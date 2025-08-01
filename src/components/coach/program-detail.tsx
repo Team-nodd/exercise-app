@@ -5,7 +5,8 @@ import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Calendar, User, Plus, Dumbbell, Clock, ArrowLeft } from "lucide-react"
+import { Calendar, User, Plus, Dumbbell, Clock, ArrowLeft, Copy, Loader2 } from "lucide-react"
+import { toast } from "sonner"
 import Link from "next/link"
 import type { ProgramWithDetails, WorkoutWithDetails } from "@/types"
 
@@ -16,7 +17,9 @@ interface ProgramDetailProps {
 export function ProgramDetail({ program }: ProgramDetailProps) {
   const [workouts, setWorkouts] = useState<WorkoutWithDetails[]>([])
   const [loading, setLoading] = useState(true)
+  const [duplicatingWorkout, setDuplicatingWorkout] = useState<number | null>(null)
   const supabase = createClient()
+  // const { toast } = useToast()
 
   useEffect(() => {
     const fetchWorkouts = async () => {
@@ -45,6 +48,114 @@ export function ProgramDetail({ program }: ProgramDetailProps) {
 
     fetchWorkouts()
   }, [program.id, supabase])
+
+  const duplicateWorkout = async (workoutId: number) => {
+    setDuplicatingWorkout(workoutId)
+
+    try {
+      console.log("🔄 Starting workout duplication for workout:", workoutId)
+
+      // Get the original workout with its exercises
+      const { data: originalWorkout, error: workoutError } = await supabase
+        .from("workouts")
+        .select(`
+          *,
+          workout_exercises(*)
+        `)
+        .eq("id", workoutId)
+        .single()
+
+      if (workoutError) {
+        console.error("❌ Error fetching original workout:", workoutError)
+        toast( "Failed to fetch workout data")
+        return
+      }
+
+      console.log("✅ Original workout fetched:", originalWorkout)
+
+      // Create the duplicate workout
+      const duplicateWorkoutData = {
+        program_id: originalWorkout.program_id,
+        user_id: originalWorkout.user_id,
+        name: `${originalWorkout.name} (Copy)`,
+        workout_type: originalWorkout.workout_type,
+        scheduled_date: null, // Don't copy the scheduled date
+        notes: originalWorkout.notes,
+        intensity_type: originalWorkout.intensity_type,
+        duration_minutes: originalWorkout.duration_minutes,
+        target_tss: originalWorkout.target_tss,
+        target_ftp: originalWorkout.target_ftp,
+        completed: false, // New workout should not be completed
+        completed_at: null,
+        order_in_program: workouts.length + 1, // Add to the end
+      }
+
+      const { data: newWorkout, error: createError } = await supabase
+        .from("workouts")
+        .insert(duplicateWorkoutData)
+        .select()
+        .single()
+
+      if (createError) {
+        console.error("❌ Error creating duplicate workout:", createError)
+        toast("Failed to create duplicate workout")
+        return
+      }
+
+      console.log("✅ Duplicate workout created:", newWorkout)
+
+      // If it's a gym workout, duplicate the exercises
+      if (originalWorkout.workout_type === "gym" && originalWorkout.workout_exercises?.length > 0) {
+        console.log("🔄 Duplicating workout exercises...")
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const duplicateExercises = originalWorkout.workout_exercises.map((exercise: any) => ({
+          workout_id: newWorkout.id,
+          exercise_id: exercise.exercise_id,
+          order_in_workout: exercise.order_in_workout,
+          sets: exercise.sets,
+          reps: exercise.reps,
+          weight: exercise.weight,
+          rest_seconds: exercise.rest_seconds,
+          volume_level: exercise.volume_level,
+          completed: false, // New exercises should not be completed
+          completed_at: null,
+        }))
+
+        const { error: exercisesError } = await supabase.from("workout_exercises").insert(duplicateExercises)
+
+        if (exercisesError) {
+          console.error("❌ Error duplicating workout exercises:", exercisesError)
+          toast("Workout duplicated but failed to copy exercises")
+        } else {
+          console.log("✅ Workout exercises duplicated successfully")
+        }
+      }
+
+      // Refresh the workouts list
+      const { data: updatedWorkouts, error: refreshError } = await supabase
+        .from("workouts")
+        .select(`
+          *,
+          program:programs(*)
+        `)
+        .eq("program_id", program.id)
+        .order("order_in_program", { ascending: true })
+
+      if (!refreshError) {
+        setWorkouts(updatedWorkouts as WorkoutWithDetails[])
+      }
+
+      toast( "Workout duplicated successfully!")
+
+      console.log("✅ Workout duplication completed successfully")
+    } catch (error) {
+      console.error("❌ Unexpected error during workout duplication:", error)
+      toast("An unexpected error occurred")
+    } finally {
+      setDuplicatingWorkout(null)
+    }
+  }
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -177,6 +288,19 @@ export function ProgramDetail({ program }: ProgramDetailProps) {
                     <Badge variant={workout.completed ? "default" : "secondary"}>
                       {workout.completed ? "Completed" : "Pending"}
                     </Badge>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => duplicateWorkout(workout.id)}
+                      disabled={duplicatingWorkout === workout.id}
+                    >
+                      {duplicatingWorkout === workout.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Copy className="h-4 w-4 mr-1" />
+                      )}
+                      {duplicatingWorkout === workout.id ? "Duplicating..." : "Duplicate"}
+                    </Button>
                     <Button variant="outline" size="sm" asChild>
                       <Link href={`/coach/programs/${program.id}/workouts/${workout.id}`}>Edit</Link>
                     </Button>
