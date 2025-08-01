@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -8,8 +8,8 @@ import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { useToast } from "@/hooks/use-toast"
-import { Calendar, Clock, Dumbbell, CheckCircle, Timer } from "lucide-react"
+import { toast } from "sonner"
+import { Calendar, Clock, Dumbbell, CheckCircle, Timer, Save } from "lucide-react"
 import type { WorkoutWithDetails, WorkoutExerciseWithDetails } from "@/types"
 
 interface WorkoutDetailProps {
@@ -17,13 +17,35 @@ interface WorkoutDetailProps {
   userId: string
 }
 
+// Debounce hook
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value)
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value)
+    }, delay)
+
+    return () => {
+      clearTimeout(handler)
+    }
+  }, [value, delay])
+
+  return debouncedValue
+}
+
 export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
   const [workout, setWorkout] = useState<WorkoutWithDetails | null>(null)
   const [exercises, setExercises] = useState<WorkoutExerciseWithDetails[]>([])
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState(false)
+  const [pendingUpdates, setPendingUpdates] = useState<Record<number, Partial<WorkoutExerciseWithDetails>>>({})
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const supabase = createClient()
-  const { toast } = useToast()
+  // const { toast } = useToast()
+
+  // Debounce pending updates
+  const debouncedUpdates = useDebounce(pendingUpdates, 1000)
 
   useEffect(() => {
     const fetchWorkoutDetails = async () => {
@@ -72,33 +94,93 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
     fetchWorkoutDetails()
   }, [workoutId, userId, supabase])
 
-  const updateExercise = async (exerciseId: number, updates: Partial<WorkoutExerciseWithDetails>) => {
+  // Process debounced updates
+  useEffect(() => {
+    const processUpdates = async () => {
+      if (Object.keys(debouncedUpdates).length === 0) return
+
+      setUpdating(true)
+      try {
+        const updatePromises = Object.entries(debouncedUpdates).map(([exerciseId, updates]) =>
+          supabase.from("workout_exercises").update(updates).eq("id", Number.parseInt(exerciseId)),
+        )
+
+        const results = await Promise.all(updatePromises)
+        const hasErrors = results.some((result) => result.error)
+
+        if (hasErrors) {
+          toast("Some updates failed to save")
+        } else {
+          toast("Changes saved automatically")
+          setHasUnsavedChanges(false)
+        }
+
+        // Clear pending updates
+        setPendingUpdates({})
+      } catch (error) {
+        toast("Failed to save changes")
+      } finally {
+        setUpdating(false)
+      }
+    }
+
+    processUpdates()
+  }, [debouncedUpdates, supabase, toast])
+
+  const updateExerciseLocally = useCallback((exerciseId: number, updates: Partial<WorkoutExerciseWithDetails>) => {
+    // Update local state immediately for responsive UI
+    setExercises((prev) => prev.map((ex) => (ex.id === exerciseId ? { ...ex, ...updates } : ex)))
+
+    // Add to pending updates
+    setPendingUpdates((prev) => ({
+      ...prev,
+      [exerciseId]: { ...prev[exerciseId], ...updates },
+    }))
+
+    setHasUnsavedChanges(true)
+  }, [])
+
+  const updateExerciseCompleted = async (exerciseId: number, completed: boolean) => {
     setUpdating(true)
     try {
-      const { error } = await supabase.from("workout_exercises").update(updates).eq("id", exerciseId)
+      const { error } = await supabase.from("workout_exercises").update({ completed }).eq("id", exerciseId)
 
       if (error) {
-        toast({
-          title: "Error",
-          description: "Failed to update exercise",
-          variant: "destructive",
-        })
+        toast("Failed to update exercise")
         return
       }
 
       // Update local state
-      setExercises((prev) => prev.map((ex) => (ex.id === exerciseId ? { ...ex, ...updates } : ex)))
+      setExercises((prev) => prev.map((ex) => (ex.id === exerciseId ? { ...ex, completed } : ex)))
 
-      toast({
-        title: "Success",
-        description: "Exercise updated successfully",
-      })
+      toast(completed ? "Exercise marked as complete" : "Exercise marked as incomplete")
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "An unexpected error occurred",
-        variant: "destructive",
-      })
+      toast("An unexpected error occurred")
+      setUpdating(false)
+    }
+  }
+
+  const saveAllChanges = async () => {
+    if (Object.keys(pendingUpdates).length === 0) return
+
+    setUpdating(true)
+    try {
+      const updatePromises = Object.entries(pendingUpdates).map(([exerciseId, updates]) =>
+        supabase.from("workout_exercises").update(updates).eq("id", Number.parseInt(exerciseId)),
+      )
+
+      const results = await Promise.all(updatePromises)
+      const hasErrors = results.some((result) => result.error)
+
+      if (hasErrors) {
+        toast( "Some updates failed to save")
+      } else {
+        toast( "All changes saved successfully")
+        setHasUnsavedChanges(false)
+        setPendingUpdates({})
+      }
+    } catch (error) {
+      toast("Failed to save changes")
     } finally {
       setUpdating(false)
     }
@@ -118,26 +200,15 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
         .eq("id", workoutId)
 
       if (error) {
-        toast({
-          title: "Error",
-          description: "Failed to complete workout",
-          variant: "destructive",
-        })
+        toast("Failed to complete workout")
         return
       }
 
       setWorkout((prev) => (prev ? { ...prev, completed: true, completed_at: new Date().toISOString() } : null))
 
-      toast({
-        title: "Congratulations!",
-        description: "Workout completed successfully!",
-      })
+      toast("Workout completed successfully!")
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "An unexpected error occurred",
-        variant: "destructive",
-      })
+      toast("An unexpected error occurred")
     } finally {
       setUpdating(false)
     }
@@ -164,6 +235,22 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
 
   return (
     <div className="container mx-auto px-4 py-8">
+      {/* Save Changes Banner */}
+      {hasUnsavedChanges && (
+        <Card className="mb-4 bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800">
+          <CardContent className="flex items-center justify-between py-3">
+            <div className="flex items-center gap-2">
+              <Timer className="h-4 w-4 text-yellow-600" />
+              <span className="text-yellow-800 dark:text-yellow-200">You have unsaved changes</span>
+            </div>
+            <Button onClick={saveAllChanges} disabled={updating} size="sm" variant="outline">
+              <Save className="h-4 w-4 mr-2" />
+              Save Now
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Workout Header */}
       <Card className="mb-8">
         <CardHeader>
@@ -249,7 +336,7 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
                   </CardTitle>
                   <Checkbox
                     checked={exercise.completed}
-                    onCheckedChange={(checked) => updateExercise(exercise.id, { completed: checked as boolean })}
+                    onCheckedChange={(checked) => updateExerciseCompleted(exercise.id, checked as boolean)}
                     disabled={updating}
                   />
                 </div>
@@ -282,7 +369,7 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
                             type="number"
                             value={exercise.actual_sets || ""}
                             onChange={(e) =>
-                              updateExercise(exercise.id, {
+                              updateExerciseLocally(exercise.id, {
                                 actual_sets: e.target.value ? Number.parseInt(e.target.value) : null,
                               })
                             }
@@ -296,7 +383,7 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
                             type="number"
                             value={exercise.actual_reps || ""}
                             onChange={(e) =>
-                              updateExercise(exercise.id, {
+                              updateExerciseLocally(exercise.id, {
                                 actual_reps: e.target.value ? Number.parseInt(e.target.value) : null,
                               })
                             }
@@ -309,7 +396,7 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
                         <label className="text-xs text-gray-600 dark:text-gray-300">Weight</label>
                         <Input
                           value={exercise.actual_weight || ""}
-                          onChange={(e) => updateExercise(exercise.id, { actual_weight: e.target.value })}
+                          onChange={(e) => updateExerciseLocally(exercise.id, { actual_weight: e.target.value })}
                           placeholder={exercise.weight || "Enter weight"}
                           disabled={updating}
                         />
@@ -318,7 +405,7 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
                         <label className="text-xs text-gray-600 dark:text-gray-300">Notes</label>
                         <Textarea
                           value={exercise.notes || ""}
-                          onChange={(e) => updateExercise(exercise.id, { notes: e.target.value })}
+                          onChange={(e) => updateExerciseLocally(exercise.id, { notes: e.target.value })}
                           placeholder="Add notes about this exercise..."
                           disabled={updating}
                           rows={2}

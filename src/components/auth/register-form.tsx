@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-// import { useToast } from "@/hooks/use-toast"
+import { toast } from "sonner"
 import { Loader2 } from "lucide-react"
 
 export function RegisterForm() {
@@ -19,7 +19,6 @@ export function RegisterForm() {
   const [role, setRole] = useState<"user" | "coach">("user")
   const [loading, setLoading] = useState(false)
   const router = useRouter()
-  // const { toast } = useToast()
   const supabase = createClient()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -30,7 +29,7 @@ export function RegisterForm() {
       console.log("=== REGISTRATION DEBUG START ===")
       console.log("Registering user:", { name, email, role })
 
-      // First, sign up the user
+      // Sign up the user - the trigger will handle profile creation
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
@@ -46,67 +45,17 @@ export function RegisterForm() {
 
       if (authError) {
         console.error("Auth error:", authError)
-        // toast({
-        //   title: "Error",
-        //   description: authError.message,
-        //   variant: "destructive",
-        // })
         return
       }
 
       if (authData.user) {
-        console.log("User created, now creating profile...")
-
-        // Wait a moment for the auth session to be established
-        await new Promise((resolve) => setTimeout(resolve, 1000))
-
-        // Insert user profile into our users table
-        const { error: profileError } = await supabase.from("users").insert({
-          id: authData.user.id,
-          name,
-          email,
-          role,
-        })
-
-        console.log("Profile creation result:", { profileError })
-
-        if (profileError) {
-          console.error("Profile creation error:", profileError)
-
-          // More detailed error handling
-          if (profileError.code === "42501") {
-            // toast({
-            //   title: "Database Error",
-            //   description: "Unable to create user profile due to security policies. Please contact support.",
-            //   variant: "destructive",
-            // })
-          } else {
-            // toast({
-            //   title: "Error",
-            //   description: `Failed to create user profile: ${profileError.message}`,
-            //   variant: "destructive",
-            // })
-          }
-          return
-        }
-
-        console.log("Profile created successfully!")
-
-        // toast({
-        //   title: "Success",
-        //   description: "Account created successfully! You can now sign in.",
-        // })
-
-        // Use window.location for more reliable redirect
+        console.log("User created successfully!")
+        
+        // Redirect to login - no need to manually create profile
         window.location.href = "/auth/login"
       }
     } catch (error) {
       console.error("Registration error:", error)
-      // toast({
-      //   title: "Error",
-      //   description: "An unexpected error occurred. Please try again.",
-      //   variant: "destructive",
-      // })
     } finally {
       setLoading(false)
       console.log("=== REGISTRATION DEBUG END ===")
@@ -156,8 +105,8 @@ export function RegisterForm() {
             <SelectValue placeholder="Select account type" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="user">User (Athlete)</SelectItem>
-            <SelectItem value="coach">Coach (Trainer)</SelectItem>
+            <SelectItem value="user">User </SelectItem>
+            <SelectItem value="coach">Coach </SelectItem>
           </SelectContent>
         </Select>
       </div>

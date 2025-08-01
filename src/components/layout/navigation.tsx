@@ -11,11 +11,26 @@ export function Navigation() {
   const { profile, loading, signOut } = useAuth()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [signingOut, setSigningOut] = useState(false) // Add this
   const router = useRouter()
 
   const handleSignOut = async () => {
-    await signOut()
-    router.push("/")
+    try {
+      setSigningOut(true)
+      setDropdownOpen(false) // Close dropdown immediately
+      
+      await signOut()
+      
+      // Wait a moment for auth state to update
+      await new Promise(resolve => setTimeout(resolve, 100))
+      
+      router.push("/")
+    } catch (error) {
+      console.error("Signout error:", error)
+      // Handle error (show toast, etc.)
+    } finally {
+      setSigningOut(false)
+    }
   }
 
   const getInitials = (name: string) => {
@@ -140,10 +155,11 @@ export function Navigation() {
                       </div>
                       <button
                         onClick={handleSignOut}
-                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                        disabled={signingOut}
+                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50"
                       >
                         <LogOut className="h-4 w-4 mr-2" />
-                        Sign out
+                        {signingOut ? "Signing out..." : "Sign out"}
                       </button>
                     </div>
                   </>
