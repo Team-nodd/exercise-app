@@ -158,13 +158,13 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
         .from("workout_exercises")
         .update({
           completed,
-          completed_at: completed ? new Date().toISOString() : null,
+          // Remove completed_at since it doesn't exist in the schema
         })
         .eq("id", exerciseId)
 
       if (error) {
         console.error("Error updating completion:", error)
-        toast( "Failed to update completion status")
+        toast("Failed to update completion status")
         return
       }
 
@@ -175,14 +175,13 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
             ? {
                 ...ex,
                 completed,
-                completed_at: completed ? new Date().toISOString() : null,
+                // Remove completed_at from local state update
               }
             : ex,
         ),
       )
 
-      toast( completed ? "Exercise marked as complete" : "Exercise marked as incomplete",
-      )
+      toast(completed ? "Exercise marked as complete" : "Exercise marked as incomplete")
     } catch (error) {
       console.error("Error toggling completion:", error)
       toast("Failed to update completion status")
@@ -398,11 +397,11 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
                     </div>
                   )}
 
-                  {typeof exercise.completed === "string" || typeof exercise.completed === "number" ? (
+                  {exercise.completed && (
                     <div className="mt-4 text-xs text-green-600 dark:text-green-400">
-                      Completed on {new Date(exercise.completed).toLocaleString()}
+                      Exercise completed
                     </div>
-                  ) : null}
+                  )}
                 </CardContent>
               </Card>
             ))

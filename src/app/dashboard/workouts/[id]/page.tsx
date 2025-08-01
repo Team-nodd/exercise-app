@@ -20,5 +20,5 @@ export default async function WorkoutPage({ params }: WorkoutPageProps) {
     redirect("/auth/login")
   }
 
-  return <WorkoutDetail workoutId={id} userId={user.id} />
+  return <WorkoutDetail workoutId={id} />
 }
