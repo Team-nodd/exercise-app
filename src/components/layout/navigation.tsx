@@ -11,24 +11,26 @@ export function Navigation() {
   const { profile, loading, signOut } = useAuth()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [dropdownOpen, setDropdownOpen] = useState(false)
-  const [signingOut, setSigningOut] = useState(false) // Add this
+  const [signingOut, setSigningOut] = useState(false)
   const router = useRouter()
 
+  console.log("🧭 NAVIGATION: Render state - loading:", loading, "profile:", profile?.name || "none")
+
   const handleSignOut = async () => {
+    console.log("🔄 NAVIGATION: Starting sign out...")
     try {
       setSigningOut(true)
-      setDropdownOpen(false) // Close dropdown immediately
+      setDropdownOpen(false)
       
       await signOut()
       
-      // Wait a moment for auth state to update
-      await new Promise(resolve => setTimeout(resolve, 100))
+      console.log("✅ NAVIGATION: Sign out complete, redirecting to home")
       
-      router.push("/")
+      // Use window.location.href for a hard redirect to ensure clean state
+      window.location.href = "/"
     } catch (error) {
-      console.error("Signout error:", error)
-      // Handle error (show toast, etc.)
-    } finally {
+      console.error("❌ NAVIGATION: Signout error:", error)
+      // Reset signing out state on error
       setSigningOut(false)
     }
   }
@@ -44,24 +46,34 @@ export function Navigation() {
 
   const getDashboardLink = () => {
     if (!profile) return "/"
-    return profile.role === "coach" ? "/coach/dashboard" : "/dashboard"
+    const link = profile.role === "coach" ? "/coach/dashboard" : "/dashboard"
+    console.log("🔗 NAVIGATION: Dashboard link for", profile.role, "->", link)
+    return link
   }
 
-  if (loading) {
+  // Only show loading skeleton for a brief moment and only if we don't have profile data
+  if (loading && !profile) {
+    console.log("⏳ NAVIGATION: Showing loading skeleton")
     return (
       <nav className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <div className="h-8 w-8 bg-gray-200 rounded animate-pulse"></div>
+              <div className="flex-shrink-0 flex items-center">
+                <Dumbbell className="h-8 w-8 text-primary" />
+                <span className="ml-2 text-xl font-bold text-gray-900 dark:text-white">FitTracker</span>
               </div>
+            </div>
+            <div className="flex items-center">
+              <div className="h-8 w-8 bg-gray-200 rounded-full animate-pulse"></div>
             </div>
           </div>
         </div>
       </nav>
     )
   }
+
+  console.log("✅ NAVIGATION: Rendering full navigation")
 
   return (
     <nav className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
@@ -79,7 +91,7 @@ export function Navigation() {
               <div className="hidden md:ml-10 md:flex md:space-x-8">
                 <Link
                   href={getDashboardLink()}
-                  className="text-gray-900 dark:text-white hover:text-primary px-3 py-2 rounded-md text-sm font-medium flex items-center"
+                  className="text-gray-900 dark:text-white hover:text-primary px-3 py-2 rounded-md text-sm font-medium flex items-center transition-colors"
                 >
                   <Home className="h-4 w-4 mr-2" />
                   Dashboard
@@ -89,21 +101,21 @@ export function Navigation() {
                   <>
                     <Link
                       href="/coach/programs"
-                      className="text-gray-500 dark:text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium flex items-center"
+                      className="text-gray-500 dark:text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium flex items-center transition-colors"
                     >
                       <Calendar className="h-4 w-4 mr-2" />
                       Programs
                     </Link>
                     <Link
                       href="/coach/clients"
-                      className="text-gray-500 dark:text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium flex items-center"
+                      className="text-gray-500 dark:text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium flex items-center transition-colors"
                     >
                       <Users className="h-4 w-4 mr-2" />
                       Clients
                     </Link>
                     <Link
                       href="/coach/exercises"
-                      className="text-gray-500 dark:text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium flex items-center"
+                      className="text-gray-500 dark:text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium flex items-center transition-colors"
                     >
                       <Dumbbell className="h-4 w-4 mr-2" />
                       Exercises
@@ -113,14 +125,14 @@ export function Navigation() {
                   <>
                     <Link
                       href="/dashboard/programs"
-                      className="text-gray-500 dark:text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium flex items-center"
+                      className="text-gray-500 dark:text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium flex items-center transition-colors"
                     >
                       <Calendar className="h-4 w-4 mr-2" />
                       My Programs
                     </Link>
                     <Link
                       href="/dashboard/workouts"
-                      className="text-gray-500 dark:text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium flex items-center"
+                      className="text-gray-500 dark:text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium flex items-center transition-colors"
                     >
                       <Dumbbell className="h-4 w-4 mr-2" />
                       Workouts
@@ -136,7 +148,7 @@ export function Navigation() {
               <div className="relative">
                 <button
                   onClick={() => setDropdownOpen(!dropdownOpen)}
-                  className="flex items-center text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+                  className="flex items-center text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-all"
                 >
                   <div className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium">
                     {getInitials(profile.name)}
@@ -156,7 +168,7 @@ export function Navigation() {
                       <button
                         onClick={handleSignOut}
                         disabled={signingOut}
-                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50"
+                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors"
                       >
                         <LogOut className="h-4 w-4 mr-2" />
                         {signingOut ? "Signing out..." : "Sign out"}
@@ -180,7 +192,7 @@ export function Navigation() {
             <div className="md:hidden ml-4">
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="text-gray-400 hover:text-gray-500 focus:outline-none focus:text-gray-500"
+                className="text-gray-400 hover:text-gray-500 focus:outline-none focus:text-gray-500 transition-colors"
               >
                 {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
               </button>
@@ -194,7 +206,7 @@ export function Navigation() {
             <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3 border-t border-gray-200 dark:border-gray-700">
               <Link
                 href={getDashboardLink()}
-                className="text-gray-900 dark:text-white hover:text-primary block px-3 py-2 rounded-md text-base font-medium"
+                className="text-gray-900 dark:text-white hover:text-primary block px-3 py-2 rounded-md text-base font-medium transition-colors"
                 onClick={() => setMobileMenuOpen(false)}
               >
                 Dashboard
@@ -204,21 +216,21 @@ export function Navigation() {
                 <>
                   <Link
                     href="/coach/programs"
-                    className="text-gray-500 dark:text-gray-300 hover:text-primary block px-3 py-2 rounded-md text-base font-medium"
+                    className="text-gray-500 dark:text-gray-300 hover:text-primary block px-3 py-2 rounded-md text-base font-medium transition-colors"
                     onClick={() => setMobileMenuOpen(false)}
                   >
                     Programs
                   </Link>
                   <Link
                     href="/coach/clients"
-                    className="text-gray-500 dark:text-gray-300 hover:text-primary block px-3 py-2 rounded-md text-base font-medium"
+                    className="text-gray-500 dark:text-gray-300 hover:text-primary block px-3 py-2 rounded-md text-base font-medium transition-colors"
                     onClick={() => setMobileMenuOpen(false)}
                   >
                     Clients
                   </Link>
                   <Link
                     href="/coach/exercises"
-                    className="text-gray-500 dark:text-gray-300 hover:text-primary block px-3 py-2 rounded-md text-base font-medium"
+                    className="text-gray-500 dark:text-gray-300 hover:text-primary block px-3 py-2 rounded-md text-base font-medium transition-colors"
                     onClick={() => setMobileMenuOpen(false)}
                   >
                     Exercises
@@ -228,14 +240,14 @@ export function Navigation() {
                 <>
                   <Link
                     href="/dashboard/programs"
-                    className="text-gray-500 dark:text-gray-300 hover:text-primary block px-3 py-2 rounded-md text-base font-medium"
+                    className="text-gray-500 dark:text-gray-300 hover:text-primary block px-3 py-2 rounded-md text-base font-medium transition-colors"
                     onClick={() => setMobileMenuOpen(false)}
                   >
                     My Programs
                   </Link>
                   <Link
                     href="/dashboard/workouts"
-                    className="text-gray-500 dark:text-gray-300 hover:text-primary block px-3 py-2 rounded-md text-base font-medium"
+                    className="text-gray-500 dark:text-gray-300 hover:text-primary block px-3 py-2 rounded-md text-base font-medium transition-colors"
                     onClick={() => setMobileMenuOpen(false)}
                   >
                     Workouts

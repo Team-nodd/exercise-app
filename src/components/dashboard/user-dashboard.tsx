@@ -28,9 +28,9 @@ export function UserDashboard({ user }: UserDashboardProps) {
         const timeoutId = setTimeout(() => {
           console.warn("Dashboard data fetch timeout, setting loading to false")
           setLoading(false)
-        }, 10000) // 10 second timeout
+        }, 15000) // Increased to 15 seconds
         
-        // Fetch stats
+        // Fetch basic stats first
         const [programsResult, workoutsResult] = await Promise.all([
           supabase.from("programs").select("id, status").eq("user_id", user.id),
           supabase.from("workouts").select("id, completed, scheduled_date").eq("user_id", user.id),
@@ -50,8 +50,12 @@ export function UserDashboard({ user }: UserDashboardProps) {
           const totalPrograms = programsResult.data.length
           const activePrograms = programsResult.data.filter((p) => p.status === "active").length
           const completedWorkouts = workoutsResult.data.filter((w) => w.completed).length
+          
+          // Fix the date comparison for upcoming workouts
+          const today = new Date()
+          today.setHours(0, 0, 0, 0) // Start of today
           const upcomingWorkouts = workoutsResult.data.filter(
-            (w) => !w.completed && w.scheduled_date && new Date(w.scheduled_date) >= new Date(),
+            (w) => !w.completed && w.scheduled_date && new Date(w.scheduled_date) >= today,
           ).length
 
           setStats({
@@ -64,7 +68,10 @@ export function UserDashboard({ user }: UserDashboardProps) {
           console.log("Stats set:", { totalPrograms, activePrograms, completedWorkouts, upcomingWorkouts })
         }
 
-        // Fetch upcoming workouts
+        // Fetch upcoming workouts with better date handling
+        const today = new Date()
+        today.setHours(0, 0, 0, 0) // Start of today
+        
         const { data: workouts, error: workoutsError } = await supabase
           .from("workouts")
           .select(`
@@ -73,7 +80,7 @@ export function UserDashboard({ user }: UserDashboardProps) {
           `)
           .eq("user_id", user.id)
           .eq("completed", false)
-          .gte("scheduled_date", new Date().toISOString().split("T")[0])
+          .gte("scheduled_date", today.toISOString())
           .order("scheduled_date", { ascending: true })
           .limit(5)
 
@@ -113,7 +120,7 @@ export function UserDashboard({ user }: UserDashboardProps) {
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Welcome back, {user.name}!</h1>
-        <p className="text-gray-600 dark:text-gray-300 mt-2">Heres your fitness overview for today.</p>
+        <p className="text-gray-600 dark:text-gray-300 mt-2">Here is your fitness overview for today.</p>
       </div>
 
       {/* Stats Cards */}

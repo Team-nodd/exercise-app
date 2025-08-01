@@ -1,131 +1,145 @@
 "use client"
+
 import type React from "react"
+
 import { useState } from "react"
-import { useRouter } from "next/navigation"
-import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { toast } from "sonner"
-import { Loader2 } from "lucide-react"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { useRouter } from "next/navigation"
+import Link from "next/link"
 
 export function LoginForm() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
-  const router = useRouter()
+  const [error, setError] = useState("")
   const supabase = createClient()
+  const router = useRouter()
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
+    console.log("🔄 LOGIN FORM: Starting login process...")
+
     setLoading(true)
+    setError("")
 
     try {
-      console.log("=== LOGIN DEBUG START ===")
-      console.log("Attempting to sign in with:", { email })
+      console.log("🔄 LOGIN FORM: Attempting to sign in user:", email)
 
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
 
-      console.log("Auth response:", { data, error })
-
-      if (error) {
-        console.error("Sign in error:", error)
-        alert(`Login failed: ${error.message}`)
-        toast(error.message)
+      if (authError) {
+        console.error("❌ LOGIN FORM: Auth error:", authError.message)
+        setError(authError.message)
         return
       }
 
-      if (data.user) {
-        console.log("User authenticated:", data.user.id)
+      console.log("✅ LOGIN FORM: Authentication successful for user:", authData.user?.id)
 
-        // Wait for auth state to propagate
-        await new Promise((resolve) => setTimeout(resolve, 500))
+      // Get user profile to determine redirect
+      console.log("🔄 LOGIN FORM: Fetching user profile...")
+      const { data: profile, error: profileError } = await supabase
+        .from("users")
+        .select("*")
+        .eq("id", authData.user.id)
+        .single()
 
-        // Check if user profile exists
-        const { data: profile, error: profileError } = await supabase
+      if (profileError) {
+        console.error("❌ LOGIN FORM: Profile fetch error:", profileError.message)
+
+        // If profile doesn't exist, create it
+        console.log("🔄 LOGIN FORM: Creating missing profile...")
+        const { data: newProfile, error: createError } = await supabase
           .from("users")
-          .select("*")
-          .eq("id", data.user.id)
+          .insert({
+            id: authData.user.id,
+            email: authData.user.email!,
+            name: authData.user.user_metadata?.full_name || authData.user.email!.split("@")[0],
+            role: "user", // Default role
+          })
+          .select()
           .single()
 
-        console.log("Profile check:", { profile, profileError })
-
-        if (profileError || !profile) {
-          console.error("Profile not found, creating one...")
-
-          // Create profile if it doesn't exist
-          const { error: insertError } = await supabase.from("users").insert({
-            id: data.user.id,
-            name: data.user.user_metadata?.name || data.user.email?.split("@")[0] || "User",
-            email: data.user.email!,
-            role: data.user.user_metadata?.role || "user",
-          })
-
-          if (insertError) {
-            console.error("Failed to create profile:", insertError)
-            toast("Failed to create user profile. Please try again.")
-            return
-          }
-
-          // Refetch the profile
-          const { data: newProfile } = await supabase.from("users").select("*").eq("id", data.user.id).single()
-
-          console.log("Created profile:", newProfile)
+        if (createError) {
+          console.error("❌ LOGIN FORM: Profile creation error:", createError.message)
+          setError("Failed to create user profile")
+          return
         }
 
-        toast("Logged in successfully!")
+        console.log("✅ LOGIN FORM: Profile created:", newProfile)
 
-        // Use window.location for more reliable redirect
-        console.log("Redirecting...")
+        // Redirect to user dashboard
+        console.log("🔄 LOGIN FORM: Redirecting to user dashboard...")
         window.location.href = "/dashboard"
+        return
       }
+
+      console.log("✅ LOGIN FORM: Profile found:", profile.name, profile.role)
+
+      // Redirect based on role
+      const redirectUrl = profile.role === "coach" ? "/coach/dashboard" : "/dashboard"
+      console.log("🔄 LOGIN FORM: Redirecting to:", redirectUrl)
+
+      // Use window.location.href for reliable redirect
+      window.location.href = redirectUrl
     } catch (error) {
-      console.error("Unexpected error during sign in:", error)
-      toast("An unexpected error occurred. Please try again.")
+      console.error("❌ LOGIN FORM: Unexpected error:", error)
+      setError("An unexpected error occurred")
     } finally {
       setLoading(false)
-      console.log("=== LOGIN DEBUG END ===")
     }
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="email">Email</Label>
-        <Input
-          id="email"
-          type="email"
-          placeholder="Enter your email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-        />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="password">Password</Label>
-        <Input
-          id="password"
-          type="password"
-          placeholder="Enter your password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-        />
-      </div>
-      <Button type="submit" className="w-full" disabled={loading}>
-        {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-        Sign In
-      </Button>
-      <div className="text-center text-sm">
-        {"Don't have an account? "}
-        <Link href="/auth/register" className="text-primary hover:underline">
-          Sign up
-        </Link>
-      </div>
-    </form>
+    <Card className="w-full max-w-md mx-auto">
+      <CardHeader>
+        <CardTitle>Sign In</CardTitle>
+        <CardDescription>Enter your credentials to access your account</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleLogin} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              disabled={loading}
+              placeholder="Enter your email"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="password">Password</Label>
+            <Input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              disabled={loading}
+              placeholder="Enter your password"
+            />
+          </div>
+          {error && <div className="text-red-500 text-sm">{error}</div>}
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading ? "Signing in..." : "Sign In"}
+          </Button>
+        </form>
+        <div className="mt-4 text-center text-sm">
+          Don not have an account?{" "}
+          <Link href="/auth/register" className="text-primary hover:underline">
+            Sign up
+          </Link>
+        </div>
+      </CardContent>
+    </Card>
   )
 }

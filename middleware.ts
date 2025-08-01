@@ -1,110 +1,149 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { createServerClient } from "@supabase/ssr"
-import { NextResponse } from "next/server"
-import type { NextRequest } from "next/server"
+import { NextResponse, type NextRequest } from "next/server"
 
-export async function middleware(req: NextRequest) {
-  // Create a response object to modify
-  let supabaseResponse = NextResponse.next({
-    request: req,
+export async function middleware(request: NextRequest) {
+  console.log("🔄 MIDDLEWARE: Processing request for:", request.nextUrl.pathname)
+
+  let response = NextResponse.next({
+    request: {
+      headers: request.headers,
+    },
   })
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return req.cookies.getAll()
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => req.cookies.set(name, value))
-          supabaseResponse = NextResponse.next({
-            request: req,
-          })
-          cookiesToSet.forEach(({ name, value, options }) => supabaseResponse.cookies.set(name, value, options))
+  try {
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return request.cookies.get(name)?.value
+          },
+          set(name: string, value: string, options: any) {
+            request.cookies.set({
+              name,
+              value,
+              ...options,
+            })
+            response = NextResponse.next({
+              request: {
+                headers: request.headers,
+              },
+            })
+            response.cookies.set({
+              name,
+              value,
+              ...options,
+            })
+          },
+          remove(name: string, options: any) {
+            request.cookies.set({
+              name,
+              value: "",
+              ...options,
+            })
+            response = NextResponse.next({
+              request: {
+                headers: request.headers,
+              },
+            })
+            response.cookies.set({
+              name,
+              value: "",
+              ...options,
+            })
+          },
         },
       },
-    },
-  )
+    )
 
-  // Refresh session if expired - required for Server Components
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
+    // Get session with timeout
+    console.log("🔄 MIDDLEWARE: Fetching session...")
+    const sessionStart = Date.now()
 
-  const user = session?.user
+    const {
+      data: { session },
+    } = await Promise.race([
+      supabase.auth.getSession(),
+      new Promise<any>((_, reject) => setTimeout(() => reject(new Error("Session timeout")), 3000)),
+    ])
 
-  // Define protected routes
-  const isAuthPage = req.nextUrl.pathname.startsWith("/auth")
-  const isDashboardPage = req.nextUrl.pathname.startsWith("/dashboard")
-  const isCoachPage = req.nextUrl.pathname.startsWith("/coach")
-  const isProtectedRoute = isDashboardPage || isCoachPage
+    console.log(`⏱️ MIDDLEWARE: Session fetch took ${Date.now() - sessionStart}ms`)
+    console.log("👤 MIDDLEWARE: Session user:", session?.user?.id || "No user")
 
-  // Redirect unauthenticated users from protected routes
-  if (isProtectedRoute && !user) {
-    const redirectUrl = new URL("/auth/login", req.url)
-    redirectUrl.searchParams.set("redirectTo", req.nextUrl.pathname)
-    return NextResponse.redirect(redirectUrl)
-  }
+    const { pathname } = request.nextUrl
 
-  // Handle authenticated users
-  if (user && isProtectedRoute) {
-    try {
-      // Get user profile with timeout
-      const { data: profile, error } = (await Promise.race([
-        supabase.from("users").select("role").eq("id", user.id).single(),
-        new Promise((_, reject) => setTimeout(() => reject(new Error("Profile fetch timeout")), 5000)),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ])) as any
+    // Public routes that don't require authentication
+    const publicRoutes = ["/", "/auth/login", "/auth/register"]
+    const isPublicRoute = publicRoutes.includes(pathname)
 
-      if (error || !profile) {
-        // If profile fetch fails, redirect to login to recreate profile
-        return NextResponse.redirect(new URL("/auth/login", req.url))
-      }
-
-      // Role-based redirects
-      if (isDashboardPage && profile.role === "coach") {
-        return NextResponse.redirect(new URL("/coach/dashboard", req.url))
-      }
-
-      if (isCoachPage && profile.role === "user") {
-        return NextResponse.redirect(new URL("/dashboard", req.url))
-      }
-    } catch (error) {
-      console.error("Middleware error:", error)
-      // On error, allow the request to continue rather than blocking
-      return supabaseResponse
+    // If no session and trying to access protected route
+    if (!session && !isPublicRoute) {
+      console.log("🚫 MIDDLEWARE: No session, redirecting to login")
+      const redirectUrl = new URL("/auth/login", request.url)
+      return NextResponse.redirect(redirectUrl)
     }
-  }
 
-  // Redirect authenticated users away from auth pages
-  if (user && isAuthPage) {
-    try {
-      const { data: profile } = await supabase.from("users").select("role").eq("id", user.id).single()
+    // If session exists and accessing protected routes, get user profile
+    if (session && (pathname.startsWith("/coach") || pathname.startsWith("/dashboard"))) {
+      console.log("🔄 MIDDLEWARE: Fetching profile for protected route...")
 
-      if (profile?.role === "coach") {
-        return NextResponse.redirect(new URL("/coach/dashboard", req.url))
-      } else if (profile?.role === "user") {
-        return NextResponse.redirect(new URL("/dashboard", req.url))
+      try {
+        const profileStart = Date.now()
+        const { data: profile } = await Promise.race([
+          supabase.from("users").select("role").eq("id", session.user.id).single(),
+          new Promise<any>((_, reject) => setTimeout(() => reject(new Error("Profile timeout")), 2000)),
+        ])
+
+        console.log(`⏱️ MIDDLEWARE: Profile fetch took ${Date.now() - profileStart}ms`)
+        console.log("👤 MIDDLEWARE: User role:", profile?.role || "No profile")
+
+        if (profile) {
+          // Role-based redirects
+          if (pathname.startsWith("/coach") && profile.role !== "coach") {
+            console.log("🔄 MIDDLEWARE: User accessing coach route, redirecting to dashboard")
+            return NextResponse.redirect(new URL("/dashboard", request.url))
+          }
+
+          if (pathname.startsWith("/dashboard") && profile.role === "coach") {
+            console.log("🔄 MIDDLEWARE: Coach accessing user route, redirecting to coach dashboard")
+            return NextResponse.redirect(new URL("/coach/dashboard", request.url))
+          }
+        }
+      } catch (error) {
+        console.error("❌ MIDDLEWARE: Profile fetch error:", error)
+        // Continue without redirect to avoid infinite loops
       }
-    } catch (error) {
-      // If profile fetch fails, stay on auth page
-      console.error("Auth redirect error:", error)
     }
-  }
 
-  return supabaseResponse
+    // Redirect authenticated users from auth pages to their dashboard
+    if (session && isPublicRoute && pathname !== "/") {
+      console.log("🔄 MIDDLEWARE: Authenticated user on auth page, checking for redirect...")
+
+      try {
+        const { data: profile } = await supabase.from("users").select("role").eq("id", session.user.id).single()
+
+        if (profile?.role === "coach") {
+          console.log("🔄 MIDDLEWARE: Redirecting coach to coach dashboard")
+          return NextResponse.redirect(new URL("/coach/dashboard", request.url))
+        } else if (profile?.role === "user") {
+          console.log("🔄 MIDDLEWARE: Redirecting user to user dashboard")
+          return NextResponse.redirect(new URL("/dashboard", request.url))
+        }
+      } catch (error) {
+        console.error("❌ MIDDLEWARE: Auth redirect error:", error)
+      }
+    }
+
+    console.log("✅ MIDDLEWARE: Request processed successfully")
+    return response
+  } catch (error) {
+    console.error("❌ MIDDLEWARE: Unexpected error:", error)
+    return response
+  }
 }
 
 export const config = {
-  matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public folder
-     */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
-  ],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
 }

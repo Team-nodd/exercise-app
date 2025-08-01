@@ -1,23 +1,22 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
+import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
-import { Calendar, Clock, Dumbbell, CheckCircle, Timer, Save } from "lucide-react"
+import { CheckCircle, Circle, Clock, Dumbbell, Target, Weight, Timer, Save, AlertCircle } from "lucide-react"
 import type { WorkoutWithDetails, WorkoutExerciseWithDetails } from "@/types"
 
 interface WorkoutDetailProps {
   workoutId: string
-  userId: string
 }
 
-// Debounce hook
+// Custom debounce hook
 function useDebounce<T>(value: T, delay: number): T {
   const [debouncedValue, setDebouncedValue] = useState<T>(value)
 
@@ -34,41 +33,42 @@ function useDebounce<T>(value: T, delay: number): T {
   return debouncedValue
 }
 
-export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
+export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
   const [workout, setWorkout] = useState<WorkoutWithDetails | null>(null)
   const [exercises, setExercises] = useState<WorkoutExerciseWithDetails[]>([])
   const [loading, setLoading] = useState(true)
-  const [updating, setUpdating] = useState(false)
-  const [pendingUpdates, setPendingUpdates] = useState<Record<number, Partial<WorkoutExerciseWithDetails>>>({})
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [pendingUpdates, setPendingUpdates] = useState<Record<string, any>>({})
+  const [hasPendingChanges, setHasPendingChanges] = useState(false)
+
+
   const supabase = createClient()
-  // const { toast } = useToast()
 
   // Debounce pending updates
   const debouncedUpdates = useDebounce(pendingUpdates, 1000)
 
-  useEffect(() => {
-    const fetchWorkoutDetails = async () => {
-      try {
-        // Fetch workout details
-        const { data: workoutData, error: workoutError } = await supabase
-          .from("workouts")
-          .select(`
-            *,
-            program:programs(*)
-          `)
-          .eq("id", workoutId)
-          .eq("user_id", userId)
-          .single()
+  const fetchWorkoutData = useCallback(async () => {
+    try {
+      // Fetch workout details
+      const { data: workoutData, error: workoutError } = await supabase
+        .from("workouts")
+        .select(`
+          *,
+          program:programs(*)
+        `)
+        .eq("id", workoutId)
+        .single()
 
-        if (workoutError) {
-          console.error("Error fetching workout:", workoutError)
-          return
-        }
+      if (workoutError) {
+        console.error("Error fetching workout:", workoutError)
+        toast( "Failed to load workout details")
+        return
+      }
 
-        setWorkout(workoutData as WorkoutWithDetails)
+      setWorkout(workoutData as WorkoutWithDetails)
 
-        // Fetch workout exercises
+      // Fetch workout exercises if it's a gym workout
+      if (workoutData.workout_type === "gym") {
         const { data: exercisesData, error: exercisesError } = await supabase
           .from("workout_exercises")
           .select(`
@@ -80,372 +80,381 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
 
         if (exercisesError) {
           console.error("Error fetching exercises:", exercisesError)
+          toast( "Failed to load workout exercises")
           return
         }
 
         setExercises(exercisesData as WorkoutExerciseWithDetails[])
-      } catch (error) {
-        console.error("Error fetching workout details:", error)
-      } finally {
-        setLoading(false)
       }
+    } catch (error) {
+      console.error("Error fetching workout data:", error)
+      toast( "An unexpected error occurred")
+    } finally {
+      setLoading(false)
     }
+  }, [workoutId, supabase, toast])
 
-    fetchWorkoutDetails()
-  }, [workoutId, userId, supabase])
-
-  // Process debounced updates
   useEffect(() => {
-    const processUpdates = async () => {
-      if (Object.keys(debouncedUpdates).length === 0) return
+    fetchWorkoutData()
+  }, [fetchWorkoutData])
 
-      setUpdating(true)
-      try {
-        const updatePromises = Object.entries(debouncedUpdates).map(([exerciseId, updates]) =>
-          supabase.from("workout_exercises").update(updates).eq("id", Number.parseInt(exerciseId)),
-        )
-
-        const results = await Promise.all(updatePromises)
-        const hasErrors = results.some((result) => result.error)
-
-        if (hasErrors) {
-          toast("Some updates failed to save")
-        } else {
-          toast("Changes saved automatically")
-          setHasUnsavedChanges(false)
-        }
-
-        // Clear pending updates
-        setPendingUpdates({})
-      } catch (error) {
-        toast("Failed to save changes")
-      } finally {
-        setUpdating(false)
-      }
+  // Auto-save when debounced updates change
+  useEffect(() => {
+    if (Object.keys(debouncedUpdates).length > 0) {
+      saveUpdates()
     }
+  }, [debouncedUpdates])
 
-    processUpdates()
-  }, [debouncedUpdates, supabase, toast])
+  const saveUpdates = async () => {
+    if (Object.keys(pendingUpdates).length === 0) return
 
-  const updateExerciseLocally = useCallback((exerciseId: number, updates: Partial<WorkoutExerciseWithDetails>) => {
+    setSaving(true)
+    try {
+      const updates = Object.entries(pendingUpdates).map(([exerciseId, changes]) => ({
+        id: exerciseId,
+        ...changes,
+      }))
+
+      for (const update of updates) {
+        const { id, ...updateData } = update
+        const { error } = await supabase.from("workout_exercises").update(updateData).eq("id", id)
+
+        if (error) {
+          console.error("Error updating exercise:", error)
+          toast( "Failed to save changes")
+          return
+        }
+      }
+
+      setPendingUpdates({})
+      setHasPendingChanges(false)
+      toast("Changes saved successfully")
+    } catch (error) {
+      console.error("Error saving updates:", error)
+      toast( "Failed to save changes")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const updateExerciseField = (exerciseId: string, field: string, value: any) => {
     // Update local state immediately for responsive UI
-    setExercises((prev) => prev.map((ex) => (ex.id === exerciseId ? { ...ex, ...updates } : ex)))
+    setExercises((prev) => prev.map((ex) => (Number(ex.id) === Number(exerciseId) ? { ...ex, [field]: value } : ex)))
 
     // Add to pending updates
     setPendingUpdates((prev) => ({
       ...prev,
-      [exerciseId]: { ...prev[exerciseId], ...updates },
+      [exerciseId]: {
+        ...prev[exerciseId],
+        [field]: value,
+      },
     }))
+    setHasPendingChanges(true)
+  }
 
-    setHasUnsavedChanges(true)
-  }, [])
-
-  const updateExerciseCompleted = async (exerciseId: number, completed: boolean) => {
-    setUpdating(true)
+  const toggleExerciseCompletion = async (exerciseId: string, completed: boolean) => {
     try {
-      const { error } = await supabase.from("workout_exercises").update({ completed }).eq("id", exerciseId)
+      const { error } = await supabase
+        .from("workout_exercises")
+        .update({
+          completed,
+          completed_at: completed ? new Date().toISOString() : null,
+        })
+        .eq("id", exerciseId)
 
       if (error) {
-        toast("Failed to update exercise")
+        console.error("Error updating completion:", error)
+        toast( "Failed to update completion status")
         return
       }
 
       // Update local state
-      setExercises((prev) => prev.map((ex) => (ex.id === exerciseId ? { ...ex, completed } : ex)))
-
-      toast(completed ? "Exercise marked as complete" : "Exercise marked as incomplete")
-    } catch (error) {
-      toast("An unexpected error occurred")
-      setUpdating(false)
-    }
-  }
-
-  const saveAllChanges = async () => {
-    if (Object.keys(pendingUpdates).length === 0) return
-
-    setUpdating(true)
-    try {
-      const updatePromises = Object.entries(pendingUpdates).map(([exerciseId, updates]) =>
-        supabase.from("workout_exercises").update(updates).eq("id", Number.parseInt(exerciseId)),
+      setExercises((prev) =>
+        prev.map((ex) =>
+          Number(ex.id) === Number(exerciseId)
+            ? {
+                ...ex,
+                completed,
+                completed_at: completed ? new Date().toISOString() : null,
+              }
+            : ex,
+        ),
       )
 
-      const results = await Promise.all(updatePromises)
-      const hasErrors = results.some((result) => result.error)
-
-      if (hasErrors) {
-        toast( "Some updates failed to save")
-      } else {
-        toast( "All changes saved successfully")
-        setHasUnsavedChanges(false)
-        setPendingUpdates({})
-      }
+      toast( completed ? "Exercise marked as complete" : "Exercise marked as incomplete",
+      )
     } catch (error) {
-      toast("Failed to save changes")
-    } finally {
-      setUpdating(false)
+      console.error("Error toggling completion:", error)
+      toast("Failed to update completion status")
     }
   }
 
-  const completeWorkout = async () => {
-    if (!workout) return
-
-    setUpdating(true)
-    try {
-      const { error } = await supabase
-        .from("workouts")
-        .update({
-          completed: true,
-          completed_at: new Date().toISOString(),
-        })
-        .eq("id", workoutId)
-
-      if (error) {
-        toast("Failed to complete workout")
-        return
-      }
-
-      setWorkout((prev) => (prev ? { ...prev, completed: true, completed_at: new Date().toISOString() } : null))
-
-      toast("Workout completed successfully!")
-    } catch (error) {
-      toast("An unexpected error occurred")
-    } finally {
-      setUpdating(false)
-    }
+  const manualSave = () => {
+    saveUpdates()
   }
 
   if (loading) {
-    return <div className="flex items-center justify-center h-64">Loading workout...</div>
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+            <p>Loading workout details...</p>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   if (!workout) {
     return (
       <div className="container mx-auto px-4 py-8">
-        <Card>
-          <CardContent className="text-center py-12">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Workout not found</h3>
-            <p className="text-gray-600 dark:text-gray-300">
-              The requested workout could not be found or you dont have access to it.
-            </p>
-          </CardContent>
-        </Card>
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Workout Not Found</h1>
+          <p className="text-gray-600 dark:text-gray-300">The workout youre looking for doesnt exist.</p>
+        </div>
       </div>
     )
   }
 
+  const completedExercises = exercises.filter((ex) => ex.completed).length
+  const totalExercises = exercises.length
+  const progressPercentage = totalExercises > 0 ? (completedExercises / totalExercises) * 100 : 0
+
   return (
     <div className="container mx-auto px-4 py-8">
-      {/* Save Changes Banner */}
-      {hasUnsavedChanges && (
-        <Card className="mb-4 bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800">
-          <CardContent className="flex items-center justify-between py-3">
-            <div className="flex items-center gap-2">
-              <Timer className="h-4 w-4 text-yellow-600" />
-              <span className="text-yellow-800 dark:text-yellow-200">You have unsaved changes</span>
-            </div>
-            <Button onClick={saveAllChanges} disabled={updating} size="sm" variant="outline">
-              <Save className="h-4 w-4 mr-2" />
-              Save Now
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Workout Header */}
-      <Card className="mb-8">
-        <CardHeader>
+      {/* Unsaved Changes Banner */}
+      {hasPendingChanges && (
+        <div className="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
           <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2 text-2xl">
-                {workout.workout_type === "gym" ? <Dumbbell className="h-6 w-6" /> : <Clock className="h-6 w-6" />}
-                {workout.name}
-              </CardTitle>
-              <CardDescription className="text-lg mt-2">Program: {workout.program?.name}</CardDescription>
-            </div>
             <div className="flex items-center gap-2">
-              <Badge variant={workout.completed ? "default" : "secondary"} className="text-sm">
-                {workout.completed ? "Completed" : "In Progress"}
-              </Badge>
-              <Badge variant="outline" className="text-sm">
-                {workout.workout_type === "gym" ? "Gym Workout" : "Cardio Session"}
-              </Badge>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="grid md:grid-cols-2 gap-4">
-            <div className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
-              <Calendar className="h-4 w-4" />
-              <span>
-                {workout.scheduled_date ? new Date(workout.scheduled_date).toLocaleDateString() : "No date set"}
+              <AlertCircle className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+              <span className="text-yellow-800 dark:text-yellow-200">
+                You have unsaved changes. They will be saved automatically in a moment.
               </span>
             </div>
-            {workout.duration_minutes && (
-              <div className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
-                <Timer className="h-4 w-4" />
-                <span>{workout.duration_minutes} minutes</span>
-              </div>
-            )}
+            <Button onClick={manualSave} disabled={saving} size="sm" variant="outline">
+              {saving ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4 mr-2" />
+                  Save Now
+                </>
+              )}
+            </Button>
           </div>
+        </div>
+      )}
 
-          {workout.notes && (
-            <div className="mt-4">
-              <h4 className="font-semibold mb-2">Notes:</h4>
-              <p className="text-gray-600 dark:text-gray-300">{workout.notes}</p>
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{workout.name}</h1>
+            <p className="text-gray-600 dark:text-gray-300 mt-2">
+              {workout.program?.name} • {workout.workout_type === "gym" ? "Gym Workout" : "Cardio Workout"}
+            </p>
+          </div>
+          <Badge variant={workout.completed ? "default" : "secondary"}>
+            {workout.completed ? "Completed" : "Pending"}
+          </Badge>
+        </div>
+
+        {workout.scheduled_date && (
+          <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 mb-4">
+            <Clock className="h-4 w-4" />
+            Scheduled for {new Date(workout.scheduled_date).toLocaleDateString()}
+          </div>
+        )}
+
+        {workout.workout_type === "gym" && totalExercises > 0 && (
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium">Progress</span>
+              <span className="text-sm text-gray-600 dark:text-gray-300">
+                {completedExercises} of {totalExercises} exercises completed
+              </span>
             </div>
-          )}
+            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+              <div
+                className="bg-primary h-2 rounded-full transition-all duration-300"
+                style={{ width: `${progressPercentage}%` }}
+              ></div>
+            </div>
+          </div>
+        )}
+      </div>
 
-          {workout.workout_type === "cardio" && (
-            <div className="mt-4 grid md:grid-cols-3 gap-4">
+      {workout.workout_type === "gym" ? (
+        <div className="space-y-6">
+          {exercises.length === 0 ? (
+            <Card>
+              <CardContent className="text-center py-12">
+                <Dumbbell className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No exercises yet</h3>
+                <p className="text-gray-600 dark:text-gray-300">
+                  This workout does not have any exercises assigned yet.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            exercises.map((exercise, index) => (
+              <Card key={exercise.id} className={exercise.completed ? "bg-green-50 dark:bg-green-900/20" : ""}>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="flex items-center gap-3">
+                      <button
+                        onClick={() => toggleExerciseCompletion(String(exercise.id), !exercise.completed)}
+                        className="flex-shrink-0"
+                      >
+                        {exercise.completed ? (
+                          <CheckCircle className="h-6 w-6 text-green-600" />
+                        ) : (
+                          <Circle className="h-6 w-6 text-gray-400 hover:text-green-600" />
+                        )}
+                      </button>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span>
+                            {index + 1}. {exercise.exercise.name}
+                          </span>
+                          {exercise.completed && (
+                            <Badge variant="secondary" className="text-xs">
+                              Completed
+                            </Badge>
+                          )}
+                        </div>
+                        {exercise.exercise.category && (
+                          <CardDescription className="mt-1">{exercise.exercise.category}</CardDescription>
+                        )}
+                      </div>
+                    </CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid md:grid-cols-4 gap-4 mb-4">
+                    <div className="space-y-2">
+                      <Label htmlFor={`sets-${exercise.id}`} className="flex items-center gap-2">
+                        <Target className="h-4 w-4" />
+                        Sets
+                      </Label>
+                      <Input
+                        id={`sets-${exercise.id}`}
+                        type="number"
+                        value={exercise.sets || ""}
+                        onChange={(e) => updateExerciseField(String(exercise.id), "sets", Number.parseInt(e.target.value) || 0)}
+                        min="0"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor={`reps-${exercise.id}`} className="flex items-center gap-2">
+                        <Target className="h-4 w-4" />
+                        Reps
+                      </Label>
+                      <Input
+                        id={`reps-${exercise.id}`}
+                        type="number"
+                        value={exercise.reps || ""}
+                        onChange={(e) => updateExerciseField(String(exercise.id), "reps", Number.parseInt(e.target.value) || 0)}
+                        min="0"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor={`weight-${exercise.id}`} className="flex items-center gap-2">
+                        <Weight className="h-4 w-4" />
+                        Weight
+                      </Label>
+                      <Input
+                        id={`weight-${exercise.id}`}
+                        value={exercise.weight || ""}
+                        onChange={(e) => updateExerciseField(String(exercise.id), "weight", e.target.value)}
+                        placeholder="e.g., 80kg, BW"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor={`rest-${exercise.id}`} className="flex items-center gap-2">
+                        <Timer className="h-4 w-4" />
+                        Rest (sec)
+                      </Label>
+                      <Input
+                        id={`rest-${exercise.id}`}
+                        type="number"
+                        value={exercise.rest_seconds || ""}
+                        onChange={(e) =>
+                          updateExerciseField(String(exercise.id), "rest_seconds", Number.parseInt(e.target.value) || 0)
+                        }
+                        min="0"
+                      />
+                    </div>
+                  </div>
+
+                  {exercise.exercise.instructions && (
+                    <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-md">
+                      <h4 className="font-medium mb-2">Instructions:</h4>
+                      <p className="text-sm text-gray-600 dark:text-gray-300">{exercise.exercise.instructions}</p>
+                    </div>
+                  )}
+
+                  {typeof exercise.completed === "string" || typeof exercise.completed === "number" ? (
+                    <div className="mt-4 text-xs text-green-600 dark:text-green-400">
+                      Completed on {new Date(exercise.completed).toLocaleString()}
+                    </div>
+                  ) : null}
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </div>
+      ) : (
+        // Cardio workout display
+        <Card>
+          <CardHeader>
+            <CardTitle>Cardio Workout Details</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid md:grid-cols-2 gap-6">
+              {workout.duration_minutes && (
+                <div>
+                  <Label className="flex items-center gap-2 mb-2">
+                    <Timer className="h-4 w-4" />
+                    Duration
+                  </Label>
+                  <p className="text-lg font-semibold">{workout.duration_minutes} minutes</p>
+                </div>
+              )}
               {workout.intensity_type && (
                 <div>
-                  <span className="font-semibold">Intensity: </span>
-                  <span className="text-gray-600 dark:text-gray-300">{workout.intensity_type}</span>
+                  <Label className="flex items-center gap-2 mb-2">
+                    <Target className="h-4 w-4" />
+                    Intensity
+                  </Label>
+                  <Badge variant="outline" className="text-sm">
+                    {workout.intensity_type}
+                  </Badge>
                 </div>
               )}
               {workout.target_tss && (
                 <div>
-                  <span className="font-semibold">Target TSS: </span>
-                  <span className="text-gray-600 dark:text-gray-300">{workout.target_tss}</span>
+                  <Label className="mb-2">Training Stress Score (TSS)</Label>
+                  <p className="text-lg font-semibold">{workout.target_tss}</p>
                 </div>
               )}
               {workout.target_ftp && (
                 <div>
-                  <span className="font-semibold">Target FTP: </span>
-                  <span className="text-gray-600 dark:text-gray-300">{workout.target_ftp}W</span>
+                  <Label className="mb-2">Functional Threshold Power (FTP)</Label>
+                  <p className="text-lg font-semibold">{workout.target_ftp}W</p>
                 </div>
               )}
             </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Exercises */}
-      {workout.workout_type === "gym" && exercises.length > 0 && (
-        <div className="space-y-6">
-          <h2 className="text-2xl font-bold">Exercises</h2>
-          {exercises.map((exercise, index) => (
-            <Card key={exercise.id}>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <span className="bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center text-sm">
-                      {index + 1}
-                    </span>
-                    {exercise.exercise.name}
-                  </CardTitle>
-                  <Checkbox
-                    checked={exercise.completed}
-                    onCheckedChange={(checked) => updateExerciseCompleted(exercise.id, checked as boolean)}
-                    disabled={updating}
-                  />
-                </div>
-                <CardDescription>
-                  {exercise.exercise.category} • {exercise.exercise.equipment}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid md:grid-cols-2 gap-6">
-                  {/* Prescribed */}
-                  <div>
-                    <h4 className="font-semibold mb-3">Prescribed</h4>
-                    <div className="space-y-2 text-sm">
-                      <div>Sets: {exercise.sets}</div>
-                      <div>Reps: {exercise.reps}</div>
-                      <div>Weight: {exercise.weight || "N/A"}</div>
-                      <div>Rest: {exercise.rest_seconds}s</div>
-                      <div>Volume: {exercise.volume_level}</div>
-                    </div>
-                  </div>
-
-                  {/* Actual */}
-                  <div>
-                    <h4 className="font-semibold mb-3">Actual Performance</h4>
-                    <div className="space-y-3">
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-xs text-gray-600 dark:text-gray-300">Sets</label>
-                          <Input
-                            type="number"
-                            value={exercise.actual_sets || ""}
-                            onChange={(e) =>
-                              updateExerciseLocally(exercise.id, {
-                                actual_sets: e.target.value ? Number.parseInt(e.target.value) : null,
-                              })
-                            }
-                            placeholder={exercise.sets.toString()}
-                            disabled={updating}
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-600 dark:text-gray-300">Reps</label>
-                          <Input
-                            type="number"
-                            value={exercise.actual_reps || ""}
-                            onChange={(e) =>
-                              updateExerciseLocally(exercise.id, {
-                                actual_reps: e.target.value ? Number.parseInt(e.target.value) : null,
-                              })
-                            }
-                            placeholder={exercise.reps.toString()}
-                            disabled={updating}
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-xs text-gray-600 dark:text-gray-300">Weight</label>
-                        <Input
-                          value={exercise.actual_weight || ""}
-                          onChange={(e) => updateExerciseLocally(exercise.id, { actual_weight: e.target.value })}
-                          placeholder={exercise.weight || "Enter weight"}
-                          disabled={updating}
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs text-gray-600 dark:text-gray-300">Notes</label>
-                        <Textarea
-                          value={exercise.notes || ""}
-                          onChange={(e) => updateExerciseLocally(exercise.id, { notes: e.target.value })}
-                          placeholder="Add notes about this exercise..."
-                          disabled={updating}
-                          rows={2}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {exercise.exercise.instructions && (
-                  <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                    <h5 className="font-semibold mb-2">Instructions:</h5>
-                    <p className="text-sm text-gray-600 dark:text-gray-300">{exercise.exercise.instructions}</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      {/* Complete Workout Button */}
-      {!workout.completed && (
-        <div className="mt-8 text-center">
-          <Button onClick={completeWorkout} disabled={updating} size="lg" className="bg-green-600 hover:bg-green-700">
-            <CheckCircle className="h-5 w-5 mr-2" />
-            Complete Workout
-          </Button>
-        </div>
-      )}
-
-      {workout.completed && workout.completed_at && (
-        <Card className="mt-8 bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800">
-          <CardContent className="text-center py-6">
-            <CheckCircle className="h-12 w-12 text-green-600 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-green-800 dark:text-green-200 mb-2">Workout Completed!</h3>
-            <p className="text-green-600 dark:text-green-300">
-              Completed on {new Date(workout.completed_at).toLocaleDateString()} at{" "}
-              {new Date(workout.completed_at).toLocaleTimeString()}
-            </p>
+            {workout.notes && (
+              <div className="mt-6">
+                <Label className="mb-2">Notes</Label>
+                <p className="text-gray-600 dark:text-gray-300">{workout.notes}</p>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
