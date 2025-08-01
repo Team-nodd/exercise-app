@@ -1,4 +1,4 @@
-import { getSupabaseServerClient } from "@/lib/supabase/server"
+import { createServerClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 import { WorkoutDetail } from "@/components/workouts/workout-detail"
 
@@ -9,7 +9,7 @@ interface WorkoutPageProps {
 }
 
 export default async function WorkoutPage({ params }: WorkoutPageProps) {
-  const supabase = await getSupabaseServerClient()
+  const supabase = await createServerClient()
   const { id } = await params
 
   const {

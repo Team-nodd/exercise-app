@@ -23,13 +23,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const getSession = async () => {
+      console.log("=== AUTH PROVIDER: Getting session ===")
       const {
         data: { session },
       } = await supabase.auth.getSession()
+      console.log("Session:", session?.user?.id)
       setUser(session?.user ?? null)
 
       if (session?.user) {
-        const { data: profileData } = await supabase.from("users").select("*").eq("id", session.user.id).single()
+        console.log("Fetching profile for user:", session.user.id)
+        const { data: profileData, error: profileError } = await supabase.from("users").select("*").eq("id", session.user.id).single()
+        console.log("Profile data:", profileData, "Error:", profileError)
         setProfile(profileData)
       }
 
@@ -41,12 +45,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log("=== AUTH PROVIDER: Auth state change ===", event, session?.user?.id)
       setUser(session?.user ?? null)
 
       if (session?.user) {
-        const { data: profileData } = await supabase.from("users").select("*").eq("id", session.user.id).single()
+        console.log("Auth state change - fetching profile for user:", session.user.id)
+        const { data: profileData, error: profileError } = await supabase.from("users").select("*").eq("id", session.user.id).single()
+        console.log("Profile data on auth change:", profileData, "Error:", profileError)
         setProfile(profileData)
       } else {
+        console.log("Auth state change - no session, clearing profile")
         setProfile(null)
       }
 

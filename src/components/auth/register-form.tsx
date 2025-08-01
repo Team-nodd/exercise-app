@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
@@ -19,7 +18,6 @@ export function RegisterForm() {
   const [password, setPassword] = useState("")
   const [role, setRole] = useState<"user" | "coach">("user")
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
   // const { toast } = useToast()
   const supabase = createClient()
@@ -27,35 +25,13 @@ export function RegisterForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-    setError(null)
-
-    // Basic validation
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters long")
-      setLoading(false)
-      return
-    }
-
-    if (!email || !name || !password) {
-      setError("All fields are required")
-      setLoading(false)
-      return
-    }
 
     try {
-      console.log("Attempting to sign up with:", { email, name, role })
-      
-      // Check environment variables
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-      const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-      
-      if (!supabaseUrl || !supabaseKey) {
-        setError("Configuration error. Please contact support.")
-        setLoading(false)
-        return
-      }
-      
-      const { data, error } = await supabase.auth.signUp({
+      console.log("=== REGISTRATION DEBUG START ===")
+      console.log("Registering user:", { name, email, role })
+
+      // First, sign up the user
+      const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -66,46 +42,79 @@ export function RegisterForm() {
         },
       })
 
-      if (error) {
-        console.error("Sign up error:", error)
-        setError(error.message)
-        setLoading(false)
+      console.log("Auth signup result:", { authData, authError })
+
+      if (authError) {
+        console.error("Auth error:", authError)
+        // toast({
+        //   title: "Error",
+        //   description: authError.message,
+        //   variant: "destructive",
+        // })
         return
       }
 
-      if (data.user) {
-        console.log("User created successfully:", data.user.id)
-        // User profile will be created automatically by the database trigger
-      }
+      if (authData.user) {
+        console.log("User created, now creating profile...")
 
-      // Success message
-      setError("Account created successfully! Please check your email to verify your account.")
-      
-      // Redirect to login after a short delay
-      setTimeout(() => {
-        router.push("/auth/login")
-      }, 2000)
-      
+        // Wait a moment for the auth session to be established
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+
+        // Insert user profile into our users table
+        const { error: profileError } = await supabase.from("users").insert({
+          id: authData.user.id,
+          name,
+          email,
+          role,
+        })
+
+        console.log("Profile creation result:", { profileError })
+
+        if (profileError) {
+          console.error("Profile creation error:", profileError)
+
+          // More detailed error handling
+          if (profileError.code === "42501") {
+            // toast({
+            //   title: "Database Error",
+            //   description: "Unable to create user profile due to security policies. Please contact support.",
+            //   variant: "destructive",
+            // })
+          } else {
+            // toast({
+            //   title: "Error",
+            //   description: `Failed to create user profile: ${profileError.message}`,
+            //   variant: "destructive",
+            // })
+          }
+          return
+        }
+
+        console.log("Profile created successfully!")
+
+        // toast({
+        //   title: "Success",
+        //   description: "Account created successfully! You can now sign in.",
+        // })
+
+        // Use window.location for more reliable redirect
+        window.location.href = "/auth/login"
+      }
     } catch (error) {
-      console.error("Unexpected error during sign up:", error)
-      setError("An unexpected error occurred. Please try again.")
+      console.error("Registration error:", error)
+      // toast({
+      //   title: "Error",
+      //   description: "An unexpected error occurred. Please try again.",
+      //   variant: "destructive",
+      // })
     } finally {
       setLoading(false)
+      console.log("=== REGISTRATION DEBUG END ===")
     }
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {error && (
-        <div className={`p-3 text-sm border rounded-md ${
-          error.includes("successfully") 
-            ? "bg-green-50 border-green-200 text-green-700 dark:bg-green-950 dark:border-green-800 dark:text-green-400"
-            : "bg-red-50 border-red-200 text-red-700 dark:bg-red-950 dark:border-red-800 dark:text-red-400"
-        }`}>
-          {error}
-        </div>
-      )}
-      
       <div className="space-y-2">
         <Label htmlFor="name">Full Name</Label>
         <Input
@@ -137,6 +146,7 @@ export function RegisterForm() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
+          minLength={6}
         />
       </div>
       <div className="space-y-2">

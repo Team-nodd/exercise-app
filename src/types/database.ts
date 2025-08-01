@@ -32,6 +32,7 @@ export interface Database {
           id: number
           name: string
           category: string | null
+          muscle_groups: string[] // Array of muscle group names
           equipment: string | null
           instructions: string | null
           created_at: string

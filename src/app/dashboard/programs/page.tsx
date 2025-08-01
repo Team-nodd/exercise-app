@@ -1,9 +1,9 @@
-import { getSupabaseServerClient } from "@/lib/supabase/server"
+import { createServerClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 import { UserPrograms } from "@/components/programs/user-programs"
 
 export default async function UserProgramsPage() {
-  const supabase = await getSupabaseServerClient()
+  const supabase = await createServerClient()
 
   const {
     data: { user },

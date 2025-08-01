@@ -21,11 +21,30 @@ export function UserDashboard({ user }: UserDashboardProps) {
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
+        console.log("=== DASHBOARD DATA FETCH START ===")
+        console.log("Fetching data for user:", user.id)
+        
+        // Set a timeout to prevent infinite loading
+        const timeoutId = setTimeout(() => {
+          console.warn("Dashboard data fetch timeout, setting loading to false")
+          setLoading(false)
+        }, 10000) // 10 second timeout
+        
         // Fetch stats
         const [programsResult, workoutsResult] = await Promise.all([
           supabase.from("programs").select("id, status").eq("user_id", user.id),
           supabase.from("workouts").select("id, completed, scheduled_date").eq("user_id", user.id),
         ])
+
+        console.log("Programs result:", programsResult)
+        console.log("Workouts result:", workoutsResult)
+
+        if (programsResult.error) {
+          console.error("Error fetching programs:", programsResult.error)
+        }
+        if (workoutsResult.error) {
+          console.error("Error fetching workouts:", workoutsResult.error)
+        }
 
         if (programsResult.data && workoutsResult.data) {
           const totalPrograms = programsResult.data.length
@@ -41,10 +60,12 @@ export function UserDashboard({ user }: UserDashboardProps) {
             completedWorkouts,
             upcomingWorkouts,
           })
+          
+          console.log("Stats set:", { totalPrograms, activePrograms, completedWorkouts, upcomingWorkouts })
         }
 
         // Fetch upcoming workouts
-        const { data: workouts } = await supabase
+        const { data: workouts, error: workoutsError } = await supabase
           .from("workouts")
           .select(`
             *,
@@ -56,13 +77,21 @@ export function UserDashboard({ user }: UserDashboardProps) {
           .order("scheduled_date", { ascending: true })
           .limit(5)
 
+        if (workoutsError) {
+          console.error("Error fetching upcoming workouts:", workoutsError)
+        }
+
         if (workouts) {
           setUpcomingWorkouts(workouts as WorkoutWithDetails[])
+          console.log("Upcoming workouts set:", workouts.length)
         }
+        
+        clearTimeout(timeoutId)
       } catch (error) {
         console.error("Error fetching dashboard data:", error)
       } finally {
         setLoading(false)
+        console.log("=== DASHBOARD DATA FETCH END ===")
       }
     }
 
@@ -70,7 +99,14 @@ export function UserDashboard({ user }: UserDashboardProps) {
   }, [user.id, supabase])
 
   if (loading) {
-    return <div className="flex items-center justify-center h-64">Loading...</div>
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p>Loading dashboard data...</p>
+        </div>
+      </div>
+    )
   }
 
   return (

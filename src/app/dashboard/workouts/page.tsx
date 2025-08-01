@@ -1,9 +1,9 @@
-import { getSupabaseServerClient } from "@/lib/supabase/server"
+import { createServerClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 import { UserWorkouts } from "@/components/workouts/user-workouts"
 
 export default async function UserWorkoutsPage() {
-  const supabase = await getSupabaseServerClient()
+  const supabase = await createServerClient()
 
   const {
     data: { user },

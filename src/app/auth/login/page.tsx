@@ -1,6 +1,4 @@
 import { LoginForm } from "@/components/auth/login-form"
-import { SupabaseTest } from "@/components/debug/supabase-test"
-import { SimpleAuthTest } from "@/components/debug/simple-auth-test"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
 export default function LoginPage() {
@@ -20,28 +18,6 @@ export default function LoginPage() {
           </CardHeader>
           <CardContent>
             <LoginForm />
-          </CardContent>
-        </Card>
-        
-        {/* Debug component - remove this after fixing the issue */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Debug</CardTitle>
-            <CardDescription>Test Supabase connection</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <SupabaseTest />
-          </CardContent>
-        </Card>
-        
-        {/* Simple Auth Test */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Auth Test</CardTitle>
-            <CardDescription>Test authentication with coach@test.com</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <SimpleAuthTest />
           </CardContent>
         </Card>
       </div>

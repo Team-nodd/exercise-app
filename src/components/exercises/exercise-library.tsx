@@ -168,10 +168,12 @@ export function ExerciseLibrary() {
                     Added {new Date(exercise.created_at).toLocaleDateString()}
                   </div>
                   <div className="space-x-2">
-                    <Button variant="outline" size="sm">
-                      Edit
+                    <Button variant="outline" size="sm" asChild>
+                      <a href={`/coach/exercises/${exercise.id}/edit`}>Edit</a>
                     </Button>
-                    <Button size="sm">Use in Program</Button>
+                    <Button size="sm" asChild>
+                      <a href={`/coach/exercises/${exercise.id}/use`}>Use in Program</a>
+                    </Button>
                   </div>
                 </div>
               </CardContent>

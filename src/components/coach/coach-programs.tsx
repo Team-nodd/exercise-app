@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
+// import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Calendar, User, Plus, Eye } from "lucide-react"
 import Link from "next/link"
@@ -150,9 +150,9 @@ export function CoachPrograms({ coachId }: CoachProgramsProps) {
                         {program.description || "No description provided"}
                       </CardDescription>
                     </div>
-                    <Badge className={getStatusColor(program.status)}>
+                    {/* <Badge className={getStatusColor(program.status)}> */}
                       {program.status.charAt(0).toUpperCase() + program.status.slice(1)}
-                    </Badge>
+                    {/* </Badge> */}
                   </div>
                 </CardHeader>
                 <CardContent>

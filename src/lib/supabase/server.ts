@@ -1,12 +1,11 @@
-import { Database } from "@/types/database"
-import { createServerClient as _createServerClient } from "@supabase/ssr"
+import { createServerClient as createSupabaseClient } from "@supabase/ssr"
 import { cookies } from "next/headers"
-// import type { Database } from "@/types/database"
+import type { Database } from "@/types/database"
 
-export const getSupabaseServerClient = async () => {
+export const createServerClient = async () => {
   const cookieStore = await cookies()
 
-  return _createServerClient<Database>(
+  return createSupabaseClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {

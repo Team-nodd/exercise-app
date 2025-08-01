@@ -1,167 +1,99 @@
 "use client"
-
 import type React from "react"
-
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-// import { useToast } from "@/hooks/use-toast"
+import { toast } from "sonner"
 import { Loader2 } from "lucide-react"
 
 export function LoginForm() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
-  const [resendLoading, setResendLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
-  // const { toast } = useToast()
   const supabase = createClient()
-
-  // Test Supabase connection
-  const testConnection = async () => {
-    try {
-      console.log("Testing Supabase connection...")
-      const { data, error } = await supabase.from('users').select('count').limit(1)
-      console.log("Connection test result:", { data, error })
-      return !error
-    } catch (err) {
-      console.error("Connection test failed:", err)
-      return false
-    }
-  }
-
-  // Resend verification email
-  const resendVerificationEmail = async () => {
-    setResendLoading(true)
-    setError(null)
-    
-    try {
-      const { error } = await supabase.auth.resend({
-        type: 'signup',
-        email: email,
-      })
-      
-      if (error) {
-        setError(`Failed to resend verification email: ${error.message}`)
-      } else {
-        setError("Verification email sent! Please check your inbox.")
-      }
-    } catch (err) {
-      setError("Failed to resend verification email. Please try again.")
-    } finally {
-      setResendLoading(false)
-    }
-  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-    setError(null)
 
     try {
       console.log("=== LOGIN DEBUG START ===")
       console.log("Attempting to sign in with:", { email })
-      console.log("Starting authentication...")
-      
-      // Check environment variables
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-      const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-      
-      console.log("Environment check:", {
-        hasUrl: !!supabaseUrl,
-        hasKey: !!supabaseKey,
-        urlLength: supabaseUrl?.length,
-        keyLength: supabaseKey?.length
-      })
-      
-      if (!supabaseUrl || !supabaseKey) {
-        console.error("Missing Supabase environment variables")
-        setError("Configuration error. Please contact support.")
-        setLoading(false)
-        return
-      }
-      
-      // Check if Supabase client is properly configured
-      console.log("Supabase URL:", process.env.NEXT_PUBLIC_SUPABASE_URL)
-      console.log("Supabase client:", supabase)
-      
-      console.log("About to test connection...")
-      
-      // Test connection first
-      const isConnected = await testConnection()
-      console.log("Connection test result:", isConnected)
-      
-      if (!isConnected) {
-        console.error("Supabase connection failed")
-        setError("Connection error. Please try again.")
-        setLoading(false)
-        return
-      }
-      
-      console.log("About to call signInWithPassword...")
-      
+
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
 
-      console.log("Authentication response received:", { data, error })
+      console.log("Auth response:", { data, error })
 
       if (error) {
         console.error("Sign in error:", error)
-        
-        if (error.message === "Email not confirmed") {
-          setError("Please verify your email address before signing in. Check your inbox for a verification link.")
-        } else {
-          setError(error.message)
-        }
-        
-        setLoading(false)
+        alert(`Login failed: ${error.message}`)
+        toast(error.message)
         return
       }
 
-      console.log("Sign in successful:", data.user?.id)
-      console.log("Redirecting to dashboard...")
+      if (data.user) {
+        console.log("User authenticated:", data.user.id)
 
-      // Simple redirect approach
-      window.location.href = "/dashboard"
+        // Wait for auth state to propagate
+        await new Promise((resolve) => setTimeout(resolve, 500))
+
+        // Check if user profile exists
+        const { data: profile, error: profileError } = await supabase
+          .from("users")
+          .select("*")
+          .eq("id", data.user.id)
+          .single()
+
+        console.log("Profile check:", { profile, profileError })
+
+        if (profileError || !profile) {
+          console.error("Profile not found, creating one...")
+
+          // Create profile if it doesn't exist
+          const { error: insertError } = await supabase.from("users").insert({
+            id: data.user.id,
+            name: data.user.user_metadata?.name || data.user.email?.split("@")[0] || "User",
+            email: data.user.email!,
+            role: data.user.user_metadata?.role || "user",
+          })
+
+          if (insertError) {
+            console.error("Failed to create profile:", insertError)
+            toast("Failed to create user profile. Please try again.")
+            return
+          }
+
+          // Refetch the profile
+          const { data: newProfile } = await supabase.from("users").select("*").eq("id", data.user.id).single()
+
+          console.log("Created profile:", newProfile)
+        }
+
+        toast("Logged in successfully!")
+
+        // Use window.location for more reliable redirect
+        console.log("Redirecting...")
+        window.location.href = "/dashboard"
+      }
     } catch (error) {
       console.error("Unexpected error during sign in:", error)
-      setError("An unexpected error occurred. Please try again.")
-      setLoading(false)
+      toast("An unexpected error occurred. Please try again.")
     } finally {
+      setLoading(false)
       console.log("=== LOGIN DEBUG END ===")
     }
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {error && (
-        <div className="p-3 text-sm border rounded-md bg-red-50 border-red-200 text-red-700 dark:bg-red-950 dark:border-red-800 dark:text-red-400">
-          {error}
-          {error.includes("verify your email") && (
-            <div className="mt-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={resendVerificationEmail}
-                disabled={resendLoading}
-                className="w-full"
-              >
-                {resendLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Resend Verification Email
-              </Button>
-            </div>
-          )}
-        </div>
-      )}
-      
       <div className="space-y-2">
         <Label htmlFor="email">Email</Label>
         <Input
