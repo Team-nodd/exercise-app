@@ -215,7 +215,7 @@ export function NotificationSettings({ profile }: NotificationSettingsProps) {
           </div>
 
           {/* Weekly Progress Notifications */}
-          <div className="flex items-center justify-between">
+          {/* <div className="flex items-center justify-between">
             <div className="space-y-1">
               <Label className="text-base font-medium">Weekly Progress</Label>
               <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -232,7 +232,7 @@ export function NotificationSettings({ profile }: NotificationSettingsProps) {
                 disabled={isSettingPending('weekly_progress_email')}
               />
             </div>
-          </div>
+          </div> */}
         </CardContent>
       </Card>
 
@@ -252,9 +252,9 @@ export function NotificationSettings({ profile }: NotificationSettingsProps) {
             <p>
               • <strong>Program Assigned:</strong> Get notified when a new program is assigned to you or your clients
             </p>
-            <p>
+            {/* <p>
               • <strong>Weekly Progress:</strong> Receive a weekly summary of your progress or your clients&apos; progress
-            </p>
+            </p> */}
           </div>
           
           <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
