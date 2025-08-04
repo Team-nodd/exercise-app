@@ -1,13 +1,13 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { createClient } from "@/lib/supabase/client"
 import { useAuth } from "@/components/providers/auth-provider"
-import { Bell, Mail, CheckCircle, AlertCircle } from "lucide-react"
+import { Bell, Mail, CheckCircle, AlertCircle, Loader2 } from "lucide-react"
 import type { User } from "@/types"
 
 interface NotificationSettingsProps {
@@ -20,6 +20,8 @@ export function NotificationSettings({ profile }: NotificationSettingsProps) {
   
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [pendingUpdates, setPendingUpdates] = useState<Set<string>>(new Set())
+  const [updateTimeouts, setUpdateTimeouts] = useState<Map<string, NodeJS.Timeout>>(new Map())
   
   // Notification settings state
   const [settings, setSettings] = useState({
@@ -28,45 +30,83 @@ export function NotificationSettings({ profile }: NotificationSettingsProps) {
     weekly_progress_email: profile.weekly_progress_email || false,
   })
 
-  const handleSettingChange = async (setting: keyof typeof settings, value: boolean) => {
-    setLoading(true)
-    setMessage(null)
+  const updateSetting = useCallback(async (setting: keyof typeof settings, value: boolean) => {
+    if (!user?.id) return
 
+    console.log(`🔄 SETTINGS: Updating ${setting} to ${value}`)
+    
     try {
       const { error } = await supabase
         .from("users")
         .update({ [setting]: value })
-        .eq("id", user?.id)
+        .eq("id", user.id)
 
       if (error) {
         console.error("❌ SETTINGS: Update error:", error)
+        // Revert the optimistic update on error
+        setSettings(prev => ({ ...prev, [setting]: !value }))
         setMessage({
           type: 'error',
-          text: 'Failed to update notification settings'
+          text: `Failed to update ${setting.replace(/_/g, ' ')}`
         })
         return
       }
 
-      // Update local state
-      setSettings(prev => ({ ...prev, [setting]: value }))
+      console.log(`✅ SETTINGS: Successfully updated ${setting}`)
       
       setMessage({
         type: 'success',
-        text: 'Notification settings updated successfully!'
+        text: `${setting.replace(/_/g, ' ')} updated successfully!`
       })
 
-      // Clear success message after 3 seconds
-      setTimeout(() => setMessage(null), 3000)
+      // Clear success message after 2 seconds
+      setTimeout(() => setMessage(null), 2000)
 
     } catch (error) {
       console.error("❌ SETTINGS: Error updating settings:", error)
+      // Revert the optimistic update on error
+      setSettings(prev => ({ ...prev, [setting]: !value }))
       setMessage({
         type: 'error',
-        text: 'Failed to update notification settings'
+        text: `Failed to update ${setting.replace(/_/g, ' ')}`
       })
     } finally {
-      setLoading(false)
+      // Remove from pending updates
+      setPendingUpdates(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(setting)
+        return newSet
+      })
     }
+  }, [user?.id, supabase])
+
+  const handleSettingChange = async (setting: keyof typeof settings, value: boolean) => {
+    // Optimistic update - update UI immediately
+    setSettings(prev => ({ ...prev, [setting]: value }))
+    
+    // Add to pending updates
+    setPendingUpdates(prev => new Set(prev).add(setting))
+    
+    // Clear any existing messages
+    setMessage(null)
+    
+    // Clear existing timeout for this setting
+    const existingTimeout = updateTimeouts.get(setting)
+    if (existingTimeout) {
+      clearTimeout(existingTimeout)
+    }
+    
+    // Set new timeout for debounced update
+    const timeout = setTimeout(() => {
+      updateSetting(setting, value)
+      setUpdateTimeouts(prev => {
+        const newMap = new Map(prev)
+        newMap.delete(setting)
+        return newMap
+      })
+    }, 300) // 300ms debounce
+    
+    setUpdateTimeouts(prev => new Map(prev).set(setting, timeout))
   }
 
   const getNotificationDescription = (role: string, setting: string) => {
@@ -79,13 +119,17 @@ export function NotificationSettings({ profile }: NotificationSettingsProps) {
         user: "Get notified when a new program is assigned to you",
         coach: "Get notified when you assign a program to a client"
       },
-      // weekly_progress_email: {
-      //   user: "Get a weekly summary of your progress",
-      //   coach: "Get weekly summaries of your clients' progress"
-      // }
+      weekly_progress_email: {
+        user: "Get a weekly summary of your progress",
+        coach: "Get weekly summaries of your clients' progress"
+      }
     }
     
     return descriptions[setting as keyof typeof descriptions]?.[role as keyof typeof descriptions.workout_completed_email] || ""
+  }
+
+  const isSettingPending = (setting: keyof typeof settings) => {
+    return pendingUpdates.has(setting)
   }
 
   return (
@@ -138,11 +182,16 @@ export function NotificationSettings({ profile }: NotificationSettingsProps) {
                 {getNotificationDescription(profile.role, 'workout_completed_email')}
               </p>
             </div>
-            <Switch
-              checked={settings.workout_completed_email}
-              onCheckedChange={(checked) => handleSettingChange('workout_completed_email', checked)}
-              disabled={loading}
-            />
+            <div className="flex items-center gap-2">
+              {isSettingPending('workout_completed_email') && (
+                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              )}
+              <Switch
+                checked={settings.workout_completed_email}
+                onCheckedChange={(checked) => handleSettingChange('workout_completed_email', checked)}
+                disabled={isSettingPending('workout_completed_email')}
+              />
+            </div>
           </div>
 
           {/* Program Assigned Notifications */}
@@ -153,27 +202,37 @@ export function NotificationSettings({ profile }: NotificationSettingsProps) {
                 {getNotificationDescription(profile.role, 'program_assigned_email')}
               </p>
             </div>
-            <Switch
-              checked={settings.program_assigned_email}
-              onCheckedChange={(checked) => handleSettingChange('program_assigned_email', checked)}
-              disabled={loading}
-            />
+            <div className="flex items-center gap-2">
+              {isSettingPending('program_assigned_email') && (
+                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              )}
+              <Switch
+                checked={settings.program_assigned_email}
+                onCheckedChange={(checked) => handleSettingChange('program_assigned_email', checked)}
+                disabled={isSettingPending('program_assigned_email')}
+              />
+            </div>
           </div>
 
           {/* Weekly Progress Notifications */}
-          {/* <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between">
             <div className="space-y-1">
               <Label className="text-base font-medium">Weekly Progress</Label>
               <p className="text-sm text-gray-600 dark:text-gray-400">
                 {getNotificationDescription(profile.role, 'weekly_progress_email')}
               </p>
             </div>
-            <Switch
-              checked={settings.weekly_progress_email}
-              onCheckedChange={(checked) => handleSettingChange('weekly_progress_email', checked)}
-              disabled={loading}
-            />
-          </div> */}
+            <div className="flex items-center gap-2">
+              {isSettingPending('weekly_progress_email') && (
+                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              )}
+              <Switch
+                checked={settings.weekly_progress_email}
+                onCheckedChange={(checked) => handleSettingChange('weekly_progress_email', checked)}
+                disabled={isSettingPending('weekly_progress_email')}
+              />
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -193,14 +252,14 @@ export function NotificationSettings({ profile }: NotificationSettingsProps) {
             <p>
               • <strong>Program Assigned:</strong> Get notified when a new program is assigned to you or your clients
             </p>
-            {/* <p>
-              • <strong>Weekly Progress:</strong> Receive a weekly summary of your progress or your clients' progress
-            </p> */}
+            <p>
+              • <strong>Weekly Progress:</strong> Receive a weekly summary of your progress or your clients&apos; progress
+            </p>
           </div>
           
           <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
             <p className="text-sm text-blue-800 dark:text-blue-200">
-              <strong>Note:</strong> You can change these settings at any time. Changes take effect immediately.
+              <strong>Note:</strong> Changes are saved automatically. You can continue using the app while settings update in the background.
             </p>
           </div>
         </CardContent>

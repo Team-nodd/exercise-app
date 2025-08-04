@@ -106,7 +106,8 @@ export function Navigation() {
 
   // Show loading skeleton when loading and we don't have profile data yet
   // Only show loading if we're truly in an initial loading state (no user yet)
-  const shouldShowLoading = loading && user === null
+  // Don't show loading if we have a user but profile is temporarily null
+  const shouldShowLoading = loading && user === null && !profile
   
   console.log("🧭 NAVIGATION: State check - loading:", loading, "user:", user?.id || "none", "profile:", profile?.name || "none", "shouldShowLoading:", shouldShowLoading)
   
@@ -130,7 +131,11 @@ export function Navigation() {
     )
   }
 
-  console.log("✅ NAVIGATION: Rendering full navigation - user:", user?.id || "none", "profile:", profile?.name || "none")
+  // Don't show sign-in/sign-up buttons if we have a user but profile is temporarily loading
+  // This prevents the UI from flickering between authenticated and unauthenticated states
+  const shouldShowAuthButtons = !user && !loading
+
+  console.log("✅ NAVIGATION: Rendering full navigation - user:", user?.id || "none", "profile:", profile?.name || "none", "showAuthButtons:", shouldShowAuthButtons)
 
   return (
     <nav className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
@@ -256,7 +261,7 @@ export function Navigation() {
                   </>
                 )}
               </div>
-            ) : (
+            ) : shouldShowAuthButtons ? (
               <div className="flex items-center space-x-4">
                 <Link href="/auth/login">
                   <Button variant="ghost">Sign in</Button>
@@ -265,6 +270,9 @@ export function Navigation() {
                   <Button>Sign up</Button>
                 </Link>
               </div>
+            ) : (
+              // Show a loading indicator when user exists but profile is loading
+              <div className="h-8 w-8 bg-gray-200 rounded-full animate-pulse"></div>
             )}
 
             {/* Mobile menu button */}

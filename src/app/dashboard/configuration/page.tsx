@@ -9,6 +9,8 @@ export default async function ConfigurationPage() {
     data: { user },
   } = await supabase.auth.getUser()
 
+  console.log("👤 CONFIGURATION PAGE: User:", user?.id || "No user")
+
   if (!user) {
     redirect("/auth/login")
   }

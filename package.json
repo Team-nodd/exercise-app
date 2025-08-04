@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test:api": "node test-api-comprehensive.js"
+    "test:api": "node test-api-comprehensive.js",
+    "test:settings": "node test-notification-settings.js"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.10",

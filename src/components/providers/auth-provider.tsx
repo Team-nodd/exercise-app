@@ -152,10 +152,18 @@ export function AuthProvider({ children, initialSession }: AuthProviderProps) {
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return
 
-      console.log("🔄 AUTH PROVIDER: Auth state change - event:", event, "user:", session?.user?.id)
+      console.log("🔄 AUTH PROVIDER: Auth state change - event:", event, "user:", session?.user?.id, "currentUser:", user?.id, "currentProfile:", profile?.name)
 
-      // Set loading to true for all auth state changes
-      setLoading(true)
+      // Only set loading to true for specific events that require data fetching
+      // Don't set loading for TOKEN_REFRESHED or other non-critical events
+      const shouldSetLoading = ['SIGNED_IN', 'SIGNED_OUT', 'USER_UPDATED'].includes(event)
+      
+      if (shouldSetLoading) {
+        console.log("⏳ AUTH PROVIDER: Setting loading to true for event:", event)
+        setLoading(true)
+      } else {
+        console.log("ℹ️ AUTH PROVIDER: Skipping loading state for event:", event)
+      }
 
       setUser(session?.user ?? null)
 
