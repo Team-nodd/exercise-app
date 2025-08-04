@@ -105,8 +105,12 @@ export function Navigation() {
   }
 
   // Show loading skeleton when loading and we don't have profile data yet
-  if (loading && !profile) {
-    console.log("⏳ NAVIGATION: Showing loading skeleton - loading:", loading, "profile:", profile ? "exists" : "none", "user:", user?.id || "none")
+  // Only show loading if we're truly in an initial loading state (no user yet)
+  const shouldShowLoading = loading && user === null
+  
+  console.log("🧭 NAVIGATION: State check - loading:", loading, "user:", user?.id || "none", "profile:", profile?.name || "none", "shouldShowLoading:", shouldShowLoading)
+  
+  if (shouldShowLoading) {
     return (
       <nav className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
         <div className="container mx-auto px-2 sm:px-6 lg:px-8">
@@ -126,7 +130,7 @@ export function Navigation() {
     )
   }
 
-  console.log("✅ NAVIGATION: Rendering full navigation")
+  console.log("✅ NAVIGATION: Rendering full navigation - user:", user?.id || "none", "profile:", profile?.name || "none")
 
   return (
     <nav className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
