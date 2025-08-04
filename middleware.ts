@@ -86,7 +86,7 @@ export async function middleware(request: NextRequest) {
     }
 
     // If session exists and accessing protected routes, get user profile
-    if (session && (pathname.startsWith("/coach") || pathname.startsWith("/dashboard"))) {
+    if (session && (pathname.startsWith("/coach") || pathname.startsWith("/dashboard") || pathname.startsWith("/profile"))) {
       console.log("🔄 MIDDLEWARE: Fetching profile for protected route...")
 
       try {

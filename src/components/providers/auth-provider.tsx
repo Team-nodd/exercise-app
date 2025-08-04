@@ -53,26 +53,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               .eq("id", session.user.id)
               .single()
 
-            if (profileError) {
-              console.error("Profile error:", profileError)
-              if (mounted) {
+            if (mounted) {
+              if (profileError) {
+                console.error("Profile error:", profileError)
                 setProfile(null)
+              } else {
+                setProfile(profileData)
               }
-            } else if (mounted) {
-              setProfile(profileData)
+              // Always set loading to false after profile fetch attempt
+              setLoading(false)
             }
           } catch (error) {
             console.error("Profile fetch error:", error)
             if (mounted) {
               setProfile(null)
+              setLoading(false)
             }
           }
         } else if (mounted) {
           // Explicitly set profile to null when no user
           setProfile(null)
-        }
-
-        if (mounted) {
           setLoading(false)
         }
       } catch (error) {
@@ -112,21 +112,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               console.log("✅ AUTH PROVIDER: Profile loaded:", profileData?.name)
               setProfile(profileData)
             }
+            // Always set loading to false after profile fetch attempt
+            setLoading(false)
           }
         } catch (error) {
           console.error("Profile fetch error on auth change:", error)
           if (mounted) {
             setProfile(null)
+            setLoading(false)
           }
         }
       } else if (mounted) {
         console.log("🔄 AUTH PROVIDER: No session, clearing profile")
         setProfile(null)
-      }
-
-      // Always set loading to false after auth state change
-      if (mounted) {
-        console.log("✅ AUTH PROVIDER: Setting loading to false")
         setLoading(false)
       }
     })

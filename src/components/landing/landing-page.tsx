@@ -7,23 +7,6 @@ import Image from "next/image"
 export function LandingPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
-      {/* Header */}
-      {/* <header className="container mx-auto px-4 py-6">
-        <nav className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <Dumbbell className="h-8 w-8 text-blue-600" />
-            <span className="text-2xl font-bold text-gray-900 dark:text-white">FitTracker Pro</span>
-          </div>
-          <div className="space-x-4">
-            <Button variant="ghost" asChild>
-              <Link href="/auth/login">Sign In</Link>
-            </Button>
-            <Button asChild>
-              <Link href="/auth/register">Get Started</Link>
-            </Button>
-          </div>
-        </nav>
-      </header> */}
 
       {/* Hero Section */}
       <section className="container mx-auto px-4 py-20">
@@ -174,7 +157,7 @@ export function LandingPage() {
             <div className="relative">
               {/* Benefits Image */}
               <img
-                src="/placeholder.svg?height=400&width=500"
+                src="/dashboard.png"
                 alt="FitTracker Pro dashboard"
                 className="w-full h-auto rounded-lg shadow-xl"
               />
