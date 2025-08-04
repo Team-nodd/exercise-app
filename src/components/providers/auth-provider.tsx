@@ -1,9 +1,9 @@
 "use client"
 
 import type React from "react"
-import { createContext, useContext, useEffect, useState } from "react"
+import { createContext, useContext, useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
-import type { User } from "@supabase/supabase-js"
+import type { User, Session } from "@supabase/supabase-js"
 import type { User as AppUser } from "@/types"
 
 interface AuthContextType {
@@ -13,26 +13,39 @@ interface AuthContextType {
   signOut: () => Promise<void>
 }
 
+interface AuthProviderProps {
+  children: React.ReactNode
+  initialSession?: Session | null
+}
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
+export function AuthProvider({ children, initialSession }: AuthProviderProps) {
+  const [user, setUser] = useState<User | null>(initialSession?.user ?? null)
   const [profile, setProfile] = useState<AppUser | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(!initialSession?.user)
   const supabase = createClient()
 
   useEffect(() => {
     let mounted = true
 
     const getSession = async () => {
+      console.log("🔄 AUTH PROVIDER: Getting initial session...")
+      
       try {
         const {
           data: { session },
           error: sessionError,
         } = await supabase.auth.getSession()
 
+        console.log("🔍 AUTH PROVIDER: Client session result:", { 
+          hasSession: !!session, 
+          userId: session?.user?.id, 
+          error: sessionError?.message 
+        })
+
         if (sessionError) {
-          console.error("Session error:", sessionError)
+          console.error("❌ AUTH PROVIDER: Session error:", sessionError)
           if (mounted) {
             setUser(null)
             setProfile(null)
@@ -41,11 +54,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return
         }
 
+        console.log("✅ AUTH PROVIDER: Initial session loaded:", session?.user?.id || "No user")
+
         if (mounted) {
           setUser(session?.user ?? null)
         }
 
         if (session?.user && mounted) {
+          console.log("🔄 AUTH PROVIDER: Fetching initial profile for user:", session.user.id)
+          
           try {
             const { data: profileData, error: profileError } = await supabase
               .from("users")
@@ -53,30 +70,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               .eq("id", session.user.id)
               .single()
 
+            console.log("🔍 AUTH PROVIDER: Initial profile fetch result:", { 
+              hasProfile: !!profileData, 
+              profileName: profileData?.name, 
+              error: profileError?.message 
+            })
+
             if (mounted) {
               if (profileError) {
-                console.error("Profile error:", profileError)
+                console.error("❌ AUTH PROVIDER: Initial profile error:", profileError)
                 setProfile(null)
               } else {
+                console.log("✅ AUTH PROVIDER: Initial profile loaded:", profileData?.name)
                 setProfile(profileData)
               }
-              // Always set loading to false after profile fetch attempt
               setLoading(false)
             }
           } catch (error) {
-            console.error("Profile fetch error:", error)
+            console.error("❌ AUTH PROVIDER: Initial profile fetch error:", error)
             if (mounted) {
               setProfile(null)
               setLoading(false)
             }
           }
         } else if (mounted) {
-          // Explicitly set profile to null when no user
+          console.log("🔄 AUTH PROVIDER: No initial session, setting loading to false")
           setProfile(null)
           setLoading(false)
         }
       } catch (error) {
-        console.error("Auth provider error:", error)
+        console.error("❌ AUTH PROVIDER: Auth provider error:", error)
         if (mounted) {
           setUser(null)
           setProfile(null)
@@ -85,7 +108,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    getSession()
+    // If we have an initial session, use it and fetch the profile
+    if (initialSession?.user) {
+      console.log("✅ AUTH PROVIDER: Using initial session for user:", initialSession.user.id)
+      setUser(initialSession.user)
+      
+      // Fetch profile for the initial session
+      const fetchInitialProfile = async () => {
+        try {
+          const { data: profileData, error: profileError } = await supabase
+            .from("users")
+            .select("*")
+            .eq("id", initialSession.user.id)
+            .single()
+
+          if (mounted) {
+            if (profileError) {
+              console.error("❌ AUTH PROVIDER: Initial profile error:", profileError)
+              setProfile(null)
+            } else {
+              console.log("✅ AUTH PROVIDER: Initial profile loaded:", profileData?.name)
+              setProfile(profileData)
+            }
+            setLoading(false)
+          }
+        } catch (error) {
+          console.error("❌ AUTH PROVIDER: Initial profile fetch error:", error)
+          if (mounted) {
+            setProfile(null)
+            setLoading(false)
+          }
+        }
+      }
+      
+      fetchInitialProfile()
+    } else {
+      // No initial session, get it from the client
+      getSession()
+    }
 
     const {
       data: { subscription },
@@ -94,9 +154,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       console.log("🔄 AUTH PROVIDER: Auth state change - event:", event, "user:", session?.user?.id)
 
+      // Set loading to true for all auth state changes
+      setLoading(true)
+
       setUser(session?.user ?? null)
 
       if (session?.user) {
+        console.log("🔄 AUTH PROVIDER: Fetching profile for user:", session.user.id)
+        
         try {
           const { data: profileData, error: profileError } = await supabase
             .from("users")
@@ -104,28 +169,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .eq("id", session.user.id)
             .single()
 
+          console.log("🔍 AUTH PROVIDER: Profile fetch result:", { 
+            hasProfile: !!profileData, 
+            profileName: profileData?.name, 
+            error: profileError?.message 
+          })
+
           if (mounted) {
             if (profileError) {
-              console.error("Profile error on auth change:", profileError)
+              console.error("❌ AUTH PROVIDER: Profile error on auth change:", profileError)
               setProfile(null)
+              setLoading(false)
             } else {
-              console.log("✅ AUTH PROVIDER: Profile loaded:", profileData?.name)
+              console.log("✅ AUTH PROVIDER: Profile loaded successfully:", profileData?.name)
               setProfile(profileData)
+              setLoading(false)
             }
-            // Always set loading to false after profile fetch attempt
-            setLoading(false)
           }
         } catch (error) {
-          console.error("Profile fetch error on auth change:", error)
+          console.error("❌ AUTH PROVIDER: Profile fetch error on auth change:", error)
           if (mounted) {
             setProfile(null)
             setLoading(false)
           }
         }
-      } else if (mounted) {
-        console.log("🔄 AUTH PROVIDER: No session, clearing profile")
-        setProfile(null)
-        setLoading(false)
+      } else {
+        console.log("🔄 AUTH PROVIDER: No session, clearing profile and user")
+        if (mounted) {
+          setProfile(null)
+          setLoading(false)
+        }
       }
     })
 
@@ -133,7 +206,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       mounted = false
       subscription.unsubscribe()
     }
-  }, [supabase])
+  }, [supabase, initialSession])
+
+  // Refresh the page if ?code is present in the URL (after email confirmation)
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has("code")) {
+        setTimeout(() => {
+          url.searchParams.delete("code");
+          window.location.replace(url.pathname + url.search);
+        }, 1000); // 1 second delay
+      }
+    }
+  }, []);
 
   const signOut = async () => {
     try {

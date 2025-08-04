@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import { CheckCircle, Circle, Clock, Dumbbell, Target, Weight, Timer, Save, AlertCircle } from "lucide-react"
 import type { WorkoutWithDetails, WorkoutExerciseWithDetails } from "@/types"
+import { notificationService } from "@/lib/notifications/notification-service"
 
 interface WorkoutDetailProps {
   workoutId: string
@@ -40,7 +41,6 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
   const [saving, setSaving] = useState(false)
   const [pendingUpdates, setPendingUpdates] = useState<Record<string, any>>({})
   const [hasPendingChanges, setHasPendingChanges] = useState(false)
-
 
   const supabase = createClient()
 
@@ -181,10 +181,91 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
         ),
       )
 
+      // Check if all exercises are completed
+      const updatedExercises = exercises.map((ex) =>
+        Number(ex.id) === Number(exerciseId) ? { ...ex, completed } : ex
+      )
+      
+      const allCompleted = updatedExercises.every((ex) => ex.completed)
+      
+      // If all exercises are completed, mark workout as completed and send notifications
+      if (allCompleted && !workout?.completed) {
+        await markWorkoutAsCompleted()
+      }
+
       toast(completed ? "Exercise marked as complete" : "Exercise marked as incomplete")
     } catch (error) {
       console.error("Error toggling completion:", error)
       toast("Failed to update completion status")
+    }
+  }
+
+  const toggleCardioWorkoutCompletion = async (completed: boolean) => {
+    try {
+      const { error } = await supabase
+        .from("workouts")
+        .update({
+          completed,
+          completed_at: completed ? new Date().toISOString() : null,
+        })
+        .eq("id", workoutId)
+
+      if (error) {
+        console.error("Error updating cardio workout completion:", error)
+        toast("Failed to update completion status")
+        return
+      }
+
+      // Update local state
+      setWorkout((prev) =>
+        prev ? {
+          ...prev,
+          completed,
+          completed_at: completed ? new Date().toISOString() : null,
+        } : null
+      )
+
+      // If marking as completed, send notifications
+      if (completed) {
+        await markWorkoutAsCompleted()
+      }
+
+      toast(completed ? "Cardio workout marked as complete" : "Cardio workout marked as incomplete")
+    } catch (error) {
+      console.error("Error toggling cardio workout completion:", error)
+      toast("Failed to update completion status")
+    }
+  }
+
+  const markWorkoutAsCompleted = async () => {
+    try {
+      console.log("🔄 WORKOUT: Marking workout as completed and sending notifications...")
+      
+      // Mark workout as completed
+      const { error: workoutError } = await supabase
+        .from("workouts")
+        .update({
+          completed: true,
+          completed_at: new Date().toISOString(),
+        })
+        .eq("id", workoutId)
+
+      if (workoutError) {
+        console.error("Error marking workout as completed:", workoutError)
+        toast("Failed to mark workout as completed")
+        return
+      }
+
+      // Update local workout state
+      setWorkout((prev) => prev ? { ...prev, completed: true, completed_at: new Date().toISOString() } : null)
+
+      // Send notifications
+      await notificationService.sendWorkoutCompletedNotifications(Number(workoutId))
+
+      toast("Workout completed! Notifications sent.")
+    } catch (error) {
+      console.error("Error marking workout as completed:", error)
+      toast("Failed to mark workout as completed")
     }
   }
 
@@ -409,9 +490,35 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
         </div>
       ) : (
         // Cardio workout display
-        <Card>
+        <Card className={workout.completed ? "bg-green-50 dark:bg-green-900/20" : ""}>
           <CardHeader>
-            <CardTitle>Cardio Workout Details</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle>Cardio Workout Details</CardTitle>
+              <div className="flex items-center gap-2">
+                {workout.completed && (
+                  <Badge variant="secondary" className="text-xs">
+                    Completed
+                  </Badge>
+                )}
+                <Button
+                  onClick={() => toggleCardioWorkoutCompletion(!workout.completed)}
+                  variant={workout.completed ? "outline" : "default"}
+                  size="sm"
+                >
+                  {workout.completed ? (
+                    <>
+                      <CheckCircle className="h-4 w-4 mr-2" />
+                      Completed
+                    </>
+                  ) : (
+                    <>
+                      <Circle className="h-4 w-4 mr-2" />
+                      Mark Complete
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="grid md:grid-cols-2 gap-6">
@@ -452,6 +559,11 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
               <div className="mt-6">
                 <Label className="mb-2">Notes</Label>
                 <p className="text-gray-600 dark:text-gray-300">{workout.notes}</p>
+              </div>
+            )}
+            {workout.completed && (
+              <div className="mt-4 text-xs text-green-600 dark:text-green-400">
+                Cardio workout completed
               </div>
             )}
           </CardContent>

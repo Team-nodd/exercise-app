@@ -1,11 +1,13 @@
+/* eslint-disable @next/next/no-html-link-for-pages */
 "use client"
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { useRouter, usePathname } from "next/navigation"
 import Link from "next/link"
-import { LogOut, Menu, X, Dumbbell, Calendar, Users, Home, User } from "lucide-react"
+import { LogOut, Menu, X, Dumbbell, Calendar, Users, Home, User, Bell } from "lucide-react"
 import { useAuth } from "@/components/providers/auth-provider"
+import { useEffect } from "react"
 
 export function Navigation() {
   const { profile, loading, signOut, user } = useAuth()
@@ -16,6 +18,32 @@ export function Navigation() {
   const pathname = usePathname()
 
   console.log("🧭 NAVIGATION: Render state - loading:", loading, "profile:", profile?.name || "none")
+
+  // Refresh the page if ?code is present in the URL (after email confirmation)
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has("code")) {
+        setTimeout(() => {
+          url.searchParams.delete("code");
+          window.location.replace(url.pathname + url.search);
+        }, 1000); // 1 second delay
+      }
+    }
+  }, []);
+
+  // Refresh the page if #message=Confirmation... is present in the URL (after email change confirmation)
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      if (url.hash && url.hash.includes("message=Confirmation")) {
+        setTimeout(() => {
+          url.hash = "";
+          window.location.replace(url.pathname + url.search);
+        }, 1000); // 1 second delay
+      }
+    }
+  }, []);
 
   const handleSignOut = async () => {
     console.log("🔄 NAVIGATION: Starting sign out...")
@@ -54,7 +82,11 @@ export function Navigation() {
 
   const isActiveLink = (href: string) => {
     if (href === "/" && pathname === "/") return true
-    if (href !== "/" && pathname.startsWith(href)) return true
+    // For dashboard, only match exact
+    if (href === "/dashboard" && pathname === "/dashboard") return true
+    if (href === "/coach/dashboard" && pathname === "/coach/dashboard") return true
+    // For sub-links, match exact
+    if (pathname === href) return true
     return false
   }
 
@@ -72,9 +104,9 @@ export function Navigation() {
     return `${baseClasses} text-gray-500 dark:text-gray-300 hover:text-primary hover:border-b-2 hover:border-gray-300 dark:hover:border-gray-600 pb-1`
   }
 
-  // Only show loading skeleton for a brief moment and only if we don't have profile data
-  if (loading && !profile && !user) {
-    console.log("⏳ NAVIGATION: Showing loading skeleton")
+  // Show loading skeleton when loading and we don't have profile data yet
+  if (loading && !profile) {
+    console.log("⏳ NAVIGATION: Showing loading skeleton - loading:", loading, "profile:", profile ? "exists" : "none", "user:", user?.id || "none")
     return (
       <nav className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
         <div className="container mx-auto px-2 sm:px-6 lg:px-8">
@@ -102,62 +134,76 @@ export function Navigation() {
         <div className="flex justify-between h-16">
           <div className="flex items-center">
             <div className="flex-shrink-0">
-              <Link href={getDashboardLink()} className="flex items-center">
+              <a href={getDashboardLink()} className="flex items-center">
                 <Dumbbell className="h-8 w-8 text-primary" />
                 <span className="ml-2 text-xl font-bold text-gray-900 dark:text-white">FitTracker</span>
-              </Link>
+              </a>
             </div>
 
             {profile && (
               <div className="hidden md:ml-10 md:flex md:space-x-8">
-                <Link
+                <a
                   href={getDashboardLink()}
                   className={getLinkClasses(getDashboardLink())}
                 >
                   <Home className="h-4 w-4 mr-2" />
                   Dashboard
-                </Link>
+                </a>
 
                 {profile.role === "coach" ? (
                   <>
-                    <Link
+                    <a
                       href="/coach/programs"
                       className={getLinkClasses("/coach/programs")}
                     >
                       <Calendar className="h-4 w-4 mr-2" />
                       Programs
-                    </Link>
-                    <Link
+                    </a>
+                    <a
                       href="/coach/clients"
                       className={getLinkClasses("/coach/clients")}
                     >
                       <Users className="h-4 w-4 mr-2" />
                       Clients
-                    </Link>
-                    <Link
+                    </a>
+                    <a
                       href="/coach/exercises"
                       className={getLinkClasses("/coach/exercises")}
                     >
                       <Dumbbell className="h-4 w-4 mr-2" />
                       Exercises
-                    </Link>
+                    </a>
+                    <a
+                      href="/dashboard/configuration"
+                      className={getLinkClasses("/dashboard/configuration")}
+                    >
+                      <Bell className="h-4 w-4 mr-2" />
+                      Configuration
+                    </a>
                   </>
                 ) : (
                   <>
-                    <Link
+                    <a
                       href="/dashboard/programs"
                       className={getLinkClasses("/dashboard/programs")}
                     >
                       <Calendar className="h-4 w-4 mr-2" />
                       My Programs
-                    </Link>
-                    <Link
+                    </a>
+                    <a
                       href="/dashboard/workouts"
                       className={getLinkClasses("/dashboard/workouts")}
                     >
                       <Dumbbell className="h-4 w-4 mr-2" />
                       Workouts
-                    </Link>
+                    </a>
+                    <a
+                      href="/dashboard/configuration"
+                      className={getLinkClasses("/dashboard/configuration")}
+                    >
+                      <Bell className="h-4 w-4 mr-2" />
+                      Configuration
+                    </a>
                   </>
                 )}
               </div>
@@ -243,44 +289,58 @@ export function Navigation() {
 
               {profile.role === "coach" ? (
                 <>
-                  <Link
+                  <a
                     href="/coach/programs"
                     className={getLinkClasses("/coach/programs", true)}
                     onClick={() => setMobileMenuOpen(false)}
                   >
                     Programs
-                  </Link>
-                  <Link
+                  </a>
+                  <a
                     href="/coach/clients"
                     className={getLinkClasses("/coach/clients", true)}
                     onClick={() => setMobileMenuOpen(false)}
                   >
                     Clients
-                  </Link>
-                  <Link
+                  </a>
+                  <a
                     href="/coach/exercises"
                     className={getLinkClasses("/coach/exercises", true)}
                     onClick={() => setMobileMenuOpen(false)}
                   >
                     Exercises
-                  </Link>
+                  </a>
+                  <a
+                    href="/dashboard/configuration"
+                    className={getLinkClasses("/dashboard/configuration", true)}
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    Configuration
+                  </a>
                 </>
               ) : (
                 <>
-                  <Link
+                  <a
                     href="/dashboard/programs"
                     className={getLinkClasses("/dashboard/programs", true)}
                     onClick={() => setMobileMenuOpen(false)}
                   >
                     My Programs
-                  </Link>
-                  <Link
+                  </a>
+                  <a
                     href="/dashboard/workouts"
                     className={getLinkClasses("/dashboard/workouts", true)}
                     onClick={() => setMobileMenuOpen(false)}
                   >
                     Workouts
-                  </Link>
+                  </a>
+                  <a
+                    href="/dashboard/configuration"
+                    className={getLinkClasses("/dashboard/configuration", true)}
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    Configuration
+                  </a>
                 </>
               )}
             </div>

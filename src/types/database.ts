@@ -9,6 +9,10 @@ export interface Database {
           role: "coach" | "user"
           created_at: string
           updated_at: string
+          // Notification settings
+          workout_completed_email: boolean
+          program_assigned_email: boolean
+          weekly_progress_email: boolean
         }
         Insert: {
           id: string
@@ -17,6 +21,10 @@ export interface Database {
           role?: "coach" | "user"
           created_at?: string
           updated_at?: string
+          // Notification settings
+          workout_completed_email?: boolean
+          program_assigned_email?: boolean
+          weekly_progress_email?: boolean
         }
         Update: {
           id?: string
@@ -25,6 +33,10 @@ export interface Database {
           role?: "coach" | "user"
           created_at?: string
           updated_at?: string
+          // Notification settings
+          workout_completed_email?: boolean
+          program_assigned_email?: boolean
+          weekly_progress_email?: boolean
         }
       }
       exercises: {
@@ -203,6 +215,41 @@ export interface Database {
           actual_reps?: number | null
           actual_weight?: string | null
           notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      notifications: {
+        Row: {
+          id: string
+          user_id: string
+          title: string
+          message: string | null
+          type: string
+          related_id: string | null
+          read: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          title: string
+          message?: string | null
+          type?: string
+          related_id?: string | null
+          read?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          title?: string
+          message?: string | null
+          type?: string
+          related_id?: string | null
+          read?: boolean
           created_at?: string
           updated_at?: string
         }

@@ -1,96 +1,52 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Users, Calendar, Dumbbell, TrendingUp, Plus } from "lucide-react"
+import { Users, Calendar, Dumbbell, TrendingUp, Plus, RefreshCw } from "lucide-react"
 import Link from "next/link"
-import type { User, DashboardStats } from "@/types"
+import type { User } from "@/types"
+import { useDashboardData } from "@/lib/hooks/use-dashboard-data"
 
 interface CoachDashboardProps {
   coach: User
 }
 
-interface CoachStats extends DashboardStats {
-  totalClients: number
-}
-
 export function CoachDashboard({ coach }: CoachDashboardProps) {
-  const [stats, setStats] = useState<CoachStats | null>(null)
-  const [recentClients, setRecentClients] = useState<User[]>([])
-  const [loading, setLoading] = useState(true)
-  const supabase = createClient()
-
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        // Fetch coach stats
-        const [programsResult, clientsResult, workoutsResult] = await Promise.all([
-          supabase.from("programs").select("id, status").eq("coach_id", coach.id),
-          supabase.from("programs").select("user_id").eq("coach_id", coach.id),
-          supabase
-            .from("workouts")
-            .select("id, completed, scheduled_date")
-            .in(
-              "program_id",
-              (await supabase.from("programs").select("id").eq("coach_id", coach.id)).data?.map((p) => p.id) || [],
-            ),
-        ])
-
-        if (programsResult.data && clientsResult.data && workoutsResult.data) {
-          const totalPrograms = programsResult.data.length
-          const activePrograms = programsResult.data.filter((p) => p.status === "active").length
-          const totalClients = new Set(clientsResult.data.map((p) => p.user_id)).size
-          const completedWorkouts = workoutsResult.data.filter((w) => w.completed).length
-          const upcomingWorkouts = workoutsResult.data.filter(
-            (w) => !w.completed && w.scheduled_date && new Date(w.scheduled_date) >= new Date(),
-          ).length
-
-          setStats({
-            totalPrograms,
-            activePrograms,
-            completedWorkouts,
-            upcomingWorkouts,
-            totalClients,
-          })
-        }
-
-        // Fetch recent clients
-        const { data: recentClientsData } = await supabase
-          .from("users")
-          .select("*")
-          .eq("role", "user")
-          .in(
-            "id",
-            (await supabase.from("programs").select("user_id").eq("coach_id", coach.id).limit(5)).data?.map(
-              (p) => p.user_id,
-            ) || [],
-          )
-          .limit(5)
-
-        if (recentClientsData) {
-          setRecentClients(recentClientsData)
-        }
-      } catch (error) {
-        console.error("Error fetching dashboard data:", error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchDashboardData()
-  }, [coach.id, supabase])
+  const { stats, recentClients, loading, error, refetch } = useDashboardData({
+    coachId: coach.id,
+    isCoach: true
+  })
 
   if (loading) {
-    return <div className="flex items-center justify-center h-64">Loading dashboard...</div>
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p>Loading dashboard...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <p className="text-red-600 mb-4">Error loading dashboard: {error}</p>
+          <Button onClick={refetch} variant="outline">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Retry
+          </Button>
+        </div>
+      </div>
+    )
   }
 
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Welcome back, Coach {coach.name}!</h1>
-        <p className="text-gray-600 dark:text-gray-300 mt-2">Heres your coaching overview for today.</p>
+        <p className="text-gray-600 dark:text-gray-300 mt-2">Here is your coaching overview for today.</p>
       </div>
 
       {/* Stats Cards */}
@@ -101,7 +57,8 @@ export function CoachDashboard({ coach }: CoachDashboardProps) {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats?.totalClients || 0}</div>
+            {/* <div className="text-2xl font-bold">{stats?.clientsCount || 0}</div> */}
+            <p className="text-xs text-muted-foreground">Active clients</p>
           </CardContent>
         </Card>
 
@@ -112,6 +69,7 @@ export function CoachDashboard({ coach }: CoachDashboardProps) {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats?.totalPrograms || 0}</div>
+            <p className="text-xs text-muted-foreground">Created programs</p>
           </CardContent>
         </Card>
 
@@ -122,6 +80,7 @@ export function CoachDashboard({ coach }: CoachDashboardProps) {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats?.activePrograms || 0}</div>
+            <p className="text-xs text-muted-foreground">Currently active</p>
           </CardContent>
         </Card>
 
@@ -132,6 +91,7 @@ export function CoachDashboard({ coach }: CoachDashboardProps) {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats?.completedWorkouts || 0}</div>
+            <p className="text-xs text-muted-foreground">By all clients</p>
           </CardContent>
         </Card>
 
@@ -142,74 +102,116 @@ export function CoachDashboard({ coach }: CoachDashboardProps) {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats?.upcomingWorkouts || 0}</div>
+            <p className="text-xs text-muted-foreground">Scheduled this week</p>
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-8">
-        {/* Recent Clients */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Clients</CardTitle>
-            <CardDescription>Clients youre currently working with</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {recentClients.length > 0 ? (
-              <div className="space-y-4">
-                {recentClients.map((client) => (
-                  <div key={client.id} className="flex items-center justify-between p-3 border rounded-lg">
-                    <div>
-                      <h3 className="font-semibold">{client.name}</h3>
-                      <p className="text-sm text-gray-600 dark:text-gray-300">{client.email}</p>
-                    </div>
-                    <Button size="sm" variant="outline" asChild>
-                      <Link href={`/coach/clients/${client.id}`}>View</Link>
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-gray-500 text-center py-8">No clients yet.</p>
-            )}
-          </CardContent>
-        </Card>
-
+      {/* Quick Actions and Recent Clients */}
+      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
         {/* Quick Actions */}
         <Card>
           <CardHeader>
             <CardTitle>Quick Actions</CardTitle>
-            <CardDescription>Common coaching tasks</CardDescription>
+            <CardDescription>Manage your coaching</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Link href="/coach/programs">
+              <Button className="w-full justify-start" variant="outline">
+                <Calendar className="h-4 w-4 mr-2" />
+                Manage Programs
+              </Button>
+            </Link>
+            <Link href="/coach/clients">
+              <Button className="w-full justify-start" variant="outline">
+                <Users className="h-4 w-4 mr-2" />
+                View Clients
+              </Button>
+            </Link>
+            <Link href="/coach/exercises">
+              <Button className="w-full justify-start" variant="outline">
+                <Dumbbell className="h-4 w-4 mr-2" />
+                Exercise Library
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        {/* Recent Clients */}
+        <Card className="md:col-span-2">
+          <CardHeader>
+            <CardTitle>Recent Clients</CardTitle>
+            <CardDescription>Your active clients</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              <Button className="w-full justify-start" asChild>
-                <Link href="/coach/programs/new">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create New Program
-                </Link>
-              </Button>
-              <Button className="w-full justify-start bg-transparent" variant="outline" asChild>
+            {recentClients && recentClients.length > 0 ? (
+              <div className="space-y-3">
+                {recentClients.map((client) => (
+                  <div key={client.id} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div className="flex items-center space-x-3">
+                      <div className="h-10 w-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium">
+                        {client.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)}
+                      </div>
+                      <div>
+                        <h4 className="font-medium">{client.name}</h4>
+                        <p className="text-sm text-muted-foreground">{client.email}</p>
+                      </div>
+                    </div>
+                    <Link href={`/coach/clients/${client.id}`}>
+                      <Button size="sm" variant="outline">
+                        View Profile
+                      </Button>
+                    </Link>
+                  </div>
+                ))}
+                {recentClients.length > 5 && (
+                  <div className="text-center pt-2">
+                    <Link href="/coach/clients">
+                      <Button variant="ghost" size="sm">
+                        View all clients
+                      </Button>
+                    </Link>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground">No clients yet</p>
                 <Link href="/coach/programs">
-                  <Calendar className="mr-2 h-4 w-4" />
-                  Manage Programs
+                  <Button className="mt-4" variant="outline">
+                    Create Your First Program
+                  </Button>
                 </Link>
-              </Button>
-              <Button className="w-full justify-start bg-transparent" variant="outline" asChild>
-                <Link href="/coach/clients">
-                  <Users className="mr-2 h-4 w-4" />
-                  View All Clients
-                </Link>
-              </Button>
-              <Button className="w-full justify-start bg-transparent" variant="outline" asChild>
-                <Link href="/coach/exercises">
-                  <Dumbbell className="mr-2 h-4 w-4" />
-                  Exercise Library
-                </Link>
-              </Button>
-            </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
+
+      {/* Create New Program */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Get Started</CardTitle>
+          <CardDescription>Create your first program or manage existing ones</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col sm:flex-row gap-4">
+            <Link href="/coach/programs/new">
+              <Button className="w-full sm:w-auto">
+                <Plus className="h-4 w-4 mr-2" />
+                Create New Program
+              </Button>
+            </Link>
+            <Link href="/coach/clients">
+              <Button variant="outline" className="w-full sm:w-auto">
+                <Users className="h-4 w-4 mr-2" />
+                Manage Clients
+              </Button>
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }

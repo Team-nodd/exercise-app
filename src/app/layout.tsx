@@ -5,17 +5,22 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { AuthProvider } from "@/components/providers/auth-provider"
 import { Navigation } from "@/components/layout/navigation"
 import { Toaster } from "@/components/ui/sonner"
+import { createServerClient } from "@/lib/supabase/server"
 
 export const metadata: Metadata = {
   title: "FitTracker Pro - Exercise Program Management",
   description: "Professional exercise program management system for coaches and athletes",
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  // Get initial session on the server
+  const supabase = await createServerClient()
+  const { data: { session } } = await supabase.auth.getSession()
+
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -28,7 +33,7 @@ export default function RootLayout({
       </head>
       <body className="font-poppins antialiased" suppressHydrationWarning>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          <AuthProvider>
+          <AuthProvider initialSession={session}>
             <div className="min-h-screen bg-background">
               <Navigation />
               <main>{children}</main>

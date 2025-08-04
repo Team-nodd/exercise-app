@@ -1,0 +1,28 @@
+import { createServerClient } from "@/lib/supabase/server"
+import { redirect } from "next/navigation"
+import { NotificationSettings } from "@/components/settings/notification-settings"
+
+export default async function ConfigurationPage() {
+  const supabase = await createServerClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    redirect("/auth/login")
+  }
+
+  // Get user profile with notification settings
+  const { data: profile, error } = await supabase
+    .from("users")
+    .select("*")
+    .eq("id", user.id)
+    .single()
+
+  if (error || !profile) {
+    redirect("/auth/login")
+  }
+
+  return <NotificationSettings profile={profile} />
+} 

@@ -58,6 +58,28 @@ export async function middleware(request: NextRequest) {
       },
     )
 
+    // Handle email confirmation codes
+    const { searchParams } = request.nextUrl
+    const code = searchParams.get('code')
+    
+    if (code) {
+      console.log("🔄 MIDDLEWARE: Found confirmation code, exchanging for session...")
+      try {
+        const { data, error } = await supabase.auth.exchangeCodeForSession(code)
+        
+        if (error) {
+          console.error("❌ MIDDLEWARE: Code exchange error:", error)
+        } else {
+          console.log("✅ MIDDLEWARE: Code exchanged successfully for user:", data.user?.id)
+          // Redirect to home page without the code parameter
+          const redirectUrl = new URL("/", request.url)
+          return NextResponse.redirect(redirectUrl)
+        }
+      } catch (error) {
+        console.error("❌ MIDDLEWARE: Code exchange failed:", error)
+      }
+    }
+
     // Get session with timeout
     console.log("🔄 MIDDLEWARE: Fetching session...")
     const sessionStart = Date.now()

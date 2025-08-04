@@ -1,109 +1,21 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Calendar, Dumbbell, TrendingUp, Clock } from "lucide-react"
+import { Calendar, Dumbbell, TrendingUp, Clock, RefreshCw } from "lucide-react"
 import Link from "next/link"
-import type { User, DashboardStats, WorkoutWithDetails } from "@/types"
+import type { User } from "@/types"
+import { useDashboardData } from "@/lib/hooks/use-dashboard-data"
 
 interface UserDashboardProps {
   user: User
 }
 
 export function UserDashboard({ user }: UserDashboardProps) {
-  const [stats, setStats] = useState<DashboardStats | null>(null)
-  const [upcomingWorkouts, setUpcomingWorkouts] = useState<WorkoutWithDetails[]>([])
-  const [loading, setLoading] = useState(true)
-  const supabase = createClient()
-
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        console.log("=== DASHBOARD DATA FETCH START ===")
-        console.log("Fetching data for user:", user.id)
-        
-        // Set a timeout to prevent infinite loading
-        const timeoutId = setTimeout(() => {
-          console.warn("Dashboard data fetch timeout, setting loading to false")
-          setLoading(false)
-        }, 15000) // Increased to 15 seconds
-        
-        // Fetch basic stats first
-        const [programsResult, workoutsResult] = await Promise.all([
-          supabase.from("programs").select("id, status").eq("user_id", user.id),
-          supabase.from("workouts").select("id, completed, scheduled_date").eq("user_id", user.id),
-        ])
-
-        console.log("Programs result:", programsResult)
-        console.log("Workouts result:", workoutsResult)
-
-        if (programsResult.error) {
-          console.error("Error fetching programs:", programsResult.error)
-        }
-        if (workoutsResult.error) {
-          console.error("Error fetching workouts:", workoutsResult.error)
-        }
-
-        if (programsResult.data && workoutsResult.data) {
-          const totalPrograms = programsResult.data.length
-          const activePrograms = programsResult.data.filter((p) => p.status === "active").length
-          const completedWorkouts = workoutsResult.data.filter((w) => w.completed).length
-          
-          // Fix the date comparison for upcoming workouts
-          const today = new Date()
-          today.setHours(0, 0, 0, 0) // Start of today
-          const upcomingWorkouts = workoutsResult.data.filter(
-            (w) => !w.completed && w.scheduled_date && new Date(w.scheduled_date) >= today,
-          ).length
-
-          setStats({
-            totalPrograms,
-            activePrograms,
-            completedWorkouts,
-            upcomingWorkouts,
-          })
-          
-          console.log("Stats set:", { totalPrograms, activePrograms, completedWorkouts, upcomingWorkouts })
-        }
-
-        // Fetch upcoming workouts with better date handling
-        const today = new Date()
-        today.setHours(0, 0, 0, 0) // Start of today
-        
-        const { data: workouts, error: workoutsError } = await supabase
-          .from("workouts")
-          .select(`
-            *,
-            program:programs(*)
-          `)
-          .eq("user_id", user.id)
-          .eq("completed", false)
-          .gte("scheduled_date", today.toISOString())
-          .order("scheduled_date", { ascending: true })
-          .limit(5)
-
-        if (workoutsError) {
-          console.error("Error fetching upcoming workouts:", workoutsError)
-        }
-
-        if (workouts) {
-          setUpcomingWorkouts(workouts as WorkoutWithDetails[])
-          console.log("Upcoming workouts set:", workouts.length)
-        }
-        
-        clearTimeout(timeoutId)
-      } catch (error) {
-        console.error("Error fetching dashboard data:", error)
-      } finally {
-        setLoading(false)
-        console.log("=== DASHBOARD DATA FETCH END ===")
-      }
-    }
-
-    fetchDashboardData()
-  }, [user.id, supabase])
+  const { stats, upcomingWorkouts, loading, error, refetch } = useDashboardData({
+    userId: user.id,
+    isCoach: false
+  })
 
   if (loading) {
     return (
@@ -111,6 +23,20 @@ export function UserDashboard({ user }: UserDashboardProps) {
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
           <p>Loading dashboard data...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <p className="text-red-600 mb-4">Error loading dashboard: {error}</p>
+          <Button onClick={refetch} variant="outline">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Retry
+          </Button>
         </div>
       </div>
     )
@@ -132,6 +58,7 @@ export function UserDashboard({ user }: UserDashboardProps) {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats?.totalPrograms || 0}</div>
+            <p className="text-xs text-muted-foreground">Active and completed programs</p>
           </CardContent>
         </Card>
 
@@ -142,6 +69,7 @@ export function UserDashboard({ user }: UserDashboardProps) {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats?.activePrograms || 0}</div>
+            <p className="text-xs text-muted-foreground">Currently active programs</p>
           </CardContent>
         </Card>
 
@@ -152,6 +80,7 @@ export function UserDashboard({ user }: UserDashboardProps) {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats?.completedWorkouts || 0}</div>
+            <p className="text-xs text-muted-foreground">Total workouts completed</p>
           </CardContent>
         </Card>
 
@@ -162,70 +91,82 @@ export function UserDashboard({ user }: UserDashboardProps) {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats?.upcomingWorkouts || 0}</div>
+            <p className="text-xs text-muted-foreground">Scheduled for this week</p>
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-8">
-        {/* Upcoming Workouts */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Upcoming Workouts</CardTitle>
-            <CardDescription>Your scheduled workouts for the next few days</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {upcomingWorkouts.length > 0 ? (
-              <div className="space-y-4">
-                {upcomingWorkouts.map((workout) => (
-                  <div key={workout.id} className="flex items-center justify-between p-4 border rounded-lg">
-                    <div>
-                      <h3 className="font-semibold">{workout.name}</h3>
-                      <p className="text-sm text-gray-600 dark:text-gray-300">
-                        {workout.scheduled_date && new Date(workout.scheduled_date).toLocaleDateString()}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        {workout.workout_type === "gym" ? "Gym Workout" : "Cardio Session"}
-                      </p>
-                    </div>
-                    <Button size="sm" asChild>
-                      <Link href={`/dashboard/workouts/${workout.id}`}>Start</Link>
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-gray-500 text-center py-8">No upcoming workouts scheduled.</p>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Quick Actions */}
+      {/* Quick Actions */}
+      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
         <Card>
           <CardHeader>
             <CardTitle>Quick Actions</CardTitle>
-            <CardDescription>Common tasks and navigation</CardDescription>
+            <CardDescription>Access your fitness tools</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Link href="/dashboard/workouts">
+              <Button className="w-full justify-start" variant="outline">
+                <Dumbbell className="h-4 w-4 mr-2" />
+                View Workouts
+              </Button>
+            </Link>
+            <Link href="/dashboard/programs">
+              <Button className="w-full justify-start" variant="outline">
+                <Calendar className="h-4 w-4 mr-2" />
+                My Programs
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        {/* Upcoming Workouts */}
+        <Card className="md:col-span-2">
+          <CardHeader>
+            <CardTitle>Upcoming Workouts</CardTitle>
+            <CardDescription>Your next scheduled workouts</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              <Button className="w-full justify-start bg-transparent" variant="outline" asChild>
+            {upcomingWorkouts.length === 0 ? (
+              <div className="text-center py-8">
+                <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground">No upcoming workouts scheduled</p>
                 <Link href="/dashboard/programs">
-                  <Calendar className="mr-2 h-4 w-4" />
-                  View My Programs
+                  <Button className="mt-4" variant="outline">
+                    Browse Programs
+                  </Button>
                 </Link>
-              </Button>
-              <Button className="w-full justify-start bg-transparent" variant="outline" asChild>
-                <Link href="/dashboard/workouts">
-                  <Dumbbell className="mr-2 h-4 w-4" />
-                  Browse Workouts
-                </Link>
-              </Button>
-              <Button className="w-full justify-start bg-transparent" variant="outline" asChild>
-                <Link href="/dashboard/progress">
-                  <TrendingUp className="mr-2 h-4 w-4" />
-                  Track Progress
-                </Link>
-              </Button>
-            </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {upcomingWorkouts.slice(0, 5).map((workout) => (
+                  <div key={workout.id} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div>
+                      <h4 className="font-medium">{workout.name}</h4>
+                      <p className="text-sm text-muted-foreground">
+                        {workout.program?.name} •{" "}
+                        {workout.scheduled_date
+                          ? new Date(workout.scheduled_date).toLocaleDateString()
+                          : "No date"}
+                      </p>
+                    </div>
+                    <Link href={`/dashboard/workouts/${workout.id}`}>
+                      <Button size="sm" variant="outline">
+                        View
+                      </Button>
+                    </Link>
+                  </div>
+                ))}
+                {upcomingWorkouts.length > 5 && (
+                  <div className="text-center pt-2">
+                    <Link href="/dashboard/workouts">
+                      <Button variant="ghost" size="sm">
+                        View all workouts
+                      </Button>
+                    </Link>
+                  </div>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
