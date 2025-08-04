@@ -1,14 +1,20 @@
 "use client"
 
 import type React from "react"
-import { createContext, useContext, useState, useEffect } from "react"
+import { createContext, useContext, useState, useEffect, useRef } from "react"
 import { createClient } from "@/lib/supabase/client"
 import type { User, Session } from "@supabase/supabase-js"
-import type { User as AppUser } from "@/types"
+
+interface Profile {
+  id: string
+  name: string
+  email: string
+  role: "coach" | "user"
+}
 
 interface AuthContextType {
   user: User | null
-  profile: AppUser | null
+  profile: Profile | null
   loading: boolean
   signOut: () => Promise<void>
 }
@@ -22,187 +28,164 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children, initialSession }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(initialSession?.user ?? null)
-  const [profile, setProfile] = useState<AppUser | null>(null)
-  const [loading, setLoading] = useState(!initialSession?.user)
+  const [profile, setProfile] = useState<Profile | null>(null)
+  const [loading, setLoading] = useState(true)
+  const fetchingProfile = useRef<string | null>(null) // Track which user we're fetching profile for
+  const profileCache = useRef<Map<string, Profile>>(new Map()) // Cache profiles
+
   const supabase = createClient()
+
+  const fetchProfile = async (userId: string): Promise<Profile | null> => {
+    // Check cache first
+    const cached = profileCache.current.get(userId)
+    if (cached) {
+      console.log("📦 AUTH: Using cached profile for:", userId)
+      return cached
+    }
+
+    // Prevent duplicate fetches for the same user
+    if (fetchingProfile.current === userId) {
+      console.log("⏳ AUTH: Profile fetch already in progress for:", userId)
+      return null
+    }
+
+    try {
+      fetchingProfile.current = userId
+      console.log("🔄 AUTH: Fetching profile for user:", userId)
+
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("Profile fetch timeout")), 5000) // Reduced to 5 seconds
+      })
+
+      const fetchPromise = supabase.from("users").select("id, name, email, role").eq("id", userId).single()
+
+      const { data, error } = await Promise.race([fetchPromise, timeoutPromise])
+
+      if (error) {
+        console.error("❌ AUTH: Error fetching profile:", error)
+        return null
+      }
+
+      console.log("✅ AUTH: Profile loaded successfully:", data?.name)
+      const profileData = data as Profile
+
+      // Cache the profile
+      profileCache.current.set(userId, profileData)
+
+      return profileData
+    } catch (error) {
+      console.error("❌ AUTH: Profile fetch failed:", error)
+      return null
+    } finally {
+      fetchingProfile.current = null
+    }
+  }
 
   useEffect(() => {
     let mounted = true
 
-    const getSession = async () => {
-      console.log("🔄 AUTH PROVIDER: Getting initial session...")
-      
+    const initializeAuth = async () => {
       try {
-        const {
-          data: { session },
-          error: sessionError,
-        } = await supabase.auth.getSession()
+        console.log("🔄 AUTH: Initializing auth...")
 
-        console.log("🔍 AUTH PROVIDER: Client session result:", { 
-          hasSession: !!session, 
-          userId: session?.user?.id, 
-          error: sessionError?.message 
-        })
-
-        if (sessionError) {
-          console.error("❌ AUTH PROVIDER: Session error:", sessionError)
+        // If we have an initial session, use it
+        if (initialSession?.user) {
+          console.log("🔄 AUTH: Using initial session for user:", initialSession.user.id)
+          const profileData = await fetchProfile(initialSession.user.id)
           if (mounted) {
-            setUser(null)
-            setProfile(null)
+            setUser(initialSession.user)
+            if (profileData) {
+              setProfile(profileData)
+            }
             setLoading(false)
+            console.log("✅ AUTH: Initial session setup complete")
           }
           return
         }
 
-        console.log("✅ AUTH PROVIDER: Initial session loaded:", session?.user?.id || "No user")
+        // Otherwise, get the current session
+        console.log("🔄 AUTH: Getting current session...")
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
 
-        if (mounted) {
-          setUser(session?.user ?? null)
-        }
-
-        if (session?.user && mounted) {
-          console.log("🔄 AUTH PROVIDER: Fetching initial profile for user:", session.user.id)
-          
-          try {
-            const { data: profileData, error: profileError } = await supabase
-              .from("users")
-              .select("*")
-              .eq("id", session.user.id)
-              .single()
-
-            console.log("🔍 AUTH PROVIDER: Initial profile fetch result:", { 
-              hasProfile: !!profileData, 
-              profileName: profileData?.name, 
-              error: profileError?.message 
-            })
-
-            if (mounted) {
-              if (profileError) {
-                console.error("❌ AUTH PROVIDER: Initial profile error:", profileError)
-                setProfile(null)
-              } else {
-                console.log("✅ AUTH PROVIDER: Initial profile loaded:", profileData?.name)
-                setProfile(profileData)
-              }
-              setLoading(false)
-            }
-          } catch (error) {
-            console.error("❌ AUTH PROVIDER: Initial profile fetch error:", error)
-            if (mounted) {
-              setProfile(null)
-              setLoading(false)
-            }
-          }
-        } else if (mounted) {
-          console.log("🔄 AUTH PROVIDER: No initial session, setting loading to false")
-          setProfile(null)
-          setLoading(false)
-        }
-      } catch (error) {
-        console.error("❌ AUTH PROVIDER: Auth provider error:", error)
-        if (mounted) {
-          setUser(null)
-          setProfile(null)
-          setLoading(false)
-        }
-      }
-    }
-
-    // If we have an initial session, use it and fetch the profile
-    if (initialSession?.user) {
-      console.log("✅ AUTH PROVIDER: Using initial session for user:", initialSession.user.id)
-      setUser(initialSession.user)
-      
-      // Fetch profile for the initial session
-      const fetchInitialProfile = async () => {
-        try {
-          const { data: profileData, error: profileError } = await supabase
-            .from("users")
-            .select("*")
-            .eq("id", initialSession.user.id)
-            .single()
-
+        if (session?.user) {
+          console.log("🔄 AUTH: Found session, fetching profile for:", session.user.id)
+          const profileData = await fetchProfile(session.user.id)
           if (mounted) {
-            if (profileError) {
-              console.error("❌ AUTH PROVIDER: Initial profile error:", profileError)
-              setProfile(null)
-            } else {
-              console.log("✅ AUTH PROVIDER: Initial profile loaded:", profileData?.name)
+            setUser(session.user)
+            if (profileData) {
               setProfile(profileData)
             }
-            setLoading(false)
           }
-        } catch (error) {
-          console.error("❌ AUTH PROVIDER: Initial profile fetch error:", error)
-          if (mounted) {
-            setProfile(null)
-            setLoading(false)
-          }
+        } else {
+          console.log("🔄 AUTH: No session found")
+        }
+
+        if (mounted) {
+          setLoading(false)
+          console.log("✅ AUTH: Initialization complete")
+        }
+      } catch (error) {
+        console.error("❌ AUTH: Initialization error:", error)
+        if (mounted) {
+          setLoading(false)
         }
       }
-      
-      fetchInitialProfile()
-    } else {
-      // No initial session, get it from the client
-      getSession()
     }
 
+    initializeAuth()
+
+    // Listen for auth changes
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return
 
-      console.log("🔄 AUTH PROVIDER: Auth state change - event:", event, "user:", session?.user?.id, "currentUser:", user?.id, "currentProfile:", profile?.name)
+      console.log("🔄 AUTH: Auth state change:", event, "User:", session?.user?.id || "none")
 
-      // Only set loading to true for specific events that require data fetching
-      // Don't set loading for TOKEN_REFRESHED or other non-critical events
-      const shouldSetLoading = ['SIGNED_IN', 'SIGNED_OUT', 'USER_UPDATED'].includes(event)
-      
-      if (shouldSetLoading) {
-        console.log("⏳ AUTH PROVIDER: Setting loading to true for event:", event)
+      // Skip profile fetch for certain events that don't require it
+      if (event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION") {
+        console.log("ℹ️ AUTH: Skipping profile fetch for event:", event)
+        return
+      }
+
+      // Set loading only for relevant auth events
+      if (
+        event === "SIGNED_IN" ||
+        event === "SIGNED_OUT" ||
+        event === "USER_UPDATED" ||
+        event === "PASSWORD_RECOVERY" ||
+        event === "MFA_CHALLENGE_VERIFIED"
+      ) {
         setLoading(true)
-      } else {
-        console.log("ℹ️ AUTH PROVIDER: Skipping loading state for event:", event)
       }
 
       setUser(session?.user ?? null)
 
       if (session?.user) {
-        console.log("🔄 AUTH PROVIDER: Fetching profile for user:", session.user.id)
-        
-        try {
-          const { data: profileData, error: profileError } = await supabase
-            .from("users")
-            .select("*")
-            .eq("id", session.user.id)
-            .single()
+        // Only fetch profile if we don't already have it or if it's a different user
+        const currentProfile = profile
+        const isSameUser = currentProfile?.id === session.user.id
 
-          console.log("🔍 AUTH PROVIDER: Profile fetch result:", { 
-            hasProfile: !!profileData, 
-            profileName: profileData?.name, 
-            error: profileError?.message 
-          })
-
+        if (!isSameUser) {
+          console.log("🔄 AUTH: Fetching profile for new user:", session.user.id)
+          const profileData = await fetchProfile(session.user.id)
           if (mounted) {
-            if (profileError) {
-              console.error("❌ AUTH PROVIDER: Profile error on auth change:", profileError)
-              setProfile(null)
-              setLoading(false)
-            } else {
-              console.log("✅ AUTH PROVIDER: Profile loaded successfully:", profileData?.name)
+            if (profileData) {
               setProfile(profileData)
-              setLoading(false)
             }
+            setLoading(false)
           }
-        } catch (error) {
-          console.error("❌ AUTH PROVIDER: Profile fetch error on auth change:", error)
+        } else {
+          console.log("ℹ️ AUTH: Same user, keeping existing profile")
           if (mounted) {
-            setProfile(null)
             setLoading(false)
           }
         }
       } else {
-        console.log("🔄 AUTH PROVIDER: No session, clearing profile and user")
+        console.log("🔄 AUTH: No session, clearing profile")
         if (mounted) {
           setProfile(null)
           setLoading(false)
@@ -214,42 +197,25 @@ export function AuthProvider({ children, initialSession }: AuthProviderProps) {
       mounted = false
       subscription.unsubscribe()
     }
-  }, [supabase, initialSession])
-
-  // Refresh the page if ?code is present in the URL (after email confirmation)
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const url = new URL(window.location.href);
-      if (url.searchParams.has("code")) {
-        setTimeout(() => {
-          url.searchParams.delete("code");
-          window.location.replace(url.pathname + url.search);
-        }, 1000); // 1 second delay
-      }
-    }
-  }, []);
+  }, [initialSession, supabase])
 
   const signOut = async () => {
     try {
-      console.log("🔄 AUTH PROVIDER: Starting sign out...")
-      
-      // Clear local state immediately
+      setLoading(true)
+      const { error } = await supabase.auth.signOut()
+
+      if (error) throw error
+
+      // Clear cache and state
+      profileCache.current.clear()
       setUser(null)
       setProfile(null)
-      setLoading(false)
-      
-      // Sign out from Supabase
-      const { error } = await supabase.auth.signOut()
-      
-      if (error) {
-        console.error("Sign out error:", error)
-        throw error
-      }
-      
-      window.location.href = '/'
-      console.log("✅ AUTH PROVIDER: Sign out successful")
+
+      // Redirect to home
+      window.location.href = "/"
     } catch (error) {
       console.error("Sign out error:", error)
+      setLoading(false)
       throw error
     }
   }

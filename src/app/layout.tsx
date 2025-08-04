@@ -19,7 +19,9 @@ export default async function RootLayout({
 }) {
   // Get initial session on the server
   const supabase = await createServerClient()
-  const { data: { session } } = await supabase.auth.getSession()
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
 
   return (
     <html lang="en" suppressHydrationWarning>

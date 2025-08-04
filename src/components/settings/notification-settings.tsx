@@ -134,7 +134,7 @@ export function NotificationSettings({ profile }: NotificationSettingsProps) {
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
-      <div className="text-center mb-8">
+      <div className="text-center mb-8 mt-10">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
           Notification Settings
         </h1>
