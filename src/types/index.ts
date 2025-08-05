@@ -26,4 +26,5 @@ export interface DashboardStats {
   activePrograms: number
   completedWorkouts: number
   upcomingWorkouts: number
+  totalClients: number
 }

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Users, Calendar, Eye } from "lucide-react"
 import Link from "next/link"
 import type { User, ProgramWithDetails } from "@/types"
+import { Badge } from "../ui/badge"
 
 interface ClientListProps {
   coachId: string
@@ -144,9 +145,18 @@ export function ClientList({ coachId }: ClientListProps) {
                                   : "No start date"}
                               </p>
                             </div>
-                            {/* <Badge className={getStatusColor(program.status)}> */}
-                              {program.status.charAt(0).toUpperCase() + program.status.slice(1)}
-                            {/* </Badge> */}
+
+                            <div className="flex align-middle gap-5">
+                              <Badge className={getStatusColor(program.status)}>
+                                {program.status.charAt(0).toUpperCase() + program.status.slice(1)}
+                              </Badge>
+                              <Button variant="outline" size="sm" asChild>
+                                <Link href={`/coach/programs/${program.id}`}>
+                                  <Eye className="h-4 w-4 mr-1" />
+                                  View
+                                </Link>
+                              </Button>
+                            </div>
                           </div>
                         ))}
                         {client.programs.length > 3 && (

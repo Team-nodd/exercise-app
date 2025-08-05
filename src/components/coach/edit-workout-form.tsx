@@ -54,6 +54,12 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
+  const [workoutComments, setWorkoutComments] = useState<any[]>([])
+  const [exerciseComments, setExerciseComments] = useState<Record<number, any[]>>({})
+  const [newCoachWorkoutComment, setNewCoachWorkoutComment] = useState("")
+  const [newCoachExerciseComments, setNewCoachExerciseComments] = useState<Record<number, string>>({})
+  const [commentLoading, setCommentLoading] = useState(false)
+
   const router = useRouter()
   // const { toast } = useToast()
   const supabase = createClient()
@@ -93,6 +99,46 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
 
     fetchExercises()
   }, [supabase, initialExercises])
+
+  // Fetch comments for workout and exercises
+  const fetchComments = async (exList: WorkoutExerciseWithDetails[]) => {
+    try {
+      // Workout comments
+      const { data: workoutCommentsData } = await supabase
+        .from("comments")
+        .select("*, user:users(name, role)")
+        .eq("workout_id", workout.id)
+        .is("workout_exercise_id", null)
+        .order("created_at", { ascending: true })
+      setWorkoutComments(workoutCommentsData || [])
+      // Exercise comments
+      if (exList.length > 0) {
+        const exerciseIds = exList.map((ex) => ex.id)
+        const { data: exerciseCommentsData } = await supabase
+          .from("comments")
+          .select("*, user:users(name, role)")
+          .in("workout_exercise_id", exerciseIds)
+          .order("created_at", { ascending: true })
+        // Group by exerciseId
+        const grouped: Record<number, any[]> = {}
+        for (const c of exerciseCommentsData || []) {
+          const exId = c.workout_exercise_id
+          if (!grouped[exId]) grouped[exId] = []
+          grouped[exId].push(c)
+        }
+        setExerciseComments(grouped)
+      } else {
+        setExerciseComments({})
+      }
+    } catch {
+      setWorkoutComments([])
+      setExerciseComments({})
+    }
+  }
+
+  useEffect(() => {
+    fetchComments(initialExercises)
+  }, [initialExercises])
 
   const addExercise = () => {
     setWorkoutExercises([
@@ -154,6 +200,64 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
       setDeleting(false)
       setShowDeleteConfirm(false)
     }
+  }
+
+  // Add coach comment for workout
+  const handleAddCoachWorkoutComment = async () => {
+    if (!newCoachWorkoutComment.trim()) return
+    setCommentLoading(true)
+    try {
+      const user = supabase.auth.getUser ? (await supabase.auth.getUser()).data.user : null
+      if (!user) {
+        toast("You must be logged in as coach to comment.")
+        setCommentLoading(false)
+        return
+      }
+      const { error } = await supabase.from("comments").insert({
+        user_id: user.id,
+        workout_id: workout.id,
+        comment_text: newCoachWorkoutComment.trim(),
+      })
+      if (!error) {
+        setNewCoachWorkoutComment("")
+        await fetchComments(initialExercises)
+      } else {
+        toast("Failed to add comment")
+      }
+    } catch {
+      toast("Failed to add comment")
+    }
+    setCommentLoading(false)
+  }
+
+  // Add coach comment for exercise
+  const handleAddCoachExerciseComment = async (exerciseId: number) => {
+    const text = newCoachExerciseComments[exerciseId] || ""
+    if (!text.trim()) return
+    setCommentLoading(true)
+    try {
+      const user = supabase.auth.getUser ? (await supabase.auth.getUser()).data.user : null
+      if (!user) {
+        toast("You must be logged in as coach to comment.")
+        setCommentLoading(false)
+        return
+      }
+      const { error } = await supabase.from("comments").insert({
+        user_id: user.id,
+        workout_id: workout.id,
+        workout_exercise_id: exerciseId,
+        comment_text: text.trim(),
+      })
+      if (!error) {
+        setNewCoachExerciseComments((prev) => ({ ...prev, [exerciseId]: "" }))
+        await fetchComments(initialExercises)
+      } else {
+        toast("Failed to add comment")
+      }
+    } catch {
+      toast("Failed to add comment")
+    }
+    setCommentLoading(false)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -549,6 +653,77 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
                   ))}
                 </div>
               )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Comments Section */}
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle>Workout Comments</CardTitle>
+            <CardDescription>See user comments and reply as coach</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2 mb-2">
+              {workoutComments.length === 0 && <div className="text-gray-500 text-sm">No comments yet.</div>}
+              {workoutComments.map((c) => (
+                <div key={c.id} className="p-2 bg-gray-50 dark:bg-gray-800 rounded">
+                  <span className="font-medium">{c.user?.name || "User"}</span>
+                  {c.user?.role === "coach" && <span className="ml-1 text-blue-600">(Coach)</span>}: {c.comment_text}
+                  <span className="ml-2 text-xs text-gray-400">{new Date(c.created_at).toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2 mt-2">
+              <Textarea
+                value={newCoachWorkoutComment}
+                onChange={(e) => setNewCoachWorkoutComment(e.target.value)}
+                placeholder="Add a coach comment..."
+                rows={2}
+                className="flex-1"
+                disabled={commentLoading}
+              />
+              <Button onClick={handleAddCoachWorkoutComment} disabled={commentLoading || !newCoachWorkoutComment.trim()}>Post</Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Gym Exercise Comments */}
+        {workoutType === "gym" && initialExercises.length > 0 && (
+          <Card className="mb-8">
+            <CardHeader>
+              <CardTitle>Exercise Comments</CardTitle>
+              <CardDescription>See user comments and reply as coach for each exercise</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {initialExercises.map((ex, idx) => (
+                <div key={ex.id} className="mb-4">
+                  <div className="font-medium text-xs mb-1">{idx + 1}. {ex.exercise?.name}</div>
+                  <div className="space-y-1 mb-1">
+                    {(exerciseComments[ex.id] || []).length === 0 && (
+                      <div className="text-gray-400 text-xs">No comments yet.</div>
+                    )}
+                    {(exerciseComments[ex.id] || []).map((c) => (
+                      <div key={c.id} className="p-1 bg-gray-50 dark:bg-gray-800 rounded text-xs">
+                        <span className="font-medium">{c.user?.name || "User"}</span>
+                        {c.user?.role === "coach" && <span className="ml-1 text-blue-600">(Coach)</span>}: {c.comment_text}
+                        <span className="ml-2 text-[10px] text-gray-400">{new Date(c.created_at).toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex gap-1 mt-1">
+                    <Textarea
+                      value={newCoachExerciseComments[ex.id] || ""}
+                      onChange={(e) => setNewCoachExerciseComments((prev) => ({ ...prev, [ex.id]: e.target.value }))}
+                      placeholder="Add a coach comment..."
+                      rows={1}
+                      className="flex-1 text-xs"
+                      disabled={commentLoading}
+                    />
+                    <Button size="sm" onClick={() => handleAddCoachExerciseComment(ex.id)} disabled={commentLoading || !(newCoachExerciseComments[ex.id] || "").trim()}>Post</Button>
+                  </div>
+                </div>
+              ))}
             </CardContent>
           </Card>
         )}

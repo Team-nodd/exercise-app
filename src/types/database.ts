@@ -254,6 +254,32 @@ export interface Database {
           updated_at?: string
         }
       }
+      comments: {
+        Row: {
+          id: number
+          user_id: string
+          workout_id: number | null
+          workout_exercise_id: number | null
+          comment_text: string
+          created_at: string
+        }
+        Insert: {
+          id?: number
+          user_id: string
+          workout_id?: number | null
+          workout_exercise_id?: number | null
+          comment_text: string
+          created_at?: string
+        }
+        Update: {
+          id?: number
+          user_id?: string
+          workout_id?: number | null
+          workout_exercise_id?: number | null
+          comment_text?: string
+          created_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never

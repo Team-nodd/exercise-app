@@ -9,9 +9,12 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
-import { CheckCircle, Circle, Clock, Dumbbell, Target, Weight, Timer, Save, AlertCircle } from "lucide-react"
+import { CheckCircle, Circle, Clock, Dumbbell, Target, Weight, Timer, Save, AlertCircle, ArrowLeft } from "lucide-react"
 import type { WorkoutWithDetails, WorkoutExerciseWithDetails } from "@/types"
 import { notificationService } from "@/lib/notifications/notification-service"
+import Link from "next/link"
+import { Textarea } from "@/components/ui/textarea"
+import { H1, H5, P } from '../ui/heading';
 
 interface WorkoutDetailProps {
   workoutId: string
@@ -41,6 +44,11 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
   const [saving, setSaving] = useState(false)
   const [pendingUpdates, setPendingUpdates] = useState<Record<string, any>>({})
   const [hasPendingChanges, setHasPendingChanges] = useState(false)
+  const [workoutComments, setWorkoutComments] = useState<any[]>([])
+  const [exerciseComments, setExerciseComments] = useState<Record<string, any[]>>({})
+  const [newWorkoutComment, setNewWorkoutComment] = useState("")
+  const [newExerciseComments, setNewExerciseComments] = useState<Record<string, string>>({})
+  const [commentLoading, setCommentLoading] = useState(false)
 
   const supabase = createClient()
 
@@ -93,6 +101,61 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
       setLoading(false)
     }
   }, [workoutId, supabase, toast])
+
+  // Fetch comments for workout and exercises
+  const fetchComments = useCallback(async (exercisesList?: WorkoutExerciseWithDetails[]) => {
+    try {
+      // Fetch workout comments
+      const { data: workoutCommentsData, error: workoutCommentsError } = await supabase
+        .from("comments")
+        .select("*, user:users(name)")
+        .eq("workout_id", workoutId)
+        .is("workout_exercise_id", null)
+        .order("created_at", { ascending: true })
+      if (workoutCommentsError) {
+        console.error("Error fetching workout comments:", workoutCommentsError)
+        toast("Failed to load workout comments")
+      } else {
+        setWorkoutComments(workoutCommentsData || [])
+      }
+      // Fetch exercise comments (for gym)
+      if (exercisesList && exercisesList.length > 0) {
+        const exerciseIds = exercisesList.map((ex) => ex.id)
+        const { data: exerciseCommentsData, error: exerciseCommentsError } = await supabase
+          .from("comments")
+          .select("*, user:users(name)")
+          .in("workout_exercise_id", exerciseIds)
+          .order("created_at", { ascending: true })
+        if (exerciseCommentsError) {
+          console.error("Error fetching exercise comments:", exerciseCommentsError)
+          toast("Failed to load exercise comments")
+        } else {
+          // Group by exerciseId
+          const grouped: Record<string, any[]> = {}
+          for (const c of exerciseCommentsData || []) {
+            const exId = c.workout_exercise_id
+            if (!grouped[exId]) grouped[exId] = []
+            grouped[exId].push(c)
+          }
+          setExerciseComments(grouped)
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching comments:", error)
+      toast("Failed to load comments")
+    }
+  }, [supabase, workoutId, toast])
+
+  // Fetch comments after loading workout/exercises
+  useEffect(() => {
+    if (workout) {
+      if (workout.workout_type === "gym" && exercises.length > 0) {
+        fetchComments(exercises)
+      } else {
+        fetchComments()
+      }
+    }
+  }, [workout, exercises, fetchComments])
 
   useEffect(() => {
     fetchWorkoutData()
@@ -273,6 +336,64 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
     saveUpdates()
   }
 
+  // Add new workout comment
+  const handleAddWorkoutComment = async () => {
+    if (!newWorkoutComment.trim()) return
+    setCommentLoading(true)
+    try {
+      const user = supabase.auth.getUser ? (await supabase.auth.getUser()).data.user : null
+      if (!user) {
+        toast("You must be logged in to comment.")
+        setCommentLoading(false)
+        return
+      }
+      const { error } = await supabase.from("comments").insert({
+        user_id: user.id,
+        workout_id: Number(workoutId),
+        comment_text: newWorkoutComment.trim(),
+      })
+      if (error) {
+        toast("Failed to add comment")
+      } else {
+        setNewWorkoutComment("")
+        fetchComments(exercises)
+      }
+    } catch (error) {
+      toast("Failed to add comment")
+    }
+    setCommentLoading(false)
+  }
+
+  // Add new exercise comment
+  const handleAddExerciseComment = async (exerciseId: number) => {
+    const text = newExerciseComments[exerciseId] || ""
+    if (!text.trim()) return
+    setCommentLoading(true)
+    try {
+      const user = supabase.auth.getUser ? (await supabase.auth.getUser()).data.user : null
+      if (!user) {
+        toast("You must be logged in to comment.")
+        setCommentLoading(false)
+        return
+      }
+      const { error } = await supabase.from("comments").insert({
+        user_id: user.id,
+        workout_id: Number(workoutId),
+        workout_exercise_id: exerciseId,
+        comment_text: text.trim(),
+      })
+      if (error) {
+        toast("Failed to add comment")
+      } else {
+        setNewExerciseComments((prev) => ({ ...prev, [exerciseId]: "" }))
+        fetchComments(exercises)
+      }
+    } catch (error) {
+      toast("Failed to add comment")
+    }
+    setCommentLoading(false)
+  }
+
   if (loading) {
     return (
       <div className="container mx-auto px-4 py-8">
@@ -290,8 +411,8 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Workout Not Found</h1>
-          <p className="text-gray-600 dark:text-gray-300">The workout youre looking for doesnt exist.</p>
+          <H1 >Workout Not Found</H1>
+          <P>The workout youre looking for doesnt exist.</P>
         </div>
       </div>
     )
@@ -302,8 +423,15 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
   const progressPercentage = totalExercises > 0 ? (completedExercises / totalExercises) * 100 : 0
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto px-6 py-8">
       {/* Unsaved Changes Banner */}
+        <Link
+          href={`/dashboard/programs/${workout.program.id}`}
+          className="flex items-center text-sm text-muted-foreground hover:text-primary mb-4 border-none outline-none"
+        >
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to Programs
+        </Link>
       {hasPendingChanges && (
         <div className="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
           <div className="flex items-center justify-between">
@@ -330,15 +458,18 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
         </div>
       )}
 
-      <div className="mb-8">
+      <div className="mb-8 border-b border-gray-200 dark:border-gray-700 pb-4">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{workout.name}</h1>
-            <p className="text-gray-600 dark:text-gray-300 mt-2">
+            <H1 className="">{workout.name}</H1>
+            <P className="text-gray-600 dark:text-gray-300 mt-2">
               {workout.program?.name} • {workout.workout_type === "gym" ? "Gym Workout" : "Cardio Workout"}
-            </p>
+            </P>
+            <Badge className="sm:hidden" variant={workout.completed ? "default" : "secondary"}>
+            {workout.completed ? "Completed" : "Pending"}
+          </Badge>
           </div>
-          <Badge variant={workout.completed ? "default" : "secondary"}>
+          <Badge className="hidden sm:block" variant={workout.completed ? "default" : "secondary"}>
             {workout.completed ? "Completed" : "Pending"}
           </Badge>
         </div>
@@ -368,6 +499,31 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
         )}
       </div>
 
+      {/* Workout Comments Section */}
+      <div className="mb-8">
+        <h2 className="text-xl font-semibold mb-2">Workout Comments</h2>
+        <div className="space-y-2 mb-2">
+          {workoutComments.length === 0 && <div className="text-gray-500 text-sm">No comments yet.</div>}
+          {workoutComments.map((c) => (
+            <div key={c.id} className="p-2 bg-gray-50 dark:bg-gray-800 rounded">
+              <span className="font-medium">{c.user?.name || "User"}</span>: {c.comment_text}
+              <span className="ml-2 text-xs text-gray-400">{new Date(c.created_at).toLocaleString()}</span>
+            </div>
+          ))}
+        </div>
+        <div className="flex gap-2 mt-2 flex-col sm:flex-row">
+          <Textarea
+            value={newWorkoutComment}
+            onChange={(e) => setNewWorkoutComment(e.target.value)}
+            placeholder="Add a comment..."
+            rows={2}
+            className="flex-1"
+            disabled={commentLoading}
+          />
+          <Button onClick={handleAddWorkoutComment} disabled={commentLoading || !newWorkoutComment.trim()}>Post</Button>
+        </div>
+      </div>
+
       {workout.workout_type === "gym" ? (
         <div className="space-y-6">
           {exercises.length === 0 ? (
@@ -382,107 +538,125 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
             </Card>
           ) : (
             exercises.map((exercise, index) => (
-              <Card key={exercise.id} className={exercise.completed ? "bg-green-50 dark:bg-green-900/20" : ""}>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="flex items-center gap-3">
+              <Card key={exercise.id} className={exercise.completed ? "bg-green-50 dark:bg-green-900/20 p-3" : "p-3"}>
+                <CardHeader className="p-2 pb-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="w-full flex items-center justify-between gap-10">
                       <button
                         onClick={() => toggleExerciseCompletion(String(exercise.id), !exercise.completed)}
                         className="flex-shrink-0"
+                        aria-label={exercise.completed ? "Mark as incomplete" : "Mark as complete"}
                       >
                         {exercise.completed ? (
-                          <CheckCircle className="h-6 w-6 text-green-600" />
+                          <CheckCircle className="h-5 w-5 text-green-600" />
                         ) : (
-                          <Circle className="h-6 w-6 text-gray-400 hover:text-green-600" />
+                          <Circle className="h-5 w-5 text-gray-400 hover:text-green-600" />
                         )}
                       </button>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span>
-                            {index + 1}. {exercise.exercise.name}
-                          </span>
-                          {exercise.completed && (
-                            <Badge variant="secondary" className="text-xs">
-                              Completed
-                            </Badge>
-                          )}
-                        </div>
-                        {exercise.exercise.category && (
-                          <CardDescription className="mt-1">{exercise.exercise.category}</CardDescription>
-                        )}
-                      </div>
-                    </CardTitle>
+                      <span className="font-medium text-base sm:text-lg w-full">
+                        {index + 1}. {exercise.exercise.name}
+                      </span>
+                      {exercise.completed && (
+                        <Badge variant="secondary" className="hidden sm:block text-xs px-2 py-0.5 ml-1">Completed</Badge>
+                      )}
+                    </div>
+                    
                   </div>
+                  {exercise.exercise.category && (
+                    <CardDescription className="mt-0.5 text-xs text-muted-foreground">{exercise.exercise.category}</CardDescription>
+                  )}
                 </CardHeader>
-                <CardContent>
-                  <div className="grid md:grid-cols-4 gap-4 mb-4">
-                    <div className="space-y-2">
-                      <Label htmlFor={`sets-${exercise.id}`} className="flex items-center gap-2">
-                        <Target className="h-4 w-4" />
-                        Sets
-                      </Label>
-                      <Input
-                        id={`sets-${exercise.id}`}
-                        type="number"
-                        value={exercise.sets || ""}
-                        onChange={(e) => updateExerciseField(String(exercise.id), "sets", Number.parseInt(e.target.value) || 0)}
-                        min="0"
-                      />
+                <CardContent className="pt-2 pb-2 px-2">
+                  <div className="gap-2 mb-2">
+                    <div className="grid grid-cols-2 xs:grid-cols-2 sm:grid-cols-4 gap-2">
+                      <div className="space-y-1">
+                        <Label htmlFor={`sets-${exercise.id}`} className="flex items-center gap-1 ">
+                          <Target className="h-3 w-3" /> Sets
+                        </Label>
+                        <Input
+                          id={`sets-${exercise.id}`}
+                          type="number"
+                          value={exercise.sets || ""}
+                          onChange={(e) => updateExerciseField(String(exercise.id), "sets", Number.parseInt(e.target.value) || 0)}
+                          min="0"
+                          className="h-7 sm:h-9 px-2"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor={`reps-${exercise.id}`} className="flex items-center gap-1 ">
+                          <Target className="h-3 w-3" /> Reps
+                        </Label>
+                        <Input
+                          id={`reps-${exercise.id}`}
+                          type="number"
+                          value={exercise.reps || ""}
+                          onChange={(e) => updateExerciseField(String(exercise.id), "reps", Number.parseInt(e.target.value) || 0)}
+                          min="0"
+                          className="h-7 sm:h-9 px-2"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor={`weight-${exercise.id}`} className="flex items-center gap-1 ">
+                          <Weight className="h-3 w-3" /> Weight
+                        </Label>
+                        <Input
+                          id={`weight-${exercise.id}`}
+                          value={exercise.weight || ""}
+                          onChange={(e) => updateExerciseField(String(exercise.id), "weight", e.target.value)}
+                          placeholder="e.g., 80kg, BW"
+                          className="h-7 sm:h-9 px-2"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor={`rest-${exercise.id}`} className="flex items-center gap-1 ">
+                          <Timer className="h-3 w-3" /> Rest (sec)
+                        </Label>
+                        <Input
+                          id={`rest-${exercise.id}`}
+                          type="number"
+                          value={exercise.rest_seconds || ""}
+                          onChange={(e) => updateExerciseField(String(exercise.id), "rest_seconds", Number.parseInt(e.target.value) || 0)}
+                          min="0"
+                          className="h-7 sm:h-9  px-2"
+                        />
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor={`reps-${exercise.id}`} className="flex items-center gap-2">
-                        <Target className="h-4 w-4" />
-                        Reps
-                      </Label>
-                      <Input
-                        id={`reps-${exercise.id}`}
-                        type="number"
-                        value={exercise.reps || ""}
-                        onChange={(e) => updateExerciseField(String(exercise.id), "reps", Number.parseInt(e.target.value) || 0)}
-                        min="0"
-                      />
+
+                  </div>
+                  {exercise.exercise.instructions && (
+                    <div className="mt-2 p-2 bg-gray-50 dark:bg-gray-800 rounded-md ">
+                      <strong>Instructions:</strong> {exercise.exercise.instructions}
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor={`weight-${exercise.id}`} className="flex items-center gap-2">
-                        <Weight className="h-4 w-4" />
-                        Weight
-                      </Label>
-                      <Input
-                        id={`weight-${exercise.id}`}
-                        value={exercise.weight || ""}
-                        onChange={(e) => updateExerciseField(String(exercise.id), "weight", e.target.value)}
-                        placeholder="e.g., 80kg, BW"
-                      />
+                  )}
+                  {exercise.completed && (
+                    <div className="mt-2 text-green-600 dark:text-green-400">Exercise completed</div>
+                  )}
+                  {/* Exercise Comments Section */}
+                  <div className="mt-2">
+                    <H5 className="font-medium mb-1 ">Exercise Comments</H5>
+                    <div className="space-y-1 mb-1">
+                      {(exerciseComments[exercise.id] || []).length === 0 && (
+                        <div className="text-gray-400 text-xs">No comments yet.</div>
+                      )}
+                      {(exerciseComments[exercise.id] || []).map((c) => (
+                        <div key={c.id} className="p-1 bg-gray-50 dark:bg-gray-800 rounded ">
+                          <span className="font-medium">{c.user?.name || "User"}</span>: {c.comment_text}
+                          <span className="ml-2  text-gray-400">{new Date(c.created_at).toLocaleString()}</span>
+                        </div>
+                      ))}
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor={`rest-${exercise.id}`} className="flex items-center gap-2">
-                        <Timer className="h-4 w-4" />
-                        Rest (sec)
-                      </Label>
-                      <Input
-                        id={`rest-${exercise.id}`}
-                        type="number"
-                        value={exercise.rest_seconds || ""}
-                        onChange={(e) =>
-                          updateExerciseField(String(exercise.id), "rest_seconds", Number.parseInt(e.target.value) || 0)
-                        }
-                        min="0"
+                    <div className="flex flex-col sm:flex-row gap-1 mt-1">
+                      <Textarea
+                        value={newExerciseComments[exercise.id] || ""}
+                        onChange={(e) => setNewExerciseComments((prev) => ({ ...prev, [exercise.id]: e.target.value }))}
+                        placeholder="Add a comment..."
+                        rows={1}
+                        className="flex-1 "
+                        disabled={commentLoading}
                       />
+                      <Button size="sm" onClick={() => handleAddExerciseComment(exercise.id)} disabled={commentLoading || !(newExerciseComments[exercise.id] || "").trim()}>Post</Button>
                     </div>
                   </div>
-
-                  {exercise.exercise.instructions && (
-                    <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-md">
-                      <h4 className="font-medium mb-2">Instructions:</h4>
-                      <p className="text-sm text-gray-600 dark:text-gray-300">{exercise.exercise.instructions}</p>
-                    </div>
-                  )}
-
-                  {exercise.completed && (
-                    <div className="mt-4 text-xs text-green-600 dark:text-green-400">
-                      Exercise completed
-                    </div>
-                  )}
                 </CardContent>
               </Card>
             ))
@@ -495,11 +669,6 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
             <div className="flex items-center justify-between">
               <CardTitle>Cardio Workout Details</CardTitle>
               <div className="flex items-center gap-2">
-                {workout.completed && (
-                  <Badge variant="secondary" className="text-xs">
-                    Completed
-                  </Badge>
-                )}
                 <Button
                   onClick={() => toggleCardioWorkoutCompletion(!workout.completed)}
                   variant={workout.completed ? "outline" : "default"}
@@ -521,7 +690,7 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="grid md:grid-cols-2 gap-6">
+            <div className="grid md:grid-cols-2 gap-6 w-full">
               {workout.duration_minutes && (
                 <div>
                   <Label className="flex items-center gap-2 mb-2">

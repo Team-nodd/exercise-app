@@ -57,7 +57,7 @@ export function CoachDashboard({ coach }: CoachDashboardProps) {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            {/* <div className="text-2xl font-bold">{stats?.clientsCount || 0}</div> */}
+            <div className="text-2xl font-bold">{stats?.totalClients || 0}</div>
             <p className="text-xs text-muted-foreground">Active clients</p>
           </CardContent>
         </Card>

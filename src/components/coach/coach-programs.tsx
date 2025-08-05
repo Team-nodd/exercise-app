@@ -197,7 +197,7 @@ export function CoachPrograms({ coachId }: CoachProgramsProps) {
                       <div className="text-sm text-gray-500">
                         Created {new Date(program.created_at).toLocaleDateString()}
                       </div>
-                      <div className="space-x-2">
+                      <div className="space-x-2 flex align-middle">
                         <Button variant="outline" size="sm" asChild>
                           <Link href={`/coach/programs/${program.id}`}>
                             <Eye className="h-4 w-4 mr-1" />

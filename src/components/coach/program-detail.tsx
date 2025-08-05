@@ -9,6 +9,9 @@ import { Calendar, User, Plus, Dumbbell, Clock, ArrowLeft, Copy, Loader2 } from 
 import { toast } from "sonner"
 import Link from "next/link"
 import type { ProgramWithDetails, WorkoutWithDetails } from "@/types"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog"
+import { Textarea } from "@/components/ui/textarea"
+import { Input } from "@/components/ui/input"
 
 interface ProgramDetailProps {
   program: ProgramWithDetails
@@ -20,6 +23,15 @@ export function ProgramDetail({ program }: ProgramDetailProps) {
   const [duplicatingWorkout, setDuplicatingWorkout] = useState<number | null>(null)
   const supabase = createClient()
   // const { toast } = useToast()
+  const [selectedWorkout, setSelectedWorkout] = useState<WorkoutWithDetails | null>(null)
+  const [workoutComments, setWorkoutComments] = useState<any[]>([])
+  const [exerciseComments, setExerciseComments] = useState<Record<string, any[]>>({})
+  const [newCoachComment, setNewCoachComment] = useState("")
+  const [commentLoading, setCommentLoading] = useState(false)
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [titleValue, setTitleValue] = useState(program.name)
+  const [titleSaving, setTitleSaving] = useState(false)
 
   useEffect(() => {
     const fetchWorkouts = async () => {
@@ -31,7 +43,7 @@ export function ProgramDetail({ program }: ProgramDetailProps) {
             program:programs(*)
           `)
           .eq("program_id", program.id)
-          .order("order_in_program", { ascending: true })
+          .order("scheduled_date", { ascending: true })
 
         if (error) {
           console.error("Error fetching workouts:", error)
@@ -157,6 +169,107 @@ export function ProgramDetail({ program }: ProgramDetailProps) {
     }
   }
 
+  // Fetch comments for a workout and its exercises
+  const fetchComments = async (workout: WorkoutWithDetails) => {
+    try {
+      // Fetch workout comments
+      const { data: workoutCommentsData } = await supabase
+        .from("comments")
+        .select("*, user:users(name, role)")
+        .eq("workout_id", workout.id)
+        .is("workout_exercise_id", null)
+        .order("created_at", { ascending: true })
+      setWorkoutComments(workoutCommentsData || [])
+      // Fetch exercise comments (for gym)
+      if (workout.workout_type === "gym") {
+        const { data: exerciseCommentsData } = await supabase
+          .from("comments")
+          .select("*, user:users(name, role)")
+          .in("workout_exercise_id", workout.workout_exercises?.map((ex: any) => ex.id) || [])
+          .order("created_at", { ascending: true })
+        // Group by exerciseId
+        const grouped: Record<string, any[]> = {}
+        for (const c of exerciseCommentsData || []) {
+          const exId = c.workout_exercise_id
+          if (!grouped[exId]) grouped[exId] = []
+          grouped[exId].push(c)
+        }
+        setExerciseComments(grouped)
+      } else {
+        setExerciseComments({})
+      }
+    } catch (error) {
+      setWorkoutComments([])
+      setExerciseComments({})
+    }
+  }
+
+  // Open dialog and fetch workout details/comments
+  const handleOpenWorkoutDialog = async (workoutId: number) => {
+    setDialogOpen(true)
+    setSelectedWorkout(null)
+    setWorkoutComments([])
+    setExerciseComments({})
+    setNewCoachComment("")
+    // Fetch workout details (with exercises)
+    const { data: workout } = await supabase
+      .from("workouts")
+      .select("*, workout_exercises(*, exercise:exercises(*))")
+      .eq("id", workoutId)
+      .single()
+    if (workout) {
+      setSelectedWorkout(workout)
+      await fetchComments(workout)
+    }
+  }
+
+  // Add coach comment
+  const handleAddCoachComment = async () => {
+    if (!selectedWorkout || !newCoachComment.trim()) return
+    setCommentLoading(true)
+    try {
+      // Get coach user
+      const user = supabase.auth.getUser ? (await supabase.auth.getUser()).data.user : null
+      if (!user) {
+        toast("You must be logged in as coach to comment.")
+        setCommentLoading(false)
+        return
+      }
+      const { error } = await supabase.from("comments").insert({
+        user_id: user.id,
+        workout_id: selectedWorkout.id,
+        comment_text: newCoachComment.trim(),
+      })
+      if (!error) {
+        setNewCoachComment("")
+        await fetchComments(selectedWorkout)
+      } else {
+        toast("Failed to add comment")
+      }
+    } catch {
+      toast("Failed to add comment")
+    }
+    setCommentLoading(false)
+  }
+
+  // Inline edit save handler
+  const handleTitleSave = async () => {
+    if (titleValue.trim() && titleValue !== program.name) {
+      setTitleSaving(true)
+      const { error } = await supabase.from("programs").update({ name: titleValue.trim() }).eq("id", program.id)
+      setTitleSaving(false)
+      if (!error) {
+        program.name = titleValue.trim()
+        toast("Program title updated")
+        setEditingTitle(false)
+      } else {
+        toast("Failed to update title")
+      }
+    } else {
+      setEditingTitle(false)
+    }
+  }
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "active":
@@ -184,12 +297,44 @@ export function ProgramDetail({ program }: ProgramDetailProps) {
         </Link>
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{program.name}</h1>
+            {editingTitle ? (
+              <Input
+                value={titleValue}
+                onChange={e => setTitleValue(e.target.value)}
+                onBlur={handleTitleSave}
+                onKeyDown={e => {
+                  if (e.key === "Enter") {
+                    handleTitleSave()
+                  } else if (e.key === "Escape") {
+                    setEditingTitle(false)
+                    setTitleValue(program.name)
+                  }
+                }}
+                disabled={titleSaving}
+                autoFocus
+                className="text-3xl font-bold text-gray-900 dark:text-white mb-1 px-2 py-1"
+              />
+            ) : (
+              <h1
+                className="text-3xl font-bold text-gray-900 dark:text-white mb-1 cursor-pointer hover:underline"
+                onClick={() => setEditingTitle(true)}
+                tabIndex={0}
+                onKeyDown={e => { if (e.key === "Enter") setEditingTitle(true) }}
+              >
+                {titleValue}
+              </h1>
+            )}
             <p className="text-gray-600 dark:text-gray-300 mt-2">{program.description}</p>
           </div>
-          <Badge className={getStatusColor(program.status)}>
-            {program.status.charAt(0).toUpperCase() + program.status.slice(1)}
-          </Badge>
+
+          <div className="flex gap-3">
+            <Badge className={getStatusColor(program.status)}>
+              {program.status.charAt(0).toUpperCase() + program.status.slice(1)}
+            </Badge>
+            <Button size="sm" asChild>
+              <Link href={`/coach/programs/${program.id}/edit`}>Edit</Link>
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -263,13 +408,13 @@ export function ProgramDetail({ program }: ProgramDetailProps) {
           ) : (
             <div className="space-y-4">
               {workouts.map((workout, index) => (
-                <div key={workout.id} className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="flex items-center gap-4">
+                <div key={workout.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border rounded-lg gap-2 sm:gap-0">
+                  <div className="flex items-center gap-4 w-full sm:w-auto">
                     <div className="bg-primary text-primary-foreground rounded-full w-8 h-8 flex items-center justify-center text-sm font-medium">
                       {index + 1}
                     </div>
                     <div>
-                      <h3 className="font-semibold">{workout.name}</h3>
+                      <h3 className="font-semibold cursor-pointer underline underline-offset-2" onClick={() => handleOpenWorkoutDialog(workout.id)}>{workout.name}</h3>
                       <div className="flex items-center gap-4 text-sm text-muted-foreground">
                         <span className="flex items-center gap-1">
                           {workout.workout_type === "gym" ? (
@@ -284,13 +429,14 @@ export function ProgramDetail({ program }: ProgramDetailProps) {
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant={workout.completed ? "default" : "secondary"}>
+                  <div className="flex flex-col xs:flex-row flex-wrap gap-2 w-full sm:w-auto sm:flex-row sm:justify-end sm:items-center mt-2 sm:mt-0">
+                    <Badge variant={workout.completed ? "default" : "secondary"} className=" xs:w-auto text-center">
                       {workout.completed ? "Completed" : "Pending"}
                     </Badge>
                     <Button
                       variant="outline"
                       size="sm"
+                      className="w-full xs:w-auto"
                       onClick={() => duplicateWorkout(workout.id)}
                       disabled={duplicatingWorkout === workout.id}
                     >
@@ -301,7 +447,7 @@ export function ProgramDetail({ program }: ProgramDetailProps) {
                       )}
                       {duplicatingWorkout === workout.id ? "Duplicating..." : "Duplicate"}
                     </Button>
-                    <Button variant="outline" size="sm" asChild>
+                    <Button variant="outline" size="sm" asChild className="w-full xs:w-auto">
                       <Link href={`/coach/programs/${program.id}/workouts/${workout.id}`}>Edit</Link>
                     </Button>
                   </div>
@@ -311,6 +457,79 @@ export function ProgramDetail({ program }: ProgramDetailProps) {
           )}
         </CardContent>
       </Card>
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="p-5 max-w-lg w-full sm:max-w-xl md:max-w-2xl lg:max-w-3xl sm:p-5 rounded-lg sm:rounded-xl overflow-y-auto max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle>{selectedWorkout?.name || "Workout Details"}</DialogTitle>
+            <DialogDescription>
+              {selectedWorkout?.workout_type === "gym" ? "Gym Workout" : "Cardio Session"}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="p-4 sm:p-6"> {/* Added padding for dialog content */}
+            {/* Workout info */}
+            {selectedWorkout && (
+              <>
+                <div className="mb-4">
+                  <div className="text-sm text-muted-foreground mb-1">Scheduled: {selectedWorkout.scheduled_date ? new Date(selectedWorkout.scheduled_date).toLocaleDateString() : "Not set"}</div>
+                  <div className="text-sm text-muted-foreground mb-1">Duration: {selectedWorkout.duration_minutes || "-"} min</div>
+                  <div className="text-sm text-muted-foreground mb-1">Notes: {selectedWorkout.notes || "-"}</div>
+                </div>
+                {/* Workout Comments */}
+                <div className="mb-4">
+                  <h4 className="font-semibold mb-1">Workout Comments</h4>
+                  <div className="space-y-1 mb-1">
+                    {workoutComments.length === 0 && <div className="text-gray-400 text-xs">No comments yet.</div>}
+                    {workoutComments.map((c) => (
+                      <div key={c.id} className="p-1 bg-gray-50 dark:bg-gray-800 rounded text-xs">
+                        <span className="font-medium">{c.user?.name || "User"}</span>
+                        {c.user?.role === "coach" && <span className="ml-1 text-blue-600">(Coach)</span>}: {c.comment_text}
+                        <span className="ml-2 text-[10px] text-gray-400">{new Date(c.created_at).toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex gap-1 mt-1">
+                    <Textarea
+                      value={newCoachComment}
+                      onChange={(e) => setNewCoachComment(e.target.value)}
+                      placeholder="Add a coach comment..."
+                      rows={1}
+                      className="flex-1 text-xs"
+                      disabled={commentLoading}
+                    />
+                    <Button size="sm" onClick={handleAddCoachComment} disabled={commentLoading || !newCoachComment.trim()}>Post</Button>
+                  </div>
+                </div>
+                {/* Exercise Comments (for gym) */}
+                {selectedWorkout.workout_type === "gym" && selectedWorkout.workout_exercises?.length > 0 && (
+                  <div>
+                    <h4 className="font-semibold mb-2">Exercise Comments</h4>
+                    {selectedWorkout.workout_exercises.map((ex: any, idx: number) => (
+                      <div key={ex.id} className="mb-2">
+                        <div className="font-medium text-xs mb-1">{idx + 1}. {ex.exercise?.name}</div>
+                        <div className="space-y-1">
+                          {(exerciseComments[ex.id] || []).length === 0 && <div className="text-gray-400 text-xs">No comments yet.</div>}
+                          {(exerciseComments[ex.id] || []).map((c) => (
+                            <div key={c.id} className="p-1 bg-gray-50 dark:bg-gray-800 rounded text-xs">
+                              <span className="font-medium">{c.user?.name || "User"}</span>
+                              {c.user?.role === "coach" && <span className="ml-1 text-blue-600">(Coach)</span>}: {c.comment_text}
+                              <span className="ml-2 text-[10px] text-gray-400">{new Date(c.created_at).toLocaleString()}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Close</Button>
+            </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
