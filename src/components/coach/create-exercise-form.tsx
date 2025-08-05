@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner"
 import { Loader2, ArrowLeft, Plus } from "lucide-react"
 import Link from "next/link"
+import { ImageUpload } from "@/components/ui/image-upload"
 
 const CATEGORIES = ["Chest", "Back", "Shoulders", "Arms", "Legs", "Core", "Cardio", "Full Body", "Flexibility"]
 
@@ -51,6 +52,7 @@ export function CreateExerciseForm() {
   const [equipment, setEquipment] = useState("")
   const [muscleGroups, setMuscleGroups] = useState<string[]>([])
   const [instructions, setInstructions] = useState("")
+  const [imageUrl, setImageUrl] = useState("")
   const [loading, setLoading] = useState(false)
 
   const router = useRouter()
@@ -73,6 +75,7 @@ export function CreateExerciseForm() {
         equipment: equipment || null,
         muscle_groups: muscleGroups.length > 0 ? muscleGroups : null,
         instructions: instructions || null,
+        image_url: imageUrl || null,
       })
 
       if (error) {
@@ -185,6 +188,16 @@ export function CreateExerciseForm() {
                 rows={4}
               />
             </div>
+
+            {/* <div className="space-y-2">
+              <Label>Exercise Image</Label>
+              <ImageUpload
+                value={imageUrl}
+                onChange={setImageUrl}
+                onRemove={() => setImageUrl("")}
+                disabled={loading}
+              />
+            </div> */}
 
             <div className="flex gap-4">
               <Button type="submit" disabled={loading}>

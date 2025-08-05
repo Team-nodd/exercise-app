@@ -195,12 +195,43 @@ export function UseExerciseForm({ exercise, coachId }: UseExerciseFormProps) {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Dumbbell className="h-5 w-5" />
+              {exercise.image_url ? (
+                <div className="w-8 h-8 rounded-md overflow-hidden flex-shrink-0">
+                  <img
+                    src={exercise.image_url}
+                    alt={exercise.name}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      // Fallback to icon if image fails to load
+                      const target = e.target as HTMLImageElement;
+                      target.style.display = 'none';
+                      target.nextElementSibling?.classList.remove('hidden');
+                    }}
+                  />
+                  <Dumbbell className="h-5 w-5 hidden" />
+                </div>
+              ) : (
+                <Dumbbell className="h-5 w-5" />
+              )}
               {exercise.name}
             </CardTitle>
             <CardDescription>Exercise details</CardDescription>
           </CardHeader>
           <CardContent>
+            {exercise.image_url && (
+              <div className="mb-4 rounded-lg overflow-hidden">
+                <img
+                  src={exercise.image_url}
+                  alt={exercise.name}
+                  className="w-full h-48 object-cover"
+                  onError={(e) => {
+                    // Hide image if it fails to load
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                  }}
+                />
+              </div>
+            )}
             <div className="space-y-3">
               {exercise.category && (
                 <div>

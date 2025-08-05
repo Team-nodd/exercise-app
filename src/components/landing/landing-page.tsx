@@ -20,12 +20,11 @@ export function LandingPage() {
               progress, and help your clients achieve their fitness goals.
             </p>
             <div className="space-x-4">
-              <Button size="lg" asChild>
-                <Link href="/auth/register">Register</Link>
-              </Button>
-              <Button size="lg" variant="outline" asChild>
-                <Link href="/auth/login">Login</Link>
-              </Button>
+              
+              <Button href="/auth/register">Register</Button>
+         
+              <Button variant={'ghost'} href="/auth/login">Login</Button>
+              
             </div>
           </div>
           <div className="relative">

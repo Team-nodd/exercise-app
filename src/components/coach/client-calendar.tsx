@@ -25,6 +25,7 @@ import {
   ChevronDown,
   Edit,
   ExternalLink,
+  Target,
 } from "lucide-react"
 import { toast } from "sonner"
 import Link from "next/link"
@@ -333,9 +334,50 @@ export function ClientCalendar({ client }: ClientCalendarProps) {
 
   if (loading) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">Loading calendar...</div>
+      <div className="container mx-auto px-4 py-6 max-w-6xl">
+        <div className="space-y-6">
+          {/* Header Skeleton */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="h-8 bg-gray-200 rounded w-1/3 animate-pulse"></div>
+            <div className="h-10 w-32 bg-gray-200 rounded animate-pulse"></div>
+          </div>
+          <div className="h-4 bg-gray-200 rounded w-1/2 mb-8 animate-pulse"></div>
+
+          {/* Stats Skeleton */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            {[...Array(4)].map((_, i) => (
+              <Card key={i} className="animate-pulse">
+                <CardContent className="p-4">
+                  <div className="space-y-2">
+                    <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                    <div className="h-8 bg-gray-200 rounded w-1/2"></div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* Calendar Skeleton */}
+          <Card className="animate-pulse">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div className="h-8 bg-gray-200 rounded w-1/4"></div>
+                <div className="h-10 w-48 bg-gray-200 rounded"></div>
+              </div>
+            </CardHeader>
+            <CardContent className="p-6">
+              <div className="grid grid-cols-7 gap-1 mb-2">
+                {[...Array(7)].map((_, i) => (
+                  <div key={i} className="h-4 bg-gray-200 rounded w-full"></div>
+                ))}
+              </div>
+              <div className="grid grid-cols-7 gap-1">
+                {[...Array(35)].map((_, i) => (
+                  <div key={i} className="h-24 bg-gray-100 rounded-lg"></div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
     )
@@ -346,7 +388,7 @@ export function ClientCalendar({ client }: ClientCalendarProps) {
   const selectedDateWorkouts = selectedDate ? getWorkoutsForDate(selectedDate) : []
 
   return (
-    <div className="container mx-auto px-2 sm:px-4 py-4 sm:py-8">
+    <div className="container mx-auto px-2 sm:px-4 py-4 sm:py-8 max-w-6xl">
       <div className="mb-4 sm:mb-8">
         <Link href="/coach/clients" className="flex items-center text-sm text-muted-foreground hover:text-primary mb-4">
           <ArrowLeft className="h-4 w-4 mr-2" />
@@ -354,7 +396,9 @@ export function ClientCalendar({ client }: ClientCalendarProps) {
         </Link>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">{client.name}s Calendar</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
+              {client.name}&apos;s Calendar
+            </h1>
             <p className="text-gray-600 dark:text-gray-300 mt-2 text-sm sm:text-base">
               View and manage all workouts for this client
             </p>
@@ -364,40 +408,48 @@ export function ClientCalendar({ client }: ClientCalendarProps) {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-4 sm:mb-8">
-        <Card>
+        <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border-blue-200 dark:border-blue-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs sm:text-sm font-medium">Total</CardTitle>
-            <Dumbbell className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
+            <CardTitle className="text-xs sm:text-sm font-medium text-blue-600 dark:text-blue-400">Total</CardTitle>
+            <Dumbbell className="h-3 w-3 sm:h-4 sm:w-4 text-blue-600 dark:text-blue-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-lg sm:text-2xl font-bold">{totalWorkouts}</div>
+            <div className="text-lg sm:text-2xl font-bold text-blue-800 dark:text-blue-200">{totalWorkouts}</div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 border-green-200 dark:border-green-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs sm:text-sm font-medium">Completed</CardTitle>
-            <Calendar className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
+            <CardTitle className="text-xs sm:text-sm font-medium text-green-600 dark:text-green-400">
+              Completed
+            </CardTitle>
+            <Calendar className="h-3 w-3 sm:h-4 sm:w-4 text-green-600 dark:text-green-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-lg sm:text-2xl font-bold text-green-600">{completedWorkouts}</div>
+            <div className="text-lg sm:text-2xl font-bold text-green-800 dark:text-green-200">{completedWorkouts}</div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 border-orange-200 dark:border-orange-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs sm:text-sm font-medium">Pending</CardTitle>
-            <Clock className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
+            <CardTitle className="text-xs sm:text-sm font-medium text-orange-600 dark:text-orange-400">
+              Pending
+            </CardTitle>
+            <Clock className="h-3 w-3 sm:h-4 sm:w-4 text-orange-600 dark:text-orange-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-lg sm:text-2xl font-bold text-orange-600">{pendingWorkouts}</div>
+            <div className="text-lg sm:text-2xl font-bold text-orange-800 dark:text-orange-200">{pendingWorkouts}</div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 border-purple-200 dark:border-purple-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs sm:text-sm font-medium">Unscheduled</CardTitle>
-            <Clock className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
+            <CardTitle className="text-xs sm:text-sm font-medium text-purple-600 dark:text-purple-400">
+              Unscheduled
+            </CardTitle>
+            <Target className="h-3 w-3 sm:h-4 sm:w-4 text-purple-600 dark:text-purple-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-lg sm:text-2xl font-bold text-blue-600">{unscheduledWorkouts.length}</div>
+            <div className="text-lg sm:text-2xl font-bold text-purple-800 dark:text-purple-200">
+              {unscheduledWorkouts.length}
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -510,7 +562,14 @@ export function ClientCalendar({ client }: ClientCalendarProps) {
             <div className="space-y-3">
               {unscheduledWorkouts.map((workout) => (
                 <Collapsible key={workout.id}>
-                  <div className="border rounded-lg bg-background">
+                  <div
+                    className={cn(
+                      "border rounded-lg bg-background transition-all duration-200 border-l-4",
+                      workout.completed
+                        ? "border-l-green-500 bg-green-50/30 dark:bg-green-900/5"
+                        : "border-l-blue-500 bg-blue-50/30 dark:bg-blue-900/5",
+                    )}
+                  >
                     <CollapsibleTrigger className="w-full p-3 sm:p-4 hover:bg-muted/50 transition-colors">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
@@ -523,7 +582,7 @@ export function ClientCalendar({ client }: ClientCalendarProps) {
                             <h4 className="font-semibold text-sm sm:text-base">{workout.name}</h4>
                             <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground">
                               <span>{workout.program.name}</span>
-                              <Badge variant={workout.completed ? "default" : "secondary"} className="text-xs">
+                              <Badge  variant={workout.completed ? "default" : "secondary"} className="text-xs text-white">
                                 {workout.completed ? "Completed" : "Pending"}
                               </Badge>
                             </div>
@@ -604,7 +663,14 @@ export function ClientCalendar({ client }: ClientCalendarProps) {
           <div className="space-y-3">
             {selectedDateWorkouts.map((workout) => (
               <Collapsible key={workout.id}>
-                <div className="border rounded-lg bg-background">
+                <div
+                  className={cn(
+                    "border rounded-lg bg-background transition-all duration-200 border-l-4",
+                    workout.completed
+                      ? "border-l-green-500 bg-green-50/30 dark:bg-green-900/5"
+                      : "border-l-blue-500 bg-blue-50/30 dark:bg-blue-900/5",
+                  )}
+                >
                   <CollapsibleTrigger className="w-full p-4 hover:bg-muted/50 transition-colors">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
@@ -677,11 +743,13 @@ export function ClientCalendar({ client }: ClientCalendarProps) {
                           )}
                           {duplicatingWorkout === workout.id ? "Duplicating..." : "Duplicate"}
                         </Button>
-                        <Button variant="outline" size="sm" asChild>
-                          <Link href={`/coach/programs/${workout.program_id}/workouts/${workout.id}`}>
-                            <ExternalLink className="h-3 w-3 mr-1" />
-                            Full Edit
-                          </Link>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          href={`/coach/programs/${workout.program_id}/workouts/${workout.id}`}
+                        >
+                          <ExternalLink className="h-3 w-3 mr-1" />
+                          Full Edit
                         </Button>
                       </div>
                     </div>
@@ -763,7 +831,7 @@ export function ClientCalendar({ client }: ClientCalendarProps) {
                     <div>
                       <label className="text-sm font-medium text-muted-foreground">Status</label>
                       <div>
-                        <Badge variant={selectedWorkout.completed ? "default" : "secondary"}>
+                        <Badge className="text-white" variant={selectedWorkout.completed ? "default" : "secondary"}>
                           {selectedWorkout.completed ? "Completed" : "Pending"}
                         </Badge>
                       </div>
@@ -800,11 +868,9 @@ export function ClientCalendar({ client }: ClientCalendarProps) {
                       )}
                       {duplicatingWorkout === selectedWorkout.id ? "Duplicating..." : "Duplicate"}
                     </Button>
-                    <Button asChild>
-                      <Link href={`/coach/programs/${selectedWorkout.program_id}/workouts/${selectedWorkout.id}`}>
-                        <ExternalLink className="h-4 w-4 mr-2" />
-                        Full Edit
-                      </Link>
+                    <Button href={`/coach/programs/${selectedWorkout.program_id}/workouts/${selectedWorkout.id}`}>
+                      <ExternalLink className="h-4 w-4 mr-2" />
+                      Full Edit
                     </Button>
                   </div>
                 </div>

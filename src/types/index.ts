@@ -1,7 +1,17 @@
 import type { Database } from "./database"
 
 export type User = Database["public"]["Tables"]["users"]["Row"]
-export type Exercise = Database["public"]["Tables"]["exercises"]["Row"]
+export interface Exercise {
+  id: number
+  name: string
+  category: string | null
+  muscle_groups: string[]
+  equipment: string | null
+  instructions: string | null
+  image_url: string | null
+  created_at: string
+  updated_at: string
+}
 export type Program = Database["public"]["Tables"]["programs"]["Row"]
 export type Workout = Database["public"]["Tables"]["workouts"]["Row"]
 export type WorkoutExercise = Database["public"]["Tables"]["workout_exercises"]["Row"]

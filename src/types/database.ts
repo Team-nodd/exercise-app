@@ -47,6 +47,7 @@ export interface Database {
           muscle_groups: string[] // Array of muscle group names
           equipment: string | null
           instructions: string | null
+          image_url: string | null
           created_at: string
           updated_at: string
         }
@@ -56,6 +57,7 @@ export interface Database {
           category?: string | null
           equipment?: string | null
           instructions?: string | null
+          image_url?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -65,6 +67,7 @@ export interface Database {
           category?: string | null
           equipment?: string | null
           instructions?: string | null
+          image_url?: string | null
           created_at?: string
           updated_at?: string
         }

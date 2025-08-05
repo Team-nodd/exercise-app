@@ -3,18 +3,37 @@
 
 import { useEffect, useState, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
+import { Separator } from "@/components/ui/separator"
+import { Progress } from "@/components/ui/progress"
 import { toast } from "sonner"
-import { CheckCircle, Circle, Clock, Dumbbell, Target, Weight, Timer, Save, AlertCircle, ArrowLeft } from "lucide-react"
+import {
+  CheckCircle,
+  Circle,
+  Dumbbell,
+  Target,
+  Weight,
+  Timer,
+  Save,
+  AlertCircle,
+  ArrowLeft,
+  MessageSquare,
+  Send,
+  User,
+  Calendar,
+  Zap,
+  TrendingUp,
+  Activity,
+} from "lucide-react"
 import type { WorkoutWithDetails, WorkoutExerciseWithDetails } from "@/types"
 import { notificationService } from "@/lib/notifications/notification-service"
 import Link from "next/link"
 import { Textarea } from "@/components/ui/textarea"
-import { H1, H5, P } from '../ui/heading';
+import { cn } from "@/lib/utils"
 
 interface WorkoutDetailProps {
   workoutId: string
@@ -69,7 +88,7 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
 
       if (workoutError) {
         console.error("Error fetching workout:", workoutError)
-        toast( "Failed to load workout details")
+        toast("Failed to load workout details")
         return
       }
 
@@ -88,7 +107,7 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
 
         if (exercisesError) {
           console.error("Error fetching exercises:", exercisesError)
-          toast( "Failed to load workout exercises")
+          toast("Failed to load workout exercises")
           return
         }
 
@@ -96,55 +115,61 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
       }
     } catch (error) {
       console.error("Error fetching workout data:", error)
-      toast( "An unexpected error occurred")
+      toast("An unexpected error occurred")
     } finally {
       setLoading(false)
     }
-  }, [workoutId, supabase, toast])
+  }, [workoutId, supabase])
 
   // Fetch comments for workout and exercises
-  const fetchComments = useCallback(async (exercisesList?: WorkoutExerciseWithDetails[]) => {
-    try {
-      // Fetch workout comments
-      const { data: workoutCommentsData, error: workoutCommentsError } = await supabase
-        .from("comments")
-        .select("*, user:users(name)")
-        .eq("workout_id", workoutId)
-        .is("workout_exercise_id", null)
-        .order("created_at", { ascending: true })
-      if (workoutCommentsError) {
-        console.error("Error fetching workout comments:", workoutCommentsError)
-        toast("Failed to load workout comments")
-      } else {
-        setWorkoutComments(workoutCommentsData || [])
-      }
-      // Fetch exercise comments (for gym)
-      if (exercisesList && exercisesList.length > 0) {
-        const exerciseIds = exercisesList.map((ex) => ex.id)
-        const { data: exerciseCommentsData, error: exerciseCommentsError } = await supabase
+  const fetchComments = useCallback(
+    async (exercisesList?: WorkoutExerciseWithDetails[]) => {
+      try {
+        // Fetch workout comments
+        const { data: workoutCommentsData, error: workoutCommentsError } = await supabase
           .from("comments")
           .select("*, user:users(name)")
-          .in("workout_exercise_id", exerciseIds)
+          .eq("workout_id", workoutId)
+          .is("workout_exercise_id", null)
           .order("created_at", { ascending: true })
-        if (exerciseCommentsError) {
-          console.error("Error fetching exercise comments:", exerciseCommentsError)
-          toast("Failed to load exercise comments")
+
+        if (workoutCommentsError) {
+          console.error("Error fetching workout comments:", workoutCommentsError)
+          toast("Failed to load workout comments")
         } else {
-          // Group by exerciseId
-          const grouped: Record<string, any[]> = {}
-          for (const c of exerciseCommentsData || []) {
-            const exId = c.workout_exercise_id
-            if (!grouped[exId]) grouped[exId] = []
-            grouped[exId].push(c)
-          }
-          setExerciseComments(grouped)
+          setWorkoutComments(workoutCommentsData || [])
         }
+
+        // Fetch exercise comments (for gym)
+        if (exercisesList && exercisesList.length > 0) {
+          const exerciseIds = exercisesList.map((ex) => ex.id)
+          const { data: exerciseCommentsData, error: exerciseCommentsError } = await supabase
+            .from("comments")
+            .select("*, user:users(name)")
+            .in("workout_exercise_id", exerciseIds)
+            .order("created_at", { ascending: true })
+
+          if (exerciseCommentsError) {
+            console.error("Error fetching exercise comments:", exerciseCommentsError)
+            toast("Failed to load exercise comments")
+          } else {
+            // Group by exerciseId
+            const grouped: Record<string, any[]> = {}
+            for (const c of exerciseCommentsData || []) {
+              const exId = c.workout_exercise_id
+              if (!grouped[exId]) grouped[exId] = []
+              grouped[exId].push(c)
+            }
+            setExerciseComments(grouped)
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching comments:", error)
+        toast("Failed to load comments")
       }
-    } catch (error) {
-      console.error("Error fetching comments:", error)
-      toast("Failed to load comments")
-    }
-  }, [supabase, workoutId, toast])
+    },
+    [supabase, workoutId],
+  )
 
   // Fetch comments after loading workout/exercises
   useEffect(() => {
@@ -184,7 +209,7 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
 
         if (error) {
           console.error("Error updating exercise:", error)
-          toast( "Failed to save changes")
+          toast("Failed to save changes")
           return
         }
       }
@@ -194,7 +219,7 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
       toast("Changes saved successfully")
     } catch (error) {
       console.error("Error saving updates:", error)
-      toast( "Failed to save changes")
+      toast("Failed to save changes")
     } finally {
       setSaving(false)
     }
@@ -221,7 +246,6 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
         .from("workout_exercises")
         .update({
           completed,
-          // Remove completed_at since it doesn't exist in the schema
         })
         .eq("id", exerciseId)
 
@@ -238,19 +262,16 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
             ? {
                 ...ex,
                 completed,
-                // Remove completed_at from local state update
               }
             : ex,
         ),
       )
 
       // Check if all exercises are completed
-      const updatedExercises = exercises.map((ex) =>
-        Number(ex.id) === Number(exerciseId) ? { ...ex, completed } : ex
-      )
-      
+      const updatedExercises = exercises.map((ex) => (Number(ex.id) === Number(exerciseId) ? { ...ex, completed } : ex))
+
       const allCompleted = updatedExercises.every((ex) => ex.completed)
-      
+
       // If all exercises are completed, mark workout as completed and send notifications
       if (allCompleted && !workout?.completed) {
         await markWorkoutAsCompleted()
@@ -281,11 +302,13 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
 
       // Update local state
       setWorkout((prev) =>
-        prev ? {
-          ...prev,
-          completed,
-          completed_at: completed ? new Date().toISOString() : null,
-        } : null
+        prev
+          ? {
+              ...prev,
+              completed,
+              completed_at: completed ? new Date().toISOString() : null,
+            }
+          : null,
       )
 
       // If marking as completed, send notifications
@@ -303,7 +326,7 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
   const markWorkoutAsCompleted = async () => {
     try {
       console.log("🔄 WORKOUT: Marking workout as completed and sending notifications...")
-      
+
       // Mark workout as completed
       const { error: workoutError } = await supabase
         .from("workouts")
@@ -320,11 +343,10 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
       }
 
       // Update local workout state
-      setWorkout((prev) => prev ? { ...prev, completed: true, completed_at: new Date().toISOString() } : null)
+      setWorkout((prev) => (prev ? { ...prev, completed: true, completed_at: new Date().toISOString() } : null))
 
       // Send notifications
       await notificationService.sendWorkoutCompletedNotifications(Number(workoutId))
-
       toast("Workout completed! Notifications sent.")
     } catch (error) {
       console.error("Error marking workout as completed:", error)
@@ -339,6 +361,7 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
   // Add new workout comment
   const handleAddWorkoutComment = async () => {
     if (!newWorkoutComment.trim()) return
+
     setCommentLoading(true)
     try {
       const user = supabase.auth.getUser ? (await supabase.auth.getUser()).data.user : null
@@ -347,11 +370,13 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
         setCommentLoading(false)
         return
       }
+
       const { error } = await supabase.from("comments").insert({
         user_id: user.id,
         workout_id: Number(workoutId),
         comment_text: newWorkoutComment.trim(),
       })
+
       if (error) {
         toast("Failed to add comment")
       } else {
@@ -368,6 +393,7 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
   const handleAddExerciseComment = async (exerciseId: number) => {
     const text = newExerciseComments[exerciseId] || ""
     if (!text.trim()) return
+
     setCommentLoading(true)
     try {
       const user = supabase.auth.getUser ? (await supabase.auth.getUser()).data.user : null
@@ -376,12 +402,14 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
         setCommentLoading(false)
         return
       }
+
       const { error } = await supabase.from("comments").insert({
         user_id: user.id,
         workout_id: Number(workoutId),
         workout_exercise_id: exerciseId,
         comment_text: text.trim(),
       })
+
       if (error) {
         toast("Failed to add comment")
       } else {
@@ -394,14 +422,45 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
     setCommentLoading(false)
   }
 
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return "No date set"
+
+    const date = new Date(dateString)
+    const today = new Date()
+    const tomorrow = new Date(today)
+    tomorrow.setDate(tomorrow.getDate() + 1)
+
+    if (date.toDateString() === today.toDateString()) {
+      return "Today"
+    } else if (date.toDateString() === tomorrow.toDateString()) {
+      return "Tomorrow"
+    } else {
+      return date.toLocaleDateString("en-US", {
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      })
+    }
+  }
+
   if (loading) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-            <p>Loading workout details...</p>
-          </div>
+      <div className="container mx-auto px-4 py-6 max-w-4xl">
+        <div className="space-y-4">
+          {[...Array(3)].map((_, i) => (
+            <Card key={i} className="animate-pulse">
+              <CardContent className="p-6">
+                <div className="flex items-center space-x-4">
+                  <div className="w-12 h-12 bg-gray-200 rounded-full"></div>
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                    <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       </div>
     )
@@ -409,10 +468,13 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
 
   if (!workout) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="text-center">
-          <H1 >Workout Not Found</H1>
-          <P>The workout youre looking for doesnt exist.</P>
+      <div className="container mx-auto px-4 py-8 max-w-4xl">
+        <div className="text-center py-12">
+          <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center">
+            <AlertCircle className="h-8 w-8 text-gray-400" />
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Workout Not Found</h1>
+          <p className="text-gray-600 dark:text-gray-300">The workout you are looking for does not exist.</p>
         </div>
       </div>
     )
@@ -423,113 +485,196 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
   const progressPercentage = totalExercises > 0 ? (completedExercises / totalExercises) * 100 : 0
 
   return (
-    <div className="container mx-auto px-6 py-8">
+    <div className="container mx-auto px-4 py-6 max-w-4xl">
+      {/* Navigation */}
+      <Link
+        href={`/dashboard/programs/${workout.program.id}`}
+        className="flex items-center text-sm text-muted-foreground hover:text-primary mb-6 transition-colors"
+      >
+        <ArrowLeft className="h-4 w-4 mr-2" />
+        Back to Programs
+      </Link>
+
       {/* Unsaved Changes Banner */}
-        <Link
-          href={`/dashboard/programs/${workout.program.id}`}
-          className="flex items-center text-sm text-muted-foreground hover:text-primary mb-4 border-none outline-none"
-        >
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Programs
-        </Link>
       {hasPendingChanges && (
-        <div className="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
-              <span className="text-yellow-800 dark:text-yellow-200">
-                You have unsaved changes. They will be saved automatically in a moment.
-              </span>
+        <Card className="mb-6 border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center">
+                  <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                </div>
+                <div>
+                  <p className="font-medium text-amber-800 dark:text-amber-200">Unsaved Changes</p>
+                  <p className="text-sm text-amber-600 dark:text-amber-300">
+                    Your changes will be saved automatically in a moment.
+                  </p>
+                </div>
+              </div>
+              <Button onClick={manualSave} disabled={saving} size="sm" variant="outline">
+                {saving ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4 mr-2" />
+                    Save Now
+                  </>
+                )}
+              </Button>
             </div>
-            <Button onClick={manualSave} disabled={saving} size="sm" variant="outline">
-              {saving ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Save className="h-4 w-4 mr-2" />
-                  Save Now
-                </>
-              )}
-            </Button>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       )}
 
-      <div className="mb-8 border-b border-gray-200 dark:border-gray-700 pb-4">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <H1 className="">{workout.name}</H1>
-            <P className="text-gray-600 dark:text-gray-300 mt-2">
-              {workout.program?.name} • {workout.workout_type === "gym" ? "Gym Workout" : "Cardio Workout"}
-            </P>
-            <Badge className="sm:hidden" variant={workout.completed ? "default" : "secondary"}>
-            {workout.completed ? "Completed" : "Pending"}
-          </Badge>
-          </div>
-          <Badge className="hidden sm:block" variant={workout.completed ? "default" : "secondary"}>
-            {workout.completed ? "Completed" : "Pending"}
-          </Badge>
-        </div>
-
-        {workout.scheduled_date && (
-          <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 mb-4">
-            <Clock className="h-4 w-4" />
-            Scheduled for {new Date(workout.scheduled_date).toLocaleDateString()}
-          </div>
-        )}
-
-        {workout.workout_type === "gym" && totalExercises > 0 && (
-          <div className="mb-6">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium">Progress</span>
-              <span className="text-sm text-gray-600 dark:text-gray-300">
-                {completedExercises} of {totalExercises} exercises completed
-              </span>
+      {/* Workout Header */}
+      <Card className="mb-6">
+        <CardContent className="p-6">
+          <div className="flex items-start gap-4">
+            <div
+              className={cn(
+                " items-center justify-center w-12 h-12 rounded-full flex-shrink-0 hidden sm:flex",
+                workout.completed
+                  ? "bg-green-100 text-green-600 dark:bg-green-900/20 dark:text-green-400"
+                  : "bg-blue-100 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400",
+              )}
+            >
+              {workout.workout_type === "gym" ? <Dumbbell className="h-6 w-6" /> : <Activity className="h-6 w-6" />}
             </div>
-            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-              <div
-                className="bg-primary h-2 rounded-full transition-all duration-300"
-                style={{ width: `${progressPercentage}%` }}
-              ></div>
+
+            <div className="flex-1 min-w-0">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-2">{workout.name}</h1>
+
+                  <div className="my-2">
+                    <Badge
+                    variant={workout.completed ? "default" : "secondary"}
+                    className={cn(
+                      " items-center gap-1 flex sm:hidden self-start w-[auto] ",
+                      workout.completed
+                        ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                        : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
+                    )}
+                  >
+                    {workout.completed ? <CheckCircle className="h-3 w-3" /> : <Circle className="h-3 w-3" />}
+                    {workout.completed ? "Completed" : "Pending"}
+                    </Badge>
+                  </div>
+
+
+                  <div className="flex items-center gap-2 justify-between w-full text-sm text-gray-600 dark:text-gray-400 mb-3">
+                    <span>{workout.program?.name}</span>
+                    
+                    <span className="capitalize">
+                      {workout.workout_type === "gym" ? "Strength Training" : "Cardio"}
+                    </span>
+
+                  </div>
+                </div>
+
+                <Badge
+                  variant={workout.completed ? "default" : "secondary"}
+                  className={cn(
+                    " items-center gap-1 hidden sm:block",
+                    workout.completed
+                      ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                      : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
+                  )}
+                >
+                  {workout.completed ? <CheckCircle className="h-3 w-3" /> : <Circle className="h-3 w-3" />}
+                  {workout.completed ? "Completed" : "Pending"}
+                </Badge>
+              </div>
+
+              {workout.scheduled_date && (
+                <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 mb-4">
+                  <Calendar className="h-4 w-4" />
+                  <span className="font-medium">{formatDate(workout.scheduled_date)}</span>
+                </div>
+              )}
+
+              {/* Progress Bar for Gym Workouts */}
+              {workout.workout_type === "gym" && totalExercises > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium text-gray-700 dark:text-gray-300">Progress</span>
+                    <span className="text-gray-600 dark:text-gray-400">
+                      {completedExercises} of {totalExercises} exercises
+                    </span>
+                  </div>
+                  <Progress value={progressPercentage} className="h-2" />
+                </div>
+              )}
             </div>
           </div>
-        )}
-      </div>
+        </CardContent>
+      </Card>
 
-      {/* Workout Comments Section */}
-      <div className="mb-8">
-        <h2 className="text-xl font-semibold mb-2">Workout Comments</h2>
-        <div className="space-y-2 mb-2">
-          {workoutComments.length === 0 && <div className="text-gray-500 text-sm">No comments yet.</div>}
-          {workoutComments.map((c) => (
-            <div key={c.id} className="p-2 bg-gray-50 dark:bg-gray-800 rounded">
-              <span className="font-medium">{c.user?.name || "User"}</span>: {c.comment_text}
-              <span className="ml-2 text-xs text-gray-400">{new Date(c.created_at).toLocaleString()}</span>
+      {/* Workout Comments */}
+      <Card className="mb-6">
+        <CardHeader className="pb-4">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <MessageSquare className="h-5 w-5" />
+            Workout Comments
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {workoutComments.length === 0 ? (
+            <p className="text-sm text-gray-500 dark:text-gray-400 italic">No comments yet. Be the first to comment!</p>
+          ) : (
+            <div className="space-y-3">
+              {workoutComments.map((comment) => (
+                <div key={comment.id} className="flex gap-3 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+                  <div className="w-8 h-8 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center flex-shrink-0">
+                    <User className="h-4 w-4 text-gray-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-medium text-sm">{comment.user?.name || "User"}</span>
+                      <span className="text-xs text-gray-500">{new Date(comment.created_at).toLocaleDateString()}</span>
+                    </div>
+                    <p className="text-sm text-gray-700 dark:text-gray-300">{comment.comment_text}</p>
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-        <div className="flex gap-2 mt-2 flex-col sm:flex-row">
-          <Textarea
-            value={newWorkoutComment}
-            onChange={(e) => setNewWorkoutComment(e.target.value)}
-            placeholder="Add a comment..."
-            rows={2}
-            className="flex-1"
-            disabled={commentLoading}
-          />
-          <Button onClick={handleAddWorkoutComment} disabled={commentLoading || !newWorkoutComment.trim()}>Post</Button>
-        </div>
-      </div>
+          )}
 
+          <Separator />
+
+          <div className="flex gap-3">
+            <Textarea
+              value={newWorkoutComment}
+              onChange={(e) => setNewWorkoutComment(e.target.value)}
+              placeholder="Add a comment about this workout..."
+              rows={2}
+              className="flex-1"
+              disabled={commentLoading}
+            />
+            <Button
+              onClick={handleAddWorkoutComment}
+              disabled={commentLoading || !newWorkoutComment.trim()}
+              size="sm"
+              className="self-end"
+            >
+              <Send className="h-4 w-4" />
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Workout Content */}
       {workout.workout_type === "gym" ? (
-        <div className="space-y-6">
+        <div className="space-y-4">
           {exercises.length === 0 ? (
-            <Card>
+            <Card className="border-dashed border-2">
               <CardContent className="text-center py-12">
-                <Dumbbell className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center">
+                  <Dumbbell className="h-8 w-8 text-gray-400" />
+                </div>
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No exercises yet</h3>
                 <p className="text-gray-600 dark:text-gray-300">
                   This workout does not have any exercises assigned yet.
@@ -538,123 +683,175 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
             </Card>
           ) : (
             exercises.map((exercise, index) => (
-              <Card key={exercise.id} className={exercise.completed ? "bg-green-50 dark:bg-green-900/20 p-3" : "p-3"}>
-                <CardHeader className="p-2 pb-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="w-full flex items-center justify-between gap-10">
-                      <button
-                        onClick={() => toggleExerciseCompletion(String(exercise.id), !exercise.completed)}
-                        className="flex-shrink-0"
-                        aria-label={exercise.completed ? "Mark as incomplete" : "Mark as complete"}
-                      >
-                        {exercise.completed ? (
-                          <CheckCircle className="h-5 w-5 text-green-600" />
-                        ) : (
-                          <Circle className="h-5 w-5 text-gray-400 hover:text-green-600" />
-                        )}
-                      </button>
-                      <span className="font-medium text-base sm:text-lg w-full">
-                        {index + 1}. {exercise.exercise.name}
-                      </span>
-                      {exercise.completed && (
-                        <Badge variant="secondary" className="hidden sm:block text-xs px-2 py-0.5 ml-1">Completed</Badge>
-                      )}
-                    </div>
-                    
-                  </div>
-                  {exercise.exercise.category && (
-                    <CardDescription className="mt-0.5 text-xs text-muted-foreground">{exercise.exercise.category}</CardDescription>
-                  )}
-                </CardHeader>
-                <CardContent className="pt-2 pb-2 px-2">
-                  <div className="gap-2 mb-2">
-                    <div className="grid grid-cols-2 xs:grid-cols-2 sm:grid-cols-4 gap-2">
-                      <div className="space-y-1">
-                        <Label htmlFor={`sets-${exercise.id}`} className="flex items-center gap-1 ">
-                          <Target className="h-3 w-3" /> Sets
-                        </Label>
-                        <Input
-                          id={`sets-${exercise.id}`}
-                          type="number"
-                          value={exercise.sets || ""}
-                          onChange={(e) => updateExerciseField(String(exercise.id), "sets", Number.parseInt(e.target.value) || 0)}
-                          min="0"
-                          className="h-7 sm:h-9 px-2"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor={`reps-${exercise.id}`} className="flex items-center gap-1 ">
-                          <Target className="h-3 w-3" /> Reps
-                        </Label>
-                        <Input
-                          id={`reps-${exercise.id}`}
-                          type="number"
-                          value={exercise.reps || ""}
-                          onChange={(e) => updateExerciseField(String(exercise.id), "reps", Number.parseInt(e.target.value) || 0)}
-                          min="0"
-                          className="h-7 sm:h-9 px-2"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor={`weight-${exercise.id}`} className="flex items-center gap-1 ">
-                          <Weight className="h-3 w-3" /> Weight
-                        </Label>
-                        <Input
-                          id={`weight-${exercise.id}`}
-                          value={exercise.weight || ""}
-                          onChange={(e) => updateExerciseField(String(exercise.id), "weight", e.target.value)}
-                          placeholder="e.g., 80kg, BW"
-                          className="h-7 sm:h-9 px-2"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor={`rest-${exercise.id}`} className="flex items-center gap-1 ">
-                          <Timer className="h-3 w-3" /> Rest (sec)
-                        </Label>
-                        <Input
-                          id={`rest-${exercise.id}`}
-                          type="number"
-                          value={exercise.rest_seconds || ""}
-                          onChange={(e) => updateExerciseField(String(exercise.id), "rest_seconds", Number.parseInt(e.target.value) || 0)}
-                          min="0"
-                          className="h-7 sm:h-9  px-2"
-                        />
-                      </div>
-                    </div>
-
-                  </div>
-                  {exercise.exercise.instructions && (
-                    <div className="mt-2 p-2 bg-gray-50 dark:bg-gray-800 rounded-md ">
-                      <strong>Instructions:</strong> {exercise.exercise.instructions}
-                    </div>
-                  )}
-                  {exercise.completed && (
-                    <div className="mt-2 text-green-600 dark:text-green-400">Exercise completed</div>
-                  )}
-                  {/* Exercise Comments Section */}
-                  <div className="mt-2">
-                    <H5 className="font-medium mb-1 ">Exercise Comments</H5>
-                    <div className="space-y-1 mb-1">
-                      {(exerciseComments[exercise.id] || []).length === 0 && (
-                        <div className="text-gray-400 text-xs">No comments yet.</div>
-                      )}
-                      {(exerciseComments[exercise.id] || []).map((c) => (
-                        <div key={c.id} className="p-1 bg-gray-50 dark:bg-gray-800 rounded ">
-                          <span className="font-medium">{c.user?.name || "User"}</span>: {c.comment_text}
-                          <span className="ml-2  text-gray-400">{new Date(c.created_at).toLocaleString()}</span>
+              <Card
+                key={exercise.id}
+                className={cn(
+                  "transition-all duration-200 border-l-4",
+                  exercise.completed
+                    ? "border-l-green-500 bg-green-50/30 dark:bg-green-900/5"
+                    : "border-l-blue-500 bg-blue-50/30 dark:bg-blue-900/5",
+                )}
+              >
+                <CardContent className="p-6">
+                  {/* Exercise Header */}
+                  <div className="flex items-start gap-4 mb-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-3 mb-2">
+                            {exercise.exercise.image_url ? (
+                              <div className="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0">
+                                <img
+                                  src={exercise.exercise.image_url}
+                                  alt={exercise.exercise.name}
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => {
+                                    // Fallback to icon if image fails to load
+                                    const target = e.target as HTMLImageElement;
+                                    target.style.display = 'none';
+                                    target.nextElementSibling?.classList.remove('hidden');
+                                  }}
+                                />
+                                <Dumbbell className="h-6 w-6 text-gray-400 hidden" />
+                              </div>
+                            ) : (
+                              <div className="w-12 h-12 bg-gray-100 dark:bg-gray-800 rounded-lg flex items-center justify-center flex-shrink-0">
+                                <Dumbbell className="h-6 w-6 text-gray-400" />
+                              </div>
+                            )}
+                            <div>
+                              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                                {index + 1}. {exercise.exercise.name}
+                              </h3>
+                              {exercise.exercise.category && (
+                                <p className="text-sm text-gray-600 dark:text-gray-400">
+                                  {exercise.exercise.category}
+                                </p>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                      ))}
-                    </div>
-                    <div className="flex flex-col sm:flex-row gap-1 mt-1">
-                      <Textarea
-                        value={newExerciseComments[exercise.id] || ""}
-                        onChange={(e) => setNewExerciseComments((prev) => ({ ...prev, [exercise.id]: e.target.value }))}
-                        placeholder="Add a comment..."
-                        rows={1}
-                        className="flex-1 "
-                        disabled={commentLoading}
-                      />
-                      <Button size="sm" onClick={() => handleAddExerciseComment(exercise.id)} disabled={commentLoading || !(newExerciseComments[exercise.id] || "").trim()}>Post</Button>
+                        {exercise.completed && (
+                          <Badge
+                            variant="default"
+                            className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                          >
+                            <CheckCircle className="h-3 w-3 mr-1" />
+                            Done
+                          </Badge>
+                        )}
+                      </div>
+
+                      {/* Exercise Stats (display only) */}
+                      <Separator className="mb-3"></Separator>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                        <div className="space-y-1">
+                          <Label className="flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-gray-400">
+                            <Target className="h-3 w-3" /> Sets
+                          </Label>
+                          <div className="text-base font-bold text-gray-900 dark:text-white pl-4">{exercise.sets}</div>
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-gray-400">
+                            <TrendingUp className="h-3 w-3" /> Reps
+                          </Label>
+                          <div className="text-base font-bold text-gray-900 dark:text-white pl-4">{exercise.reps}</div>
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-gray-400">
+                            <Weight className="h-3 w-3" /> Weight
+                          </Label>
+                          <div className="text-base font-bold text-gray-900 dark:text-white pl-4">{exercise.weight || "-"}</div>
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-gray-400">
+                            <Timer className="h-3 w-3" /> Rest (sec)
+                          </Label>
+                          <div className="text-base font-bold text-gray-900 dark:text-white pl-4">{exercise.rest_seconds}</div>
+                        </div>
+                      </div>
+
+                      {/* Mark Complete/Incomplete Button */}
+                      <div className="mb-4">
+                        {exercise.completed ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-primary border-primary-300 dark:text-primary dark:border-primary-700"
+                            onClick={() => toggleExerciseCompletion(String(exercise.id), false)}
+                          >
+                            Mark as Incomplete
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="default"
+                            className=" text-white"
+                            onClick={() => toggleExerciseCompletion(String(exercise.id), true)}
+                          >
+                            Mark as Complete
+                          </Button>
+                        )}
+                      </div>
+
+                      {/* Exercise Instructions */}
+                      {exercise.exercise.instructions && (
+                        <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                          <p className="text-sm text-blue-800 dark:text-blue-200">
+                            <strong>Instructions:</strong> {exercise.exercise.instructions}
+                          </p>
+                        </div>
+                      )}
+
+                      <Separator className="my-4" />
+
+                      {/* Exercise Comments */}
+                      <div className="space-y-3">
+                        <h4 className="font-medium text-sm text-gray-700 dark:text-gray-300">Exercise Comments</h4>
+
+                        {(exerciseComments[exercise.id] || []).length === 0 ? (
+                          <p className="text-xs text-gray-500 dark:text-gray-400 italic">No comments yet.</p>
+                        ) : (
+                          <div className="space-y-2">
+                            {(exerciseComments[exercise.id] || []).map((comment) => (
+                              <div key={comment.id} className="flex gap-2 p-2 bg-gray-50 dark:bg-gray-800/50 rounded">
+                                <div className="w-6 h-6 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center flex-shrink-0">
+                                  <User className="h-3 w-3 text-gray-500" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <span className="font-medium text-xs">{comment.user?.name || "User"}</span>
+                                    <span className="text-xs text-gray-500">
+                                      {new Date(comment.created_at).toLocaleDateString()}
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-gray-700 dark:text-gray-300">{comment.comment_text}</p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        <div className="flex gap-2">
+                          <Textarea
+                            value={newExerciseComments[exercise.id] || ""}
+                            onChange={(e) =>
+                              setNewExerciseComments((prev) => ({ ...prev, [exercise.id]: e.target.value }))
+                            }
+                            placeholder="Add a comment about this exercise..."
+                            rows={1}
+                            className="flex-1 text-sm"
+                            disabled={commentLoading}
+                          />
+                          <Button
+                            size="sm"
+                            onClick={() => handleAddExerciseComment(exercise.id)}
+                            disabled={commentLoading || !(newExerciseComments[exercise.id] || "").trim()}
+                          >
+                            <Send className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </CardContent>
@@ -664,75 +861,84 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
         </div>
       ) : (
         // Cardio workout display
-        <Card className={workout.completed ? "bg-green-50 dark:bg-green-900/20" : ""}>
+        <Card className={cn(workout.completed && "border-l-4 border-l-green-500 bg-green-50/30 dark:bg-green-900/5")}>
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle>Cardio Workout Details</CardTitle>
-              <div className="flex items-center gap-2">
-                <Button
-                  onClick={() => toggleCardioWorkoutCompletion(!workout.completed)}
-                  variant={workout.completed ? "outline" : "default"}
-                  size="sm"
-                >
-                  {workout.completed ? (
-                    <>
-                      <CheckCircle className="h-4 w-4 mr-2" />
-                      Completed
-                    </>
-                  ) : (
-                    <>
-                      <Circle className="h-4 w-4 mr-2" />
-                      Mark Complete
-                    </>
-                  )}
-                </Button>
-              </div>
+              <CardTitle className="flex items-center gap-2">
+                <Activity className="h-5 w-5" />
+                Cardio Workout Details
+              </CardTitle>
+              <Button
+                onClick={() => toggleCardioWorkoutCompletion(!workout.completed)}
+                variant={workout.completed ? "outline" : "default"}
+                size="sm"
+              >
+                {workout.completed ? (
+                  <>
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                    Completed
+                  </>
+                ) : (
+                  <>
+                    <Circle className="h-4 w-4 mr-2" />
+                    Mark Complete
+                  </>
+                )}
+              </Button>
             </div>
           </CardHeader>
-          <CardContent>
-            <div className="grid md:grid-cols-2 gap-6 w-full">
+          <CardContent className="space-y-6">
+            <div className="grid sm:grid-cols-2 gap-6">
               {workout.duration_minutes && (
-                <div>
-                  <Label className="flex items-center gap-2 mb-2">
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-400">
                     <Timer className="h-4 w-4" />
                     Duration
                   </Label>
-                  <p className="text-lg font-semibold">{workout.duration_minutes} minutes</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{workout.duration_minutes} min</p>
                 </div>
               )}
+
               {workout.intensity_type && (
-                <div>
-                  <Label className="flex items-center gap-2 mb-2">
-                    <Target className="h-4 w-4" />
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-400">
+                    <Zap className="h-4 w-4" />
                     Intensity
                   </Label>
-                  <Badge variant="outline" className="text-sm">
+                  <Badge variant="outline" className="text-sm capitalize">
                     {workout.intensity_type}
                   </Badge>
                 </div>
               )}
+
               {workout.target_tss && (
-                <div>
-                  <Label className="mb-2">Training Stress Score (TSS)</Label>
-                  <p className="text-lg font-semibold">{workout.target_tss}</p>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-gray-600 dark:text-gray-400">Training Stress Score</Label>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{workout.target_tss}</p>
                 </div>
               )}
+
               {workout.target_ftp && (
-                <div>
-                  <Label className="mb-2">Functional Threshold Power (FTP)</Label>
-                  <p className="text-lg font-semibold">{workout.target_ftp}W</p>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                    Functional Threshold Power
+                  </Label>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{workout.target_ftp}W</p>
                 </div>
               )}
             </div>
+
             {workout.notes && (
-              <div className="mt-6">
-                <Label className="mb-2">Notes</Label>
-                <p className="text-gray-600 dark:text-gray-300">{workout.notes}</p>
+              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                <Label className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2 block">Notes</Label>
+                <p className="text-sm text-blue-700 dark:text-blue-300">{workout.notes}</p>
               </div>
             )}
+
             {workout.completed && (
-              <div className="mt-4 text-xs text-green-600 dark:text-green-400">
-                Cardio workout completed
+              <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
+                <CheckCircle className="h-4 w-4" />
+                <span className="text-sm font-medium">Cardio workout completed successfully!</span>
               </div>
             )}
           </CardContent>

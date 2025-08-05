@@ -185,12 +185,11 @@ export function Navigation() {
             ) : (
               // Show sign in/sign up buttons only when not loading and no user
               <div className="flex items-center space-x-4">
-                <Link href="/auth/login">
-                  <Button variant="ghost">Sign in</Button>
-                </Link>
-                <Link href="/auth/register">
-                  <Button>Sign up</Button>
-                </Link>
+                
+                <Button href="/auth/login" variant="ghost">Sign in</Button>
+                
+                <Button href="/auth/register">Sign up</Button>
+              
               </div>
             )}
 

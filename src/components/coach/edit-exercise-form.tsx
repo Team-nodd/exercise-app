@@ -14,6 +14,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { toast } from "sonner"
 import { ArrowLeft, Save, Trash2 } from "lucide-react"
 import type { Exercise } from "@/types"
+import { ImageUpload } from "@/components/ui/image-upload"
 
 interface EditExerciseFormProps {
   exerciseId: string
@@ -33,6 +34,7 @@ export function EditExerciseForm({ exerciseId }: EditExerciseFormProps) {
     category: "",
     equipment: "",
     instructions: "",
+    image_url: "",
     muscle_groups: [] as string[],
   })
 
@@ -83,6 +85,7 @@ export function EditExerciseForm({ exerciseId }: EditExerciseFormProps) {
           category: data.category || "",
           equipment: data.equipment || "",
           instructions: data.instructions || "",
+          image_url: data.image_url || "",
           muscle_groups: data.muscle_groups || [],
         })
       } catch (error) {
@@ -108,6 +111,7 @@ export function EditExerciseForm({ exerciseId }: EditExerciseFormProps) {
           category: formData.category,
           equipment: formData.equipment,
           instructions: formData.instructions,
+          image_url: formData.image_url,
           muscle_groups: formData.muscle_groups,
           updated_at: new Date().toISOString(),
         })
@@ -272,6 +276,16 @@ export function EditExerciseForm({ exerciseId }: EditExerciseFormProps) {
                 rows={6}
               />
             </div>
+
+            {/* <div className="space-y-2">
+              <Label>Exercise Image</Label>
+              <ImageUpload
+                value={formData.image_url}
+                onChange={(url) => setFormData((prev) => ({ ...prev, image_url: url }))}
+                onRemove={() => setFormData((prev) => ({ ...prev, image_url: "" }))}
+                disabled={saving}
+              />
+            </div> */}
 
             <div className="flex justify-end space-x-4">
               <Button type="button" variant="outline" onClick={() => router.back()}>
