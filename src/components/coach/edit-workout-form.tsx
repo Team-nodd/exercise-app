@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
@@ -12,9 +11,10 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
-import { Loader2, Plus, Trash2, ArrowLeft, AlertTriangle } from "lucide-react"
+import { Loader2, Plus, Trash2, ArrowLeft, AlertTriangle, Send, User, Dumbbell } from "lucide-react"
 import Link from "next/link"
 import type { ProgramWithDetails, Exercise, WorkoutWithDetails, WorkoutExerciseWithDetails } from "@/types"
+import { Badge } from "@/components/ui/badge"
 
 interface EditWorkoutFormProps {
   program: ProgramWithDetails
@@ -54,6 +54,7 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
+  // Comments
   const [workoutComments, setWorkoutComments] = useState<any[]>([])
   const [exerciseComments, setExerciseComments] = useState<Record<number, any[]>>({})
   const [newCoachWorkoutComment, setNewCoachWorkoutComment] = useState("")
@@ -61,21 +62,18 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
   const [commentLoading, setCommentLoading] = useState(false)
 
   const router = useRouter()
-  // const { toast } = useToast()
   const supabase = createClient()
 
   useEffect(() => {
     const fetchExercises = async () => {
       try {
         const { data, error } = await supabase.from("exercises").select("*").order("name", { ascending: true })
-
         if (error) {
           console.error("Error fetching exercises:", error)
+          toast("Failed to load exercises. Please try again.")
           return
         }
-
         setExercises(data || [])
-
         // Convert initial exercises to workout exercises format
         const convertedExercises: WorkoutExercise[] = initialExercises.map((ex) => ({
           id: ex.id,
@@ -88,15 +86,14 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
           volume_level: ex.volume_level,
           order_in_workout: ex.order_in_workout,
         }))
-
         setWorkoutExercises(convertedExercises)
       } catch (error) {
         console.error("Error fetching exercises:", error)
+        toast("An unexpected error occurred while fetching exercises.")
       } finally {
         setLoadingExercises(false)
       }
     }
-
     fetchExercises()
   }, [supabase, initialExercises])
 
@@ -111,6 +108,7 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
         .is("workout_exercise_id", null)
         .order("created_at", { ascending: true })
       setWorkoutComments(workoutCommentsData || [])
+
       // Exercise comments
       if (exList.length > 0) {
         const exerciseIds = exList.map((ex) => ex.id)
@@ -119,6 +117,7 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
           .select("*, user:users(name, role)")
           .in("workout_exercise_id", exerciseIds)
           .order("created_at", { ascending: true })
+
         // Group by exerciseId
         const grouped: Record<number, any[]> = {}
         for (const c of exerciseCommentsData || []) {
@@ -138,7 +137,7 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
 
   useEffect(() => {
     fetchComments(initialExercises)
-  }, [initialExercises])
+  }, [initialExercises, workout.id, supabase])
 
   const addExercise = () => {
     setWorkoutExercises([
@@ -167,13 +166,11 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
   const updateExercise = (index: number, field: keyof WorkoutExercise, value: unknown) => {
     const updated = [...workoutExercises]
     updated[index] = { ...updated[index], [field]: value }
-
     // If exercise_id changed, update the exercise reference
     if (field === "exercise_id") {
       const exercise = exercises.find((ex) => ex.id === value)
       updated[index].exercise = exercise
     }
-
     setWorkoutExercises(updated)
   }
 
@@ -181,21 +178,16 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
     setDeleting(true)
     try {
       const { error } = await supabase.from("workouts").delete().eq("id", workout.id)
-
       if (error) {
         console.error("Error deleting workout:", error)
-        toast( 
-        "Failed to delete workout"
-        )
+        toast("Failed to delete workout")
         return
       }
-
       toast("Workout deleted successfully")
-
       router.push(`/coach/programs/${program.id}`)
     } catch (error) {
       console.error("Error deleting workout:", error)
-      toast( "An unexpected error occurred")
+      toast("An unexpected error occurred")
     } finally {
       setDeleting(false)
       setShowDeleteConfirm(false)
@@ -263,7 +255,6 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-
     try {
       // Validate gym workouts have exercises
       if (workoutType === "gym" && workoutExercises.length === 0) {
@@ -271,12 +262,11 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
         setLoading(false)
         return
       }
-
       // Validate gym workouts have valid exercises
       if (workoutType === "gym") {
         const invalidExercises = workoutExercises.filter((ex) => ex.exercise_id === 0)
         if (invalidExercises.length > 0) {
-          toast( "Please select exercises for all workout exercises")
+          toast("Please select exercises for all workout exercises")
           setLoading(false)
           return
         }
@@ -301,9 +291,7 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
           target_ftp: null,
         }),
       }
-
       const { error: workoutError } = await supabase.from("workouts").update(workoutData).eq("id", workout.id)
-
       if (workoutError) {
         console.error("Error updating workout:", workoutError)
         toast("Failed to update workout")
@@ -314,7 +302,6 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
       if (workoutType === "gym") {
         // Delete existing workout exercises
         await supabase.from("workout_exercises").delete().eq("workout_id", workout.id)
-
         // Insert new workout exercises
         if (workoutExercises.length > 0) {
           const exerciseData = workoutExercises.map((ex) => ({
@@ -327,9 +314,7 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
             rest_seconds: ex.rest_seconds,
             volume_level: ex.volume_level,
           }))
-
           const { error: exerciseError } = await supabase.from("workout_exercises").insert(exerciseData)
-
           if (exerciseError) {
             console.error("Error updating workout exercises:", exerciseError)
             toast("Workout updated but failed to update exercises")
@@ -340,8 +325,7 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
         await supabase.from("workout_exercises").delete().eq("workout_id", workout.id)
       }
 
-      toast( "Workout updated successfully!")
-
+      toast("Workout updated successfully!")
       router.push(`/coach/programs/${program.id}`)
     } catch (error) {
       console.error("Error updating workout:", error)
@@ -353,29 +337,50 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
 
   if (loadingExercises) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin" />
+      <div className="container mx-auto px-4 py-6 max-w-6xl">
+        <div className="space-y-6">
+          {/* Header Skeleton */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="h-8 bg-gray-200 rounded w-1/3 animate-pulse"></div>
+            <div className="h-10 w-32 bg-gray-200 rounded animate-pulse"></div>
+          </div>
+          <div className="h-4 bg-gray-200 rounded w-1/2 mb-8 animate-pulse"></div>
+
+          {/* Form Sections Skeleton */}
+          {[...Array(3)].map((_, i) => (
+            <Card key={i} className="animate-pulse">
+              <CardHeader>
+                <div className="h-6 bg-gray-200 rounded w-1/4 mb-2"></div>
+                <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="h-10 bg-gray-200 rounded"></div>
+                <div className="h-10 bg-gray-200 rounded"></div>
+                <div className="h-10 bg-gray-200 rounded"></div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       </div>
     )
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto px-4 py-6 max-w-6xl">
       <div className="mb-8">
         <Link
           href={`/coach/programs/${program.id}`}
-          className="flex items-center text-sm text-muted-foreground hover:text-primary mb-4"
+          className="flex items-center text-sm text-muted-foreground hover:text-primary mb-4 transition-colors"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to {program.name}
         </Link>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Edit Workout</h1>
-            <p className="text-gray-600 dark:text-gray-300 mt-2">
-              Editing <strong>{workout.name}</strong> for {program.user.name}
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">Edit Workout</h1>
+            <p className="text-gray-600 dark:text-gray-300 mt-2 text-sm sm:text-base">
+              Editing <strong className="font-semibold text-gray-800 dark:text-gray-200">{workout.name}</strong> for{" "}
+              <strong className="font-semibold text-gray-800 dark:text-gray-200">{program.user.name}</strong>
             </p>
           </div>
           <Button variant="destructive" onClick={() => setShowDeleteConfirm(true)}>
@@ -387,13 +392,13 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
 
       {/* Delete Confirmation */}
       {showDeleteConfirm && (
-        <Card className="mb-8 border-destructive">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-destructive">
+        <Card className="mb-8 border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800">
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center gap-2 text-lg font-semibold text-red-800 dark:text-red-200">
               <AlertTriangle className="h-5 w-5" />
-              Delete Workout
+              Confirm Deletion
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-sm text-red-600 dark:text-red-300">
               Are you sure you want to delete this workout? This action cannot be undone and will remove all associated
               exercises.
             </CardDescription>
@@ -412,12 +417,16 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
         </Card>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-8">
+      <form onSubmit={handleSubmit} className="space-y-6">
         {/* Basic Workout Info */}
         <Card>
-          <CardHeader>
-            <CardTitle>Workout Details</CardTitle>
-            <CardDescription>Basic information about the workout</CardDescription>
+          <CardHeader className="pb-4">
+            <CardTitle className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white">
+              Workout Details
+            </CardTitle>
+            <CardDescription className="text-sm text-gray-600 dark:text-gray-300">
+              Basic information about the workout
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -430,7 +439,6 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
                 required
               />
             </div>
-
             <div className="space-y-2">
               <Label htmlFor="workoutType">Workout Type *</Label>
               <Select value={workoutType} onValueChange={(value: "gym" | "cardio") => setWorkoutType(value)}>
@@ -443,7 +451,6 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
                 </SelectContent>
               </Select>
             </div>
-
             <div className="space-y-2">
               <Label htmlFor="scheduledDate">Scheduled Date</Label>
               <Input
@@ -453,7 +460,6 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
                 onChange={(e) => setScheduledDate(e.target.value)}
               />
             </div>
-
             <div className="space-y-2">
               <Label htmlFor="notes">Notes</Label>
               <Textarea
@@ -470,12 +476,16 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
         {/* Cardio Specific Fields */}
         {workoutType === "cardio" && (
           <Card>
-            <CardHeader>
-              <CardTitle>Cardio Details</CardTitle>
-              <CardDescription>Specific parameters for cardio workouts</CardDescription>
+            <CardHeader className="pb-4">
+              <CardTitle className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white">
+                Cardio Details
+              </CardTitle>
+              <CardDescription className="text-sm text-gray-600 dark:text-gray-300">
+                Specific parameters for cardio workouts
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="intensityType">Intensity Type</Label>
                   <Input
@@ -496,7 +506,7 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="targetTss">Target TSS</Label>
                   <Input
@@ -525,13 +535,17 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
         {/* Gym Exercises */}
         {workoutType === "gym" && (
           <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
+            <CardHeader className="pb-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                  <CardTitle>Exercises</CardTitle>
-                  <CardDescription>Manage exercises in this workout</CardDescription>
+                  <CardTitle className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white">
+                    Exercises
+                  </CardTitle>
+                  <CardDescription className="text-sm text-gray-600 dark:text-gray-300">
+                    Manage exercises in this workout
+                  </CardDescription>
                 </div>
-                <Button type="button" onClick={addExercise} variant="outline">
+                <Button type="button" onClick={addExercise}>
                   <Plus className="h-4 w-4 mr-2" />
                   Add Exercise
                 </Button>
@@ -539,117 +553,122 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
             </CardHeader>
             <CardContent>
               {workoutExercises.length === 0 ? (
-                <div className="text-center py-8">
-                  <p className="text-muted-foreground mb-4">No exercises added yet</p>
-                  <Button type="button" onClick={addExercise}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add First Exercise
-                  </Button>
-                </div>
+                <Card className="border-dashed border-2">
+                  <CardContent className="text-center py-12">
+                    <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center">
+                      <Dumbbell className="h-8 w-8 text-gray-400" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No exercises added yet</h3>
+                    <p className="text-gray-600 dark:text-gray-300 mb-4 text-sm max-w-sm mx-auto">
+                      Add exercises to build out this gym workout.
+                    </p>
+                    <Button type="button" onClick={addExercise} className="mt-6">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add First Exercise
+                    </Button>
+                  </CardContent>
+                </Card>
               ) : (
                 <div className="space-y-6">
                   {workoutExercises.map((workoutExercise, index) => (
-                    <div key={index} className="border rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-4">
-                        <h4 className="font-semibold">Exercise {index + 1}</h4>
-                        <Button type="button" variant="outline" size="sm" onClick={() => removeExercise(index)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label>Exercise *</Label>
-                          <Select
-                            value={workoutExercise.exercise_id.toString()}
-                            onValueChange={(value) => updateExercise(index, "exercise_id", Number.parseInt(value))}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select exercise" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {exercises.map((exercise) => (
-                                <SelectItem key={exercise.id} value={exercise.id.toString()}>
-                                  {exercise.name} ({exercise.category})
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                    <Card key={index} className="border-l-4 border-blue-500 bg-blue-50/30 dark:bg-blue-900/5">
+                      <CardContent className="p-4 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-semibold text-base text-gray-900 dark:text-white">
+                            Exercise {index + 1}
+                          </h4>
+                          <Button type="button" variant="destructive" size="sm" onClick={() => removeExercise(index)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
-
-                        <div className="space-y-2">
-                          <Label>Volume Level</Label>
-                          <Select
-                            value={workoutExercise.volume_level}
-                            onValueChange={(value: "low" | "moderate" | "high") =>
-                              updateExercise(index, "volume_level", value)
-                            }
-                          >
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="low">Low</SelectItem>
-                              <SelectItem value="moderate">Moderate</SelectItem>
-                              <SelectItem value="high">High</SelectItem>
-                            </SelectContent>
-                          </Select>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label>Exercise *</Label>
+                            <Select
+                              value={workoutExercise.exercise_id.toString()}
+                              onValueChange={(value) => updateExercise(index, "exercise_id", Number.parseInt(value))}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select exercise" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {exercises.map((exercise) => (
+                                  <SelectItem key={exercise.id} value={exercise.id.toString()}>
+                                    {exercise.name} ({exercise.category})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Volume Level</Label>
+                            <Select
+                              value={workoutExercise.volume_level}
+                              onValueChange={(value: "low" | "moderate" | "high") =>
+                                updateExercise(index, "volume_level", value)
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="low">Low</SelectItem>
+                                <SelectItem value="moderate">Moderate</SelectItem>
+                                <SelectItem value="high">High</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Sets</Label>
+                            <Input
+                              type="number"
+                              value={workoutExercise.sets}
+                              onChange={(e) => updateExercise(index, "sets", Number.parseInt(e.target.value) || 0)}
+                              min="1"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Reps</Label>
+                            <Input
+                              type="number"
+                              value={workoutExercise.reps}
+                              onChange={(e) => updateExercise(index, "reps", Number.parseInt(e.target.value) || 0)}
+                              min="1"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Weight</Label>
+                            <Input
+                              value={workoutExercise.weight}
+                              onChange={(e) => updateExercise(index, "weight", e.target.value)}
+                              placeholder="e.g., 80kg, BW"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Rest (seconds)</Label>
+                            <Input
+                              type="number"
+                              value={workoutExercise.rest_seconds}
+                              onChange={(e) =>
+                                updateExercise(index, "rest_seconds", Number.parseInt(e.target.value) || 0)
+                              }
+                              min="0"
+                            />
+                          </div>
                         </div>
-
-                        <div className="space-y-2">
-                          <Label>Sets</Label>
-                          <Input
-                            type="number"
-                            value={workoutExercise.sets}
-                            onChange={(e) => updateExercise(index, "sets", Number.parseInt(e.target.value) || 0)}
-                            min="1"
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label>Reps</Label>
-                          <Input
-                            type="number"
-                            value={workoutExercise.reps}
-                            onChange={(e) => updateExercise(index, "reps", Number.parseInt(e.target.value) || 0)}
-                            min="1"
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label>Weight</Label>
-                          <Input
-                            value={workoutExercise.weight}
-                            onChange={(e) => updateExercise(index, "weight", e.target.value)}
-                            placeholder="e.g., 80kg, BW"
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label>Rest (seconds)</Label>
-                          <Input
-                            type="number"
-                            value={workoutExercise.rest_seconds}
-                            onChange={(e) =>
-                              updateExercise(index, "rest_seconds", Number.parseInt(e.target.value) || 0)
-                            }
-                            min="0"
-                          />
-                        </div>
-                      </div>
-
-                      {workoutExercise.exercise && (
-                        <div className="mt-4 p-3 bg-muted rounded-lg">
-                          <p className="text-sm">
-                            <strong>Instructions:</strong>{" "}
-                            {workoutExercise.exercise.instructions || "No instructions available"}
-                          </p>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            Equipment: {workoutExercise.exercise.equipment || "None specified"}
-                          </p>
-                        </div>
-                      )}
-                    </div>
+                        {workoutExercise.exercise && (
+                          <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                            <p className="text-sm text-blue-800 dark:text-blue-200">
+                              <strong>Instructions:</strong>{" "}
+                              {workoutExercise.exercise.instructions || "No instructions available"}
+                            </p>
+                            <p className="text-sm text-blue-600 dark:text-blue-400 mt-1">
+                              Equipment: {workoutExercise.exercise.equipment || "None specified"}
+                            </p>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
                   ))}
                 </div>
               )}
@@ -658,69 +677,125 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
         )}
 
         {/* Comments Section */}
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle>Workout Comments</CardTitle>
-            <CardDescription>See user comments and reply as coach</CardDescription>
+        <Card>
+          <CardHeader className="pb-4">
+            <CardTitle className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white">
+              Workout Comments
+            </CardTitle>
+            <CardDescription className="text-sm text-gray-600 dark:text-gray-300">
+              See user comments and reply as coach
+            </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-2 mb-2">
-              {workoutComments.length === 0 && <div className="text-gray-500 text-sm">No comments yet.</div>}
+          <CardContent className="space-y-4">
+            <div className="space-y-3">
+              {workoutComments.length === 0 && (
+                <p className="text-gray-500 text-sm italic">No comments yet. Be the first to comment!</p>
+              )}
               {workoutComments.map((c) => (
-                <div key={c.id} className="p-2 bg-gray-50 dark:bg-gray-800 rounded">
-                  <span className="font-medium">{c.user?.name || "User"}</span>
-                  {c.user?.role === "coach" && <span className="ml-1 text-blue-600">(Coach)</span>}: {c.comment_text}
-                  <span className="ml-2 text-xs text-gray-400">{new Date(c.created_at).toLocaleString()}</span>
+                <div key={c.id} className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg flex gap-3">
+                  <div className="w-8 h-8 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center flex-shrink-0">
+                    <User className="h-4 w-4 text-gray-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-medium text-sm">{c.user?.name || "User"}</span>
+                      {c.user?.role === "coach" && (
+                        <Badge
+                          variant="outline"
+                          className="text-xs px-1.5 py-0.5 bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
+                        >
+                          Coach
+                        </Badge>
+                      )}
+                      <span className="text-xs text-gray-500">{new Date(c.created_at).toLocaleDateString()}</span>
+                    </div>
+                    <p className="text-sm text-gray-700 dark:text-gray-300">{c.comment_text}</p>
+                  </div>
                 </div>
               ))}
             </div>
-            <div className="flex gap-2 mt-2">
+            <div className="flex gap-2 mt-4">
               <Textarea
                 value={newCoachWorkoutComment}
                 onChange={(e) => setNewCoachWorkoutComment(e.target.value)}
                 placeholder="Add a coach comment..."
                 rows={2}
-                className="flex-1"
+                className="flex-1 text-sm"
                 disabled={commentLoading}
               />
-              <Button onClick={handleAddCoachWorkoutComment} disabled={commentLoading || !newCoachWorkoutComment.trim()}>Post</Button>
+              <Button
+                size="sm"
+                onClick={handleAddCoachWorkoutComment}
+                disabled={commentLoading || !newCoachWorkoutComment.trim()}
+                className="self-end"
+              >
+                <Send className="h-4 w-4" />
+              </Button>
             </div>
           </CardContent>
         </Card>
 
         {/* Gym Exercise Comments */}
         {workoutType === "gym" && initialExercises.length > 0 && (
-          <Card className="mb-8">
-            <CardHeader>
-              <CardTitle>Exercise Comments</CardTitle>
-              <CardDescription>See user comments and reply as coach for each exercise</CardDescription>
+          <Card>
+            <CardHeader className="pb-4">
+              <CardTitle className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white">
+                Exercise Comments
+              </CardTitle>
+              <CardDescription className="text-sm text-gray-600 dark:text-gray-300">
+                See user comments and reply as coach for each exercise
+              </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
               {initialExercises.map((ex, idx) => (
-                <div key={ex.id} className="mb-4">
-                  <div className="font-medium text-xs mb-1">{idx + 1}. {ex.exercise?.name}</div>
-                  <div className="space-y-1 mb-1">
+                <div key={ex.id} className="space-y-3 p-3 border rounded-lg bg-muted/50">
+                  <div className="font-medium text-sm text-gray-900 dark:text-white">
+                    {idx + 1}. {ex.exercise?.name}
+                  </div>
+                  <div className="space-y-2">
                     {(exerciseComments[ex.id] || []).length === 0 && (
-                      <div className="text-gray-400 text-xs">No comments yet.</div>
+                      <p className="text-gray-500 text-xs italic">No comments yet.</p>
                     )}
                     {(exerciseComments[ex.id] || []).map((c) => (
-                      <div key={c.id} className="p-1 bg-gray-50 dark:bg-gray-800 rounded text-xs">
-                        <span className="font-medium">{c.user?.name || "User"}</span>
-                        {c.user?.role === "coach" && <span className="ml-1 text-blue-600">(Coach)</span>}: {c.comment_text}
-                        <span className="ml-2 text-[10px] text-gray-400">{new Date(c.created_at).toLocaleString()}</span>
+                      <div key={c.id} className="p-2 bg-gray-100 dark:bg-gray-700 rounded flex gap-2">
+                        <div className="w-6 h-6 bg-gray-200 dark:bg-gray-600 rounded-full flex items-center justify-center flex-shrink-0">
+                          <User className="h-3 w-3 text-gray-500" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className="font-medium text-xs">{c.user?.name || "User"}</span>
+                            {c.user?.role === "coach" && (
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] px-1 py-0 bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
+                              >
+                                Coach
+                              </Badge>
+                            )}
+                            <span className="text-xs text-gray-500">{new Date(c.created_at).toLocaleDateString()}</span>
+                          </div>
+                          <p className="text-xs text-gray-700 dark:text-gray-300">{c.comment_text}</p>
+                        </div>
                       </div>
                     ))}
                   </div>
-                  <div className="flex gap-1 mt-1">
+                  <div className="flex gap-2 mt-2">
                     <Textarea
                       value={newCoachExerciseComments[ex.id] || ""}
                       onChange={(e) => setNewCoachExerciseComments((prev) => ({ ...prev, [ex.id]: e.target.value }))}
                       placeholder="Add a coach comment..."
                       rows={1}
-                      className="flex-1 text-xs"
+                      className="flex-1 text-sm"
                       disabled={commentLoading}
                     />
-                    <Button size="sm" onClick={() => handleAddCoachExerciseComment(ex.id)} disabled={commentLoading || !(newCoachExerciseComments[ex.id] || "").trim()}>Post</Button>
+                    <Button
+                      size="sm"
+                      onClick={() => handleAddCoachExerciseComment(ex.id)}
+                      disabled={commentLoading || !(newCoachExerciseComments[ex.id] || "").trim()}
+                      className="self-end"
+                    >
+                      <Send className="h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
               ))}

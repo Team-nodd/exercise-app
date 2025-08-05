@@ -40,10 +40,18 @@ export function Navigation() {
   }
 
   const isActiveLink = (href: string) => {
+    // Special handling for root dashboards
     if (href === "/" && pathname === "/") return true
     if (href === "/dashboard" && pathname === "/dashboard") return true
     if (href === "/coach/dashboard" && pathname === "/coach/dashboard") return true
-    return pathname === href
+
+    // For other links, check if the pathname starts with the href
+    // and is either an exact match or followed by a '/'
+    if (href !== "/" && pathname.startsWith(href)) {
+      return pathname.length === href.length || pathname[href.length] === "/"
+    }
+
+    return pathname === href // Fallback for exact matches
   }
 
   const getLinkClasses = (href: string, isMobile = false) => {
