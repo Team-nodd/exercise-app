@@ -11,24 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Progress } from "@/components/ui/progress"
 import { toast } from "sonner"
-import {
-  CheckCircle,
-  Circle,
-  Dumbbell,
-  Target,
-  Weight,
-  Timer,
-  Save,
-  AlertCircle,
-  ArrowLeft,
-  MessageSquare,
-  Send,
-  User,
-  Calendar,
-  Zap,
-  TrendingUp,
-  Activity,
-} from "lucide-react"
+import { CheckCircle, Circle, Dumbbell, Target, Weight, Timer, Save, AlertCircle, ArrowLeft, MessageSquare, Send, User, Calendar, Zap, TrendingUp, Activity, ChevronDown } from 'lucide-react'
 import type { WorkoutWithDetails, WorkoutExerciseWithDetails } from "@/types"
 import { notificationService } from "@/lib/notifications/notification-service"
 import Link from "next/link"
@@ -64,10 +47,18 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
   const [pendingUpdates, setPendingUpdates] = useState<Record<string, any>>({})
   const [hasPendingChanges, setHasPendingChanges] = useState(false)
   const [workoutComments, setWorkoutComments] = useState<any[]>([])
-  const [exerciseComments, setExerciseComments] = useState<Record<string, any[]>>({})
   const [newWorkoutComment, setNewWorkoutComment] = useState("")
-  const [newExerciseComments, setNewExerciseComments] = useState<Record<string, string>>({})
   const [commentLoading, setCommentLoading] = useState(false)
+  
+  // State for exercise expansion and editing
+  const [expandedExercises, setExpandedExercises] = useState<Record<string, boolean>>({})
+  const [editingExercises, setEditingExercises] = useState<Record<string, boolean>>({})
+  const [editValues, setEditValues] = useState<Record<string, {
+    sets: number
+    reps: number
+    weight: string
+    rest_seconds: number
+  }>>({})
 
   const supabase = createClient()
 
@@ -111,7 +102,20 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
           return
         }
 
-        setExercises(exercisesData as WorkoutExerciseWithDetails[])
+        const exercisesList = exercisesData as WorkoutExerciseWithDetails[]
+        setExercises(exercisesList)
+        
+        // Initialize edit values for all exercises
+        const initialEditValues: Record<string, any> = {}
+        exercisesList.forEach(exercise => {
+          initialEditValues[exercise.id] = {
+            sets: exercise.sets,
+            reps: exercise.reps,
+            weight: exercise.weight || "",
+            rest_seconds: exercise.rest_seconds
+          }
+        })
+        setEditValues(initialEditValues)
       }
     } catch (error) {
       console.error("Error fetching workout data:", error)
@@ -139,30 +143,6 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
         } else {
           setWorkoutComments(workoutCommentsData || [])
         }
-
-        // Fetch exercise comments (for gym)
-        if (exercisesList && exercisesList.length > 0) {
-          const exerciseIds = exercisesList.map((ex) => ex.id)
-          const { data: exerciseCommentsData, error: exerciseCommentsError } = await supabase
-            .from("comments")
-            .select("*, user:users(name)")
-            .in("workout_exercise_id", exerciseIds)
-            .order("created_at", { ascending: true })
-
-          if (exerciseCommentsError) {
-            console.error("Error fetching exercise comments:", exerciseCommentsError)
-            toast("Failed to load exercise comments")
-          } else {
-            // Group by exerciseId
-            const grouped: Record<string, any[]> = {}
-            for (const c of exerciseCommentsData || []) {
-              const exId = c.workout_exercise_id
-              if (!grouped[exId]) grouped[exId] = []
-              grouped[exId].push(c)
-            }
-            setExerciseComments(grouped)
-          }
-        }
       } catch (error) {
         console.error("Error fetching comments:", error)
         toast("Failed to load comments")
@@ -175,7 +155,7 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
   useEffect(() => {
     if (workout) {
       if (workout.workout_type === "gym" && exercises.length > 0) {
-        fetchComments(exercises)
+        fetchComments()
       } else {
         fetchComments()
       }
@@ -389,37 +369,80 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
     setCommentLoading(false)
   }
 
-  // Add new exercise comment
-  const handleAddExerciseComment = async (exerciseId: number) => {
-    const text = newExerciseComments[exerciseId] || ""
-    if (!text.trim()) return
+  const toggleExpanded = (exerciseId: string) => {
+    setExpandedExercises(prev => ({
+      ...prev,
+      [exerciseId]: !prev[exerciseId]
+    }))
+  }
 
-    setCommentLoading(true)
+  const startEditing = (exerciseId: string) => {
+    setEditingExercises(prev => ({
+      ...prev,
+      [exerciseId]: true
+    }))
+  }
+
+  const cancelEditing = (exerciseId: string, exercise: WorkoutExerciseWithDetails) => {
+    setEditingExercises(prev => ({
+      ...prev,
+      [exerciseId]: false
+    }))
+    // Reset edit values to original
+    setEditValues(prev => ({
+      ...prev,
+      [exerciseId]: {
+        sets: exercise.sets,
+        reps: exercise.reps,
+        weight: exercise.weight || "",
+        rest_seconds: exercise.rest_seconds
+      }
+    }))
+  }
+
+  const handleSaveEdit = async (exerciseId: string) => {
     try {
-      const user = supabase.auth.getUser ? (await supabase.auth.getUser()).data.user : null
-      if (!user) {
-        toast("You must be logged in to comment.")
-        setCommentLoading(false)
+      const values = editValues[exerciseId]
+      const { error } = await supabase
+        .from("workout_exercises")
+        .update({
+          sets: values.sets,
+          reps: values.reps,
+          weight: values.weight || null,
+          rest_seconds: values.rest_seconds
+        })
+        .eq("id", exerciseId)
+
+      if (error) {
+        toast("Failed to save changes")
         return
       }
 
-      const { error } = await supabase.from("comments").insert({
-        user_id: user.id,
-        workout_id: Number(workoutId),
-        workout_exercise_id: exerciseId,
-        comment_text: text.trim(),
-      })
-
-      if (error) {
-        toast("Failed to add comment")
-      } else {
-        setNewExerciseComments((prev) => ({ ...prev, [exerciseId]: "" }))
-        fetchComments(exercises)
-      }
+      // Update local state
+      setExercises(prev => prev.map(ex => 
+        ex.id === parseInt(exerciseId)
+          ? { ...ex, ...values }
+          : ex
+      ))
+      
+      setEditingExercises(prev => ({
+        ...prev,
+        [exerciseId]: false
+      }))
+      toast("Exercise updated successfully")
     } catch (error) {
-      toast("Failed to add comment")
+      toast("Failed to save changes")
     }
-    setCommentLoading(false)
+  }
+
+  const updateEditValue = (exerciseId: string, field: string, value: any) => {
+    setEditValues(prev => ({
+      ...prev,
+      [exerciseId]: {
+        ...prev[exerciseId],
+        [field]: value
+      }
+    }))
   }
 
   const formatDate = (dateString: string | null) => {
@@ -531,11 +554,11 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
 
       {/* Workout Header */}
       <Card className="mb-6">
-        <CardContent className="p-6">
+        <CardContent className="p-6 py-1">
           <div className="flex items-start gap-4">
             <div
               className={cn(
-                " items-center justify-center w-12 h-12 rounded-full flex-shrink-0 hidden sm:flex",
+                "hidden sm:flex items-center justify-center w-12 h-12 rounded-full flex-shrink-0",
                 workout.completed
                   ? "bg-green-100 text-green-600 dark:bg-green-900/20 dark:text-green-400"
                   : "bg-blue-100 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400",
@@ -548,37 +571,19 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
                   <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-2">{workout.name}</h1>
-
-                  <div className="my-2">
-                    <Badge
-                    variant={workout.completed ? "default" : "secondary"}
-                    className={cn(
-                      " items-center gap-1 flex sm:hidden self-start w-[auto] ",
-                      workout.completed
-                        ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                        : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
-                    )}
-                  >
-                    {workout.completed ? <CheckCircle className="h-3 w-3" /> : <Circle className="h-3 w-3" />}
-                    {workout.completed ? "Completed" : "Pending"}
-                    </Badge>
-                  </div>
-
-
-                  <div className="flex items-center gap-2 justify-between w-full text-sm text-gray-600 dark:text-gray-400 mb-3">
+                  <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 mb-3">
                     <span>{workout.program?.name}</span>
-                    
+                    <div className="w-1 h-1 bg-gray-300 rounded-full"></div>
                     <span className="capitalize">
                       {workout.workout_type === "gym" ? "Strength Training" : "Cardio"}
                     </span>
-
                   </div>
                 </div>
 
                 <Badge
                   variant={workout.completed ? "default" : "secondary"}
                   className={cn(
-                    " items-center gap-1 hidden sm:block",
+                    "flex items-center gap-1",
                     workout.completed
                       ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
                       : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
@@ -615,7 +620,7 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
 
       {/* Workout Comments */}
       <Card className="mb-6">
-        <CardHeader className="pb-4">
+        <CardHeader >
           <CardTitle className="flex items-center gap-2 text-lg">
             <MessageSquare className="h-5 w-5" />
             Workout Comments
@@ -682,181 +687,223 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
               </CardContent>
             </Card>
           ) : (
-            exercises.map((exercise, index) => (
-              <Card
-                key={exercise.id}
-                className={cn(
-                  "transition-all duration-200 border-l-4",
-                  exercise.completed
-                    ? "border-l-green-500 bg-green-50/30 dark:bg-green-900/5"
-                    : "border-l-blue-500 bg-blue-50/30 dark:bg-blue-900/5",
-                )}
-              >
-                <CardContent className="p-6">
-                  {/* Exercise Header */}
-                  <div className="flex items-start gap-4 mb-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-3 mb-2">
-                            {exercise.exercise.image_url ? (
-                              <div className="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0">
-                                <img
-                                  src={exercise.exercise.image_url}
-                                  alt={exercise.exercise.name}
-                                  className="w-full h-full object-cover"
-                                  onError={(e) => {
-                                    // Fallback to icon if image fails to load
-                                    const target = e.target as HTMLImageElement;
-                                    target.style.display = 'none';
-                                    target.nextElementSibling?.classList.remove('hidden');
-                                  }}
-                                />
-                                <Dumbbell className="h-6 w-6 text-gray-400 hidden" />
-                              </div>
-                            ) : (
-                              <div className="w-12 h-12 bg-gray-100 dark:bg-gray-800 rounded-lg flex items-center justify-center flex-shrink-0">
-                                <Dumbbell className="h-6 w-6 text-gray-400" />
-                              </div>
-                            )}
-                            <div>
-                              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                                {index + 1}. {exercise.exercise.name}
-                              </h3>
-                              {exercise.exercise.category && (
-                                <p className="text-sm text-gray-600 dark:text-gray-400">
-                                  {exercise.exercise.category}
-                                </p>
-                              )}
-                            </div>
-                          </div>
+            exercises.map((exercise, index) => {
+              const exerciseId = String(exercise.id)
+              const isExpanded = expandedExercises[exerciseId] || false
+              const isEditing = editingExercises[exerciseId] || false
+              const currentEditValues = editValues[exerciseId] || {
+                sets: exercise.sets,
+                reps: exercise.reps,
+                weight: exercise.weight || "",
+                rest_seconds: exercise.rest_seconds
+              }
+
+              return (
+                <Card
+                  key={exercise.id}
+                  className={cn(
+                    "transition-all duration-200 border-l-4 overflow-hidden py-1",
+                    exercise.completed
+                      ? "border-l-green-500 bg-green-50/30 dark:bg-green-900/5"
+                      : "border-l-blue-500 bg-blue-50/30 dark:bg-blue-900/5",
+                  )}
+                >
+                  {/* Compact Header - Always Visible */}
+                  <div 
+                    className="p-3 cursor-pointer hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors"
+                    onClick={() => toggleExpanded(exerciseId)}
+                  >
+                    <div className="flex items-center gap-3">
+                      {/* Exercise Image/Icon */}
+                      <div className="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100 dark:bg-gray-800">
+                        {exercise.exercise.image_url ? (
+                          <img
+                            src={exercise.exercise.image_url || "/placeholder.svg"}
+                            alt={exercise.exercise.name}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.style.display = 'none';
+                              target.nextElementSibling?.classList.remove('hidden');
+                            }}
+                          />
+                        ) : null}
+                        <div className={cn(
+                          "w-full h-full flex items-center justify-center",
+                          exercise.exercise.image_url ? "hidden" : ""
+                        )}>
+                          <Dumbbell className="h-6 w-6 text-gray-400" />
                         </div>
-                        {exercise.completed && (
-                          <Badge
-                            variant="default"
-                            className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                          >
+                      </div>
+
+                      {/* Exercise Info */}
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-sm text-gray-900 dark:text-white truncate">
+                          {index + 1}. {exercise.exercise.name}
+                        </h3>
+                        <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                          <span>{exercise.sets}×{exercise.reps}</span>
+                          {exercise.weight && (
+                            <>
+                              <span>•</span>
+                              <span>{exercise.weight}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Chevron Icon */}
+                      <div className="flex-shrink-0 mr-2">
+                        <ChevronDown 
+                          className={cn(
+                            "h-4 w-4 text-gray-400 transition-transform duration-200",
+                            isExpanded && "rotate-180"
+                          )}
+                        />
+                      </div>
+
+                      {/* Mark Complete Button */}
+                      <Button
+                        size="sm"
+                        variant={exercise.completed ? "outline" : "default"}
+                        className={cn(
+                          "flex-shrink-0 text-xs px-3 py-1 h-8",
+                          exercise.completed 
+                            ? "text-green-600 border-green-300 bg-green-50 hover:bg-green-100" 
+                            : "bg-blue-600 hover:bg-blue-700 text-white"
+                        )}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          toggleExerciseCompletion(String(exercise.id), !exercise.completed)
+                        }}
+                      >
+                        {exercise.completed ? (
+                          <>
                             <CheckCircle className="h-3 w-3 mr-1" />
                             Done
-                          </Badge>
-                        )}
-                      </div>
-
-                      {/* Exercise Stats (display only) */}
-                      <Separator className="mb-3"></Separator>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-                        <div className="space-y-1">
-                          <Label className="flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-gray-400">
-                            <Target className="h-3 w-3" /> Sets
-                          </Label>
-                          <div className="text-base font-bold text-gray-900 dark:text-white pl-4">{exercise.sets}</div>
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-gray-400">
-                            <TrendingUp className="h-3 w-3" /> Reps
-                          </Label>
-                          <div className="text-base font-bold text-gray-900 dark:text-white pl-4">{exercise.reps}</div>
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-gray-400">
-                            <Weight className="h-3 w-3" /> Weight
-                          </Label>
-                          <div className="text-base font-bold text-gray-900 dark:text-white pl-4">{exercise.weight || "-"}</div>
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-gray-400">
-                            <Timer className="h-3 w-3" /> Rest (sec)
-                          </Label>
-                          <div className="text-base font-bold text-gray-900 dark:text-white pl-4">{exercise.rest_seconds}</div>
-                        </div>
-                      </div>
-
-                      {/* Mark Complete/Incomplete Button */}
-                      <div className="mb-4">
-                        {exercise.completed ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="text-primary border-primary-300 dark:text-primary dark:border-primary-700"
-                            onClick={() => toggleExerciseCompletion(String(exercise.id), false)}
-                          >
-                            Mark as Incomplete
-                          </Button>
+                          </>
                         ) : (
-                          <Button
-                            size="sm"
-                            variant="default"
-                            className=" text-white"
-                            onClick={() => toggleExerciseCompletion(String(exercise.id), true)}
-                          >
-                            Mark as Complete
-                          </Button>
+                          <>
+                            <Circle className="h-3 w-3 mr-1" />
+                            Mark
+                          </>
                         )}
-                      </div>
-
-                      {/* Exercise Instructions */}
-                      {exercise.exercise.instructions && (
-                        <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                          <p className="text-sm text-blue-800 dark:text-blue-200">
-                            <strong>Instructions:</strong> {exercise.exercise.instructions}
-                          </p>
-                        </div>
-                      )}
-
-                      <Separator className="my-4" />
-
-                      {/* Exercise Comments */}
-                      <div className="space-y-3">
-                        <h4 className="font-medium text-sm text-gray-700 dark:text-gray-300">Exercise Comments</h4>
-
-                        {(exerciseComments[exercise.id] || []).length === 0 ? (
-                          <p className="text-xs text-gray-500 dark:text-gray-400 italic">No comments yet.</p>
-                        ) : (
-                          <div className="space-y-2">
-                            {(exerciseComments[exercise.id] || []).map((comment) => (
-                              <div key={comment.id} className="flex gap-2 p-2 bg-gray-50 dark:bg-gray-800/50 rounded">
-                                <div className="w-6 h-6 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center flex-shrink-0">
-                                  <User className="h-3 w-3 text-gray-500" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2 mb-1">
-                                    <span className="font-medium text-xs">{comment.user?.name || "User"}</span>
-                                    <span className="text-xs text-gray-500">
-                                      {new Date(comment.created_at).toLocaleDateString()}
-                                    </span>
-                                  </div>
-                                  <p className="text-xs text-gray-700 dark:text-gray-300">{comment.comment_text}</p>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-
-                        <div className="flex gap-2">
-                          <Textarea
-                            value={newExerciseComments[exercise.id] || ""}
-                            onChange={(e) =>
-                              setNewExerciseComments((prev) => ({ ...prev, [exercise.id]: e.target.value }))
-                            }
-                            placeholder="Add a comment about this exercise..."
-                            rows={1}
-                            className="flex-1 text-sm"
-                            disabled={commentLoading}
-                          />
-                          <Button
-                            size="sm"
-                            onClick={() => handleAddExerciseComment(exercise.id)}
-                            disabled={commentLoading || !(newExerciseComments[exercise.id] || "").trim()}
-                          >
-                            <Send className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      </div>
+                      </Button>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
-            ))
+
+                  {/* Expandable Details */}
+                  {isExpanded && (
+                    <div className="border-t bg-gray-50/50 dark:bg-gray-800/50">
+                      <div className="p-3 space-y-3">
+                        {/* Exercise Details */}
+                        {isEditing ? (
+                          <div className="space-y-3">
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <Label className="text-xs text-gray-600 dark:text-gray-400">Sets</Label>
+                                <Input
+                                  type="number"
+                                  value={currentEditValues.sets}
+                                  onChange={(e) => updateEditValue(exerciseId, 'sets', parseInt(e.target.value) || 0)}
+                                  className="h-8 text-sm"
+                                  min="1"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs text-gray-600 dark:text-gray-400">Reps</Label>
+                                <Input
+                                  type="number"
+                                  value={currentEditValues.reps}
+                                  onChange={(e) => updateEditValue(exerciseId, 'reps', parseInt(e.target.value) || 0)}
+                                  className="h-8 text-sm"
+                                  min="1"
+                                />
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <Label className="text-xs text-gray-600 dark:text-gray-400">Weight</Label>
+                                <Input
+                                  value={currentEditValues.weight}
+                                  onChange={(e) => updateEditValue(exerciseId, 'weight', e.target.value)}
+                                  placeholder="e.g., 80kg"
+                                  className="h-8 text-sm"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs text-gray-600 dark:text-gray-400">Rest (sec)</Label>
+                                <Input
+                                  type="number"
+                                  value={currentEditValues.rest_seconds}
+                                  onChange={(e) => updateEditValue(exerciseId, 'rest_seconds', parseInt(e.target.value) || 0)}
+                                  className="h-8 text-sm"
+                                  min="0"
+                                />
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button size="sm" onClick={() => handleSaveEdit(exerciseId)} className="h-8 text-xs">
+                                <Save className="h-3 w-3 mr-1" />
+                                Save
+                              </Button>
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                onClick={() => cancelEditing(exerciseId, exercise)}
+                                className="h-8 text-xs"
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            {/* Exercise Stats Display */}
+                            <div className="grid grid-cols-2 gap-2 text-sm">
+                              <div className="flex items-center justify-start px-2 py-1 gap-3 bg-white dark:bg-gray-900 rounded">
+                                <span className="text-gray-600 dark:text-gray-400">Sets:</span>
+                                <span className="font-medium">{exercise.sets}</span>
+                              </div>
+                              <div className="flex items-center justify-start gap-3 px-2 py-1 bg-white dark:bg-gray-900 rounded">
+                                <span className="text-gray-600 dark:text-gray-400">Reps:</span>
+                                <span className="font-medium">{exercise.reps}</span>
+                              </div>
+                              <div className="flex items-center justify-start gap-3 px-2 py-1 bg-white dark:bg-gray-900 rounded">
+                                <span className="text-gray-600 dark:text-gray-400">Weight:</span>
+                                <span className="font-medium">{exercise.weight || "-"}</span>
+                              </div>
+                              <div className="flex items-center justify-start gap-3 px-2 py-1 bg-white dark:bg-gray-900 rounded">
+                                <span className="text-gray-600 dark:text-gray-400">Rest:</span>
+                                <span className="font-medium">{exercise.rest_seconds}s</span>
+                              </div>
+                            </div>
+
+                            {/* Exercise Instructions */}
+                            {exercise.exercise.instructions && (
+                              <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded text-xs text-blue-800 dark:text-blue-200">
+                                <strong>Instructions:</strong> {exercise.exercise.instructions}
+                              </div>
+                            )}
+
+                            {/* Edit Button */}
+                            <Button 
+                              size="sm" 
+                               
+                              onClick={() => startEditing(exerciseId)}
+                              className="h-8 text-xs "
+                            >
+                              <Target className="h-3 w-3 mr-1" />
+                              Edit Exercise
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </Card>
+              )
+            })
           )}
         </div>
       ) : (
@@ -864,7 +911,7 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
         <Card className={cn(workout.completed && "border-l-4 border-l-green-500 bg-green-50/30 dark:bg-green-900/5")}>
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2">
+              <CardTitle className="flex items-center gap-2 mt-2">
                 <Activity className="h-5 w-5" />
                 Cardio Workout Details
               </CardTitle>
@@ -890,17 +937,17 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
           <CardContent className="space-y-6">
             <div className="grid sm:grid-cols-2 gap-6">
               {workout.duration_minutes && (
-                <div className="space-y-2">
+                <div className="align-middle flex gap-3">
                   <Label className="flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-400">
                     <Timer className="h-4 w-4" />
-                    Duration
+                    Duration:
                   </Label>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{workout.duration_minutes} min</p>
+                  <p className=" font-bold text-gray-900 dark:text-white">{workout.duration_minutes} min</p>
                 </div>
               )}
 
               {workout.intensity_type && (
-                <div className="space-y-2">
+                <div className="">
                   <Label className="flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-400">
                     <Zap className="h-4 w-4" />
                     Intensity
@@ -912,18 +959,18 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
               )}
 
               {workout.target_tss && (
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium text-gray-600 dark:text-gray-400">Training Stress Score</Label>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{workout.target_tss}</p>
+                <div className=" flex align-middle gap-3 ">
+                  <Label className="text-sm font-medium text-gray-600 dark:text-gray-400">Training Stress Score:</Label>
+                  <p className=" font-bold text-gray-900 dark:text-white">{workout.target_tss}</p>
                 </div>
               )}
 
               {workout.target_ftp && (
-                <div className="space-y-2">
+                <div className=" flex gap-3">
                   <Label className="text-sm font-medium text-gray-600 dark:text-gray-400">
                     Functional Threshold Power
                   </Label>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{workout.target_ftp}W</p>
+                  <p className="font-bold text-gray-900 dark:text-white">{workout.target_ftp}W</p>
                 </div>
               )}
             </div>

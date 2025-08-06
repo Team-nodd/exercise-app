@@ -7,23 +7,8 @@ import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
-import {
-  Calendar,
-  User,
-  Clock,
-  Dumbbell,
-  Target,
-  CheckCircle,
-  Circle,
-  ArrowLeft,
-  Play,
-  Activity,
-  TrendingUp,
-  Info,
-} from "lucide-react"
+import { Calendar, User, Clock, Dumbbell, Target, CheckCircle, Circle, ArrowLeft, Play, Activity, TrendingUp, Info } from 'lucide-react'
 import Link from "next/link"
-import { createClient } from "@/lib/supabase/client"
-import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import type { ProgramWithDetails, WorkoutWithDetails } from "@/types"
 
@@ -33,9 +18,6 @@ interface UserProgramDetailProps {
 
 export function UserProgramDetail({ program }: UserProgramDetailProps) {
   const [workouts, setWorkouts] = useState<WorkoutWithDetails[]>(program.workouts || [])
-  const [loading, setLoading] = useState(false)
-
-  const supabase = createClient()
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -56,37 +38,6 @@ export function UserProgramDetail({ program }: UserProgramDetailProps) {
     if (workouts.length === 0) return 0
     const completedWorkouts = workouts.filter((w) => w.completed).length
     return Math.round((completedWorkouts / workouts.length) * 100)
-  }
-
-  const toggleWorkoutCompletion = async (workoutId: string, completed: boolean) => {
-    setLoading(true)
-    try {
-      const { error } = await supabase
-        .from("workouts")
-        .update({
-          completed: !completed,
-          completed_at: !completed ? new Date().toISOString() : null,
-        })
-        .eq("id", workoutId)
-
-      if (error) throw error
-
-      // Update local state
-      setWorkouts((prev) =>
-        prev.map((w) =>
-          String(w.id) === String(workoutId)
-            ? { ...w, completed: !completed, completed_at: !completed ? new Date().toISOString() : null }
-            : w,
-        ),
-      )
-
-      toast(`Workout marked as ${!completed ? "completed" : "incomplete"}`)
-    } catch (error) {
-      console.error("Error updating workout:", error)
-      toast("Failed to update workout status")
-    } finally {
-      setLoading(false)
-    }
   }
 
   const formatDate = (dateString: string | null) => {
@@ -274,10 +225,10 @@ export function UserProgramDetail({ program }: UserProgramDetailProps) {
               </CardContent>
             </Card>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-3">
               {sortedDates.map((date) => (
                 <Card key={date}>
-                  <CardHeader className="pb-3">
+                  <CardHeader className="">
                     <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
                       <Calendar className="h-4 w-4 sm:h-5 sm:w-5" />
                       {date === "Unscheduled"
@@ -289,44 +240,30 @@ export function UserProgramDetail({ program }: UserProgramDetailProps) {
                           })}
                     </CardTitle>
                   </CardHeader>
+                  
                   <CardContent className="pt-0">
                     <div className="space-y-3">
                       {groupedWorkouts[date].map((workout, index) => (
                         <div key={workout.id}>
-                          <div className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors">
-                            <button
-                              onClick={() => toggleWorkoutCompletion(String(workout.id), workout.completed)}
-                              disabled={loading}
-                              className="flex-shrink-0"
-                              aria-label={workout.completed ? "Mark as incomplete" : "Mark as complete"}
-                            >
-                              {workout.completed ? (
-                                <CheckCircle className="h-5 w-5 text-green-600 hover:text-green-700 transition-colors" />
-                              ) : (
-                                <Circle className="h-5 w-5 text-gray-400 hover:text-green-600 transition-colors" />
-                              )}
-                            </button>
-
+                          <div className="flex items-center gap-3 p-3 py-1 rounded-lg hover:bg-muted/50 transition-colors">
                             <div className="flex-1 min-w-0">
                               <div className="flex items-start justify-between gap-3">
                                 <div className="flex-1 min-w-0">
                                   <h4 className="font-semibold text-sm sm:text-base text-gray-900 dark:text-white truncate">
                                     {workout.name}
                                   </h4>
-                                  <div className="flex items-center gap-3 mt-1 text-xs sm:text-sm text-gray-600 dark:text-gray-400">
-                                    {workout.completed && workout.completed_at && (
-                                      <span className="text-green-600 dark:text-green-400">
-                                        Completed {formatDate(workout.completed_at)}
-                                      </span>
+                                  <div className="flex items-center gap-2 mt-1 text-xs sm:text-sm text-gray-600 dark:text-gray-400">
+                                    <span className="capitalize">
+                                      {workout.workout_type === "gym" ? "Strength" : "Cardio"}
+                                    </span>
+                                    {workout.scheduled_date && (
+                                      <>
+                                        <span>•</span>
+                                        <span>{formatDate(workout.scheduled_date)}</span>
+                                      </>
                                     )}
                                   </div>
-                                  {workout.notes && (
-                                    <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
-                                      {workout.notes}
-                                    </p>
-                                  )}
                                 </div>
-
                                 <div className="flex items-center gap-2 flex-shrink-0">
                                   <Badge
                                     variant={workout.completed ? "default" : "secondary"}
@@ -350,7 +287,7 @@ export function UserProgramDetail({ program }: UserProgramDetailProps) {
                               </div>
                             </div>
                           </div>
-                          {index < groupedWorkouts[date].length - 1 && <Separator className="mt-3" />}
+                          {index < groupedWorkouts[date].length - 1 && <Separator className="mt-1" />}
                         </div>
                       ))}
                     </div>
