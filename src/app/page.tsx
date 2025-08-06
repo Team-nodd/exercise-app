@@ -1,6 +1,7 @@
+import LandingPage from "@/components/landing/landing-page"
 import { createServerClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
-import { LandingPage } from "@/components/landing/landing-page"
+// import { LandingP } from "@/components/landing/landing-page"
 
 export default async function Home() {
   const supabase = await createServerClient()
