@@ -1,52 +1,47 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { Calendar, Clock, Dumbbell, Play, Target, Zap, CheckCircle2, Circle, Filter, TrendingUp } from "lucide-react"
+import { Calendar, Clock, Dumbbell, Play, Target, Zap, CheckCircle2, Circle, Filter, TrendingUp } from 'lucide-react'
 import Link from "next/link"
 import { cn } from "@/lib/utils"
-import type { WorkoutWithDetails } from "@/types"
+import type { WorkoutWithDetails, Program } from "@/types"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 interface UserWorkoutsProps {
   userId: string
 }
 
 export function UserWorkouts({ userId }: UserWorkoutsProps) {
-  const [workouts, setWorkouts] = useState<WorkoutWithDetails[]>([])
+  const [allWorkouts, setAllWorkouts] = useState<WorkoutWithDetails[]>([])
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState<"all" | "upcoming" | "completed">("all")
+  const [displayFilter, setDisplayFilter] = useState<"all" | "upcoming" | "completed">("all")
+  const [selectedProgramId, setSelectedProgramId] = useState<string>("all")
   const supabase = createClient()
 
   useEffect(() => {
     const fetchWorkouts = async () => {
       try {
-        let query = supabase
+        // Fetch all workouts for the user, ordered by scheduled_date ascending
+        const { data, error } = await supabase
           .from("workouts")
           .select(`
             *,
-            program:programs(*)
+            program:programs(id, name)
           `)
           .eq("user_id", userId)
-          .order("scheduled_date", { ascending: false })
-
-        if (filter === "upcoming") {
-          query = query.eq("completed", false).gte("scheduled_date", new Date().toISOString().split("T")[0])
-        } else if (filter === "completed") {
-          query = query.eq("completed", true)
-        }
-
-        const { data, error } = await query
+          .order("scheduled_date", { ascending: true }) // Order ascending as requested
 
         if (error) {
           console.error("Error fetching workouts:", error)
           return
         }
 
-        setWorkouts(data as WorkoutWithDetails[])
+        setAllWorkouts(data as WorkoutWithDetails[])
       } catch (error) {
         console.error("Error fetching workouts:", error)
       } finally {
@@ -55,17 +50,53 @@ export function UserWorkouts({ userId }: UserWorkoutsProps) {
     }
 
     fetchWorkouts()
-  }, [userId, filter, supabase])
+  }, [userId, supabase])
 
-  const getWorkoutStats = () => {
-    const total = workouts.length
-    const completed = workouts.filter((w) => w.completed).length
-    const upcoming = workouts.filter(
-      (w) => !w.completed && w.scheduled_date && new Date(w.scheduled_date) >= new Date(),
-    ).length
+  // Get unique programs from all fetched workouts
+  const programs = useMemo(() => {
+    const uniquePrograms = new Map<number, Pick<Program, 'id' | 'name'>>();
+    allWorkouts.forEach(workout => {
+      if (workout.program) {
+        uniquePrograms.set(workout.program.id, workout.program);
+      }
+    });
+    return Array.from(uniquePrograms.values());
+  }, [allWorkouts]);
 
-    return { total, completed, upcoming }
-  }
+  // Filter workouts by selected program first
+  const workoutsFilteredByProgram = useMemo(() => {
+    if (selectedProgramId === "all") {
+      return allWorkouts;
+    }
+    return allWorkouts.filter(workout => workout.program?.id?.toString() === selectedProgramId);
+  }, [allWorkouts, selectedProgramId]);
+
+  // Apply the display filter (All, Upcoming, Completed)
+  const displayedWorkouts = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Normalize to start of day
+
+    return workoutsFilteredByProgram.filter(workout => {
+      if (displayFilter === "upcoming") {
+        return !workout.completed && workout.scheduled_date && new Date(workout.scheduled_date) >= today;
+      } else if (displayFilter === "completed") {
+        return workout.completed;
+      }
+      return true; // "all" filter
+    });
+  }, [workoutsFilteredByProgram, displayFilter]);
+
+  // Calculate stats based on workouts filtered by program (static for cards)
+  const stats = useMemo(() => {
+    const total = workoutsFilteredByProgram.length;
+    const completed = workoutsFilteredByProgram.filter((w) => w.completed).length;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const upcoming = workoutsFilteredByProgram.filter(
+      (w) => !w.completed && w.scheduled_date && new Date(w.scheduled_date) >= today,
+    ).length;
+    return { total, completed, upcoming };
+  }, [workoutsFilteredByProgram]);
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return "No date set"
@@ -93,7 +124,7 @@ export function UserWorkouts({ userId }: UserWorkoutsProps) {
     return (
       <div
         className={cn(
-          "flex items-center justify-center w-10 h-10 rounded-full",
+          "items-center justify-center w-10 h-10 rounded-full hidden sm:flex",
           completed
             ? "bg-green-100 text-green-600 dark:bg-green-900/20 dark:text-green-400"
             : "bg-blue-100 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400",
@@ -103,8 +134,6 @@ export function UserWorkouts({ userId }: UserWorkoutsProps) {
       </div>
     )
   }
-
-  const stats = getWorkoutStats()
 
   if (loading) {
     return (
@@ -137,69 +166,78 @@ export function UserWorkouts({ userId }: UserWorkoutsProps) {
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">My Workouts</h1>
             <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Track your fitness journey</p>
           </div>
-          {/* <div className="hidden sm:flex items-center gap-2">
-            <Filter className="h-4 w-4 text-gray-500" />
-            <span className="text-sm text-gray-500">Filter</span>
-          </div> */}
         </div>
 
-        {/* Stats Cards */}
+        {/* Program Filter */}
+        {programs.length > 0 && (
+          <div className="flex items-center gap-2 mb-4">
+            <Filter className="h-4 w-4 text-gray-500" />
+            <span className="text-sm text-gray-500">Filter by Program:</span>
+            <Select
+              onValueChange={setSelectedProgramId}
+              value={selectedProgramId}
+            >
+              <SelectTrigger className="w-[180px] h-9">
+                <SelectValue placeholder="All Programs" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Programs</SelectItem>
+                {programs.map((program) => (
+                  <SelectItem key={program.id} value={program.id.toString()}>
+                    {program.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
+        {/* Stats Cards - now clickable and smaller */}
         <div className="grid grid-cols-3 gap-3 sm:gap-4 mb-6">
-          <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border-blue-200 dark:border-blue-800">
-            <CardContent className="p-3 sm:p-4 text-center">
-              <div className="text-lg sm:text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.total}</div>
+          <Card
+            className={cn(
+              "cursor-pointer hover:shadow-md transition-all duration-200",
+              "bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border-blue-200 dark:border-blue-800",
+              displayFilter === "all" && "ring-2 ring-blue-500 dark:ring-blue-400"
+            )}
+            onClick={() => setDisplayFilter("all")}
+          >
+            <CardContent className="p-2 sm:p-3 text-center">
+              <div className="text-lg sm:text-xl font-bold text-blue-600 dark:text-blue-400">{stats.total}</div>
               <div className="text-xs sm:text-sm text-blue-600/80 dark:text-blue-400/80">Total</div>
             </CardContent>
           </Card>
-          <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 border-green-200 dark:border-green-800">
-            <CardContent className="p-3 sm:p-4 text-center">
-              <div className="text-lg sm:text-2xl font-bold text-green-600 dark:text-green-400">{stats.completed}</div>
+          <Card
+            className={cn(
+              "cursor-pointer hover:shadow-md transition-all duration-200",
+              "bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 border-green-200 dark:border-green-800",
+              displayFilter === "completed" && "ring-2 ring-green-500 dark:ring-green-400"
+            )}
+            onClick={() => setDisplayFilter("completed")}
+          >
+            <CardContent className="p-2 sm:p-3 text-center">
+              <div className="text-lg sm:text-xl font-bold text-green-600 dark:text-green-400">{stats.completed}</div>
               <div className="text-xs sm:text-sm text-green-600/80 dark:text-green-400/80">Completed</div>
             </CardContent>
           </Card>
-          <Card className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 border-orange-200 dark:border-orange-800">
-            <CardContent className="p-3 sm:p-4 text-center">
-              <div className="text-lg sm:text-2xl font-bold text-orange-600 dark:text-orange-400">{stats.upcoming}</div>
+          <Card
+            className={cn(
+              "cursor-pointer hover:shadow-md transition-all duration-200",
+              "bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 border-orange-200 dark:border-orange-800",
+              displayFilter === "upcoming" && "ring-2 ring-orange-500 dark:ring-orange-400"
+            )}
+            onClick={() => setDisplayFilter("upcoming")}
+          >
+            <CardContent className="p-2 sm:p-3 text-center">
+              <div className="text-lg sm:text-xl font-bold text-orange-600 dark:text-orange-400">{stats.upcoming}</div>
               <div className="text-xs sm:text-sm text-orange-600/80 dark:text-orange-400/80">Upcoming</div>
             </CardContent>
           </Card>
         </div>
-
-        {/* Filter Buttons */}
-        <div className="flex space-x-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
-          {[
-            { key: "all", label: "All", count: stats.total },
-            { key: "upcoming", label: "Upcoming", count: stats.upcoming },
-            { key: "completed", label: "Completed", count: stats.completed },
-          ].map(({ key, label, count }) => (
-            <Button
-              key={key}
-              variant={filter === key ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setFilter(key as typeof filter)}
-              className={cn(
-                "flex-1 text-xs sm:text-sm transition-all duration-200",
-                filter === key ? "bg-white text-black dark:text-white dark:bg-gray-700 shadow-sm" : "hover:bg-gray-200 hover:text-black dark:hover:text-white dark:hover:bg-gray-700",
-              )}
-            >
-              {label}
-              <span
-                className={cn(
-                  "ml-1 px-1.5 py-0.5 rounded-full text-xs",
-                  filter === key
-                    ? "bg-gray-100 dark:bg-gray-600 text-gray-600 dark:text-gray-300"
-                    : "bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400",
-                )}
-              >
-                {count}
-              </span>
-            </Button>
-          ))}
-        </div>
       </div>
 
       {/* Workouts List */}
-      {workouts.length === 0 ? (
+      {displayedWorkouts.length === 0 ? (
         <Card className="border-dashed border-2">
           <CardContent className="text-center py-12">
             <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center">
@@ -207,17 +245,17 @@ export function UserWorkouts({ userId }: UserWorkoutsProps) {
             </div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No workouts found</h3>
             <p className="text-gray-600 dark:text-gray-300 text-sm max-w-sm mx-auto">
-              {filter === "upcoming"
+              {displayFilter === "upcoming"
                 ? "You don't have any upcoming workouts scheduled."
-                : filter === "completed"
+                : displayFilter === "completed"
                   ? "You haven't completed any workouts yet."
-                  : "No workouts available. Contact your coach to get started!"}
+                  : "No workouts available with the selected filters."}
             </p>
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-3">
-          {workouts.map((workout, index) => (
+          {displayedWorkouts.map((workout, index) => (
             <Card
               key={workout.id}
               className={cn(

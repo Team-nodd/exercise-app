@@ -1,13 +1,14 @@
 "use client"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { Calendar, Dumbbell, TrendingUp, Clock, RefreshCw, Target, Activity, Play, ArrowRight, CheckCircle, Zap, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Calendar, Dumbbell, TrendingUp, Clock, RefreshCw, Target, Activity, Play, ArrowRight, CheckCircle, Zap, ChevronLeft, ChevronRight, Filter } from 'lucide-react'
 import Link from "next/link"
 import { useDashboardData } from "@/lib/hooks/use-dashboard-data"
-import { User } from "@/types"
+import { User, WorkoutWithDetails, Program } from "@/types"
 import { cn } from "@/lib/utils"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -23,23 +24,43 @@ export function UserDashboard({ user }: UserDashboardProps) {
   })
 
   const [currentDate, setCurrentDate] = useState(new Date())
-  const [todaysWorkouts, setTodaysWorkouts] = useState<any[]>([])
+  const [todaysWorkouts, setTodaysWorkouts] = useState<WorkoutWithDetails[]>([])
   const [showWorkoutSelectionDialog, setShowWorkoutSelectionDialog] = useState(false)
-  const [selectedDayWorkouts, setSelectedDayWorkouts] = useState<any[]>([])
+  const [selectedDayWorkouts, setSelectedDayWorkouts] = useState<WorkoutWithDetails[]>([])
+  const [selectedProgramId, setSelectedProgramId] = useState<string>("all")
+
+  // Get unique programs from upcomingWorkouts and memoize them
+  const programs = useMemo(() => {
+    return upcomingWorkouts?.reduce((acc: Program[], workout: WorkoutWithDetails) => {
+      if (workout.program && !acc.find(p => p.id === workout.program.id)) {
+        acc.push(workout.program)
+      }
+      return acc
+    }, []) || []
+  }, [upcomingWorkouts]);
+
+  // Filter workouts based on selected program
+  const filteredWorkouts = useMemo(() => {
+    return selectedProgramId === "all" 
+      ? upcomingWorkouts || []
+      : (upcomingWorkouts || []).filter(workout => workout.program?.id === Number(selectedProgramId))
+  }, [selectedProgramId, upcomingWorkouts]);
 
   // Get today's workouts
   useEffect(() => {
-    if (upcomingWorkouts.length > 0) {
+    if (filteredWorkouts.length > 0) {
       const today = new Date()
       const todayString = today.toDateString()
-      const workoutsToday = upcomingWorkouts.filter(workout => {
+      const workoutsToday = filteredWorkouts.filter(workout => {
         if (!workout.scheduled_date) return false
         const workoutDate = new Date(workout.scheduled_date)
         return workoutDate.toDateString() === todayString
       })
       setTodaysWorkouts(workoutsToday)
+    } else {
+      setTodaysWorkouts([])
     }
-  }, [upcomingWorkouts])
+  }, [filteredWorkouts])
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return "No date set"
@@ -79,7 +100,7 @@ export function UserDashboard({ user }: UserDashboardProps) {
 
   const getWorkoutsForDate = (date: Date) => {
     const dateString = date.toDateString()
-    return upcomingWorkouts.filter(workout => {
+    return filteredWorkouts.filter(workout => {
       if (!workout.scheduled_date) return false
       const workoutDate = new Date(workout.scheduled_date)
       return workoutDate.toDateString() === dateString
@@ -98,7 +119,7 @@ export function UserDashboard({ user }: UserDashboardProps) {
     })
   }
 
-  const handleDayClick = (workouts: any[]) => {
+  const handleDayClick = (workouts: WorkoutWithDetails[]) => {
     if (workouts.length === 1) {
       window.location.href = `/dashboard/workouts/${workouts[0].id}`
     } else if (workouts.length > 1) {
@@ -131,7 +152,8 @@ export function UserDashboard({ user }: UserDashboardProps) {
           className={cn(
             "h-20 sm:h-24 p-1 border border-gray-100 dark:border-gray-800 relative cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors flex flex-col",
             isToday && "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800",
-            isPast && "text-gray-400 dark:text-gray-600"
+            isPast && "text-gray-400 dark:text-gray-600",
+            workoutsForDay.length === 0 && "cursor-default"
           )}
           onClick={() => handleDayClick(workoutsForDay)}
         >
@@ -144,6 +166,7 @@ export function UserDashboard({ user }: UserDashboardProps) {
                   "text-xs font-medium px-1 py-0.5 rounded-sm truncate mb-0.5",
                   workout.completed ? "bg-green-200 text-green-800 dark:bg-green-700/50 dark:text-green-200" : "bg-blue-200 text-blue-800 dark:bg-blue-700/50 dark:text-blue-200"
                 )}
+                title={`${workout.name} - ${workout.program?.name || 'No Program'}`}
               >
                 {workout.name}
               </div>
@@ -218,7 +241,7 @@ export function UserDashboard({ user }: UserDashboardProps) {
             </div>
 
             {/* Stats Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-6 gap-3 sm:ml-15">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 sm:ml-15 ">
               <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 border border-green-200 dark:border-green-800 rounded-lg p-3 text-center">
                 <div className="w-6 h-6 mx-auto mb-1 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
                   <Activity className="h-3 w-3 text-green-600 dark:text-green-400" />
@@ -254,7 +277,7 @@ export function UserDashboard({ user }: UserDashboardProps) {
 
             {/* Start Today's Workout Button */}
             {todaysWorkouts.length > 0 && (
-              <div className="pt-2 border-t sm:ml-15">
+              <div className="pt-2 border-t  sm:ml-15">
                 <Button asChild className="w-full sm:w-auto">
                   <Link href={`/dashboard/workouts/${todaysWorkouts[0].id}`}>
                     <Play className="h-4 w-4 mr-2" />
@@ -275,18 +298,38 @@ export function UserDashboard({ user }: UserDashboardProps) {
               <Calendar className="h-5 w-5" />
               Workout Schedule
             </CardTitle>
-            <div className="flex items-center ">
+            <div className="flex items-center gap-1">
               <Button variant="ghost" size="sm" onClick={() => navigateMonth('prev')}>
-                <ChevronLeft className="h-3 w-3 sm:h-4 sm:w-4" />
+                <ChevronLeft className="h-2 w-2" />
               </Button>
               <span className="text-sm font-medium min-w-[100px] text-center">
                 {currentDate.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
               </span>
               <Button variant="ghost" size="sm" onClick={() => navigateMonth('next')}>
-                <ChevronRight className="h-4 w-4" />
+                <ChevronRight className="h-2 w-2" />
               </Button>
             </div>
           </div>
+          
+          {/* Program Filter */}
+          {programs.length > 0 && (
+            <div className="flex items-center gap-2 mt-4">
+              <Filter className="h-4 w-4 text-muted-foreground" />
+              <Select value={selectedProgramId} onValueChange={setSelectedProgramId}>
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder="Filter by program" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Programs</SelectItem>
+                  {programs.map(program => (
+                    <SelectItem key={program.id} value={String(program.id)}>
+                      {program.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-7 gap-1 mb-2">
@@ -299,6 +342,12 @@ export function UserDashboard({ user }: UserDashboardProps) {
           <div className="grid grid-cols-7 gap-1">
             {renderCalendar()}
           </div>
+          {filteredWorkouts.length === 0 && (
+            <div className="text-center py-8 text-muted-foreground">
+              <Calendar className="h-12 w-12 mx-auto mb-2 opacity-50" />
+              <p className="text-sm">No workouts scheduled</p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -365,7 +414,7 @@ export function UserDashboard({ user }: UserDashboardProps) {
                 <Calendar className="h-5 w-5" />
                 Upcoming Workouts
               </CardTitle>
-              {upcomingWorkouts.length > 0 && (
+              {upcomingWorkouts && upcomingWorkouts.length > 0 && (
                 <Link href="/dashboard/workouts">
                   <Button variant="ghost" size="sm">
                     <span className="hidden sm:inline">View all</span>
@@ -376,14 +425,14 @@ export function UserDashboard({ user }: UserDashboardProps) {
             </div>
           </CardHeader>
           <CardContent>
-            {upcomingWorkouts.length === 0 ? (
+            {!upcomingWorkouts || upcomingWorkouts.length === 0 ? (
               <div className="text-center py-8">
                 <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center">
                   <Calendar className="h-8 w-8 text-gray-400" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No upcoming workouts</h3>
-                <p className="text-gray-600 dark:text-gray-300 text-sm mb-4">
-                  Check your programs to see available workouts.
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No workouts yet</h3>
+                <p className="text-gray-600 dark:text-gray-300 text-sm">
+                  Your coach hasn&apos;t added any workouts to this program yet.
                 </p>
                 <Link href="/dashboard/programs">
                   <Button variant="outline">
@@ -408,7 +457,7 @@ export function UserDashboard({ user }: UserDashboardProps) {
                               {workout.name}
                             </h4>
                             <div className="flex items-center gap-2 mt-1 text-xs sm:text-sm text-gray-600 dark:text-gray-400">
-                              <span className="hidden sm:inline">{workout.program?.name}</span>
+                              <span className="hidden sm:inline">{workout.program?.name || 'No Program'}</span>
                               <div className="w-1 h-1 bg-gray-300 rounded-full"></div>
                               <span className="font-medium">{formatDate(workout.scheduled_date)}</span>
                             </div>
@@ -470,7 +519,10 @@ export function UserDashboard({ user }: UserDashboardProps) {
                     workout.completed ? "bg-green-50 dark:bg-green-900/20" : "bg-blue-50 dark:bg-blue-900/20"
                   )}
                 >
-                  <span className="font-medium">{workout.name}</span>
+                  <div className="flex-1 min-w-0">
+                    <span className="font-medium block truncate">{workout.name}</span>
+                    <span className="text-sm text-muted-foreground">{workout.program?.name || 'No Program'}</span>
+                  </div>
                   <Badge variant="secondary" className={cn(
                     workout.completed ? "bg-green-200 text-green-800 dark:bg-green-700/50 dark:text-green-200" : "bg-blue-200 text-blue-800 dark:bg-blue-700/50 dark:text-blue-200"
                   )}>

@@ -1,23 +1,28 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
-import { Calendar, User, Clock, Dumbbell, Target, CheckCircle, Circle, ArrowLeft, Play, Activity, TrendingUp, Info } from 'lucide-react'
+import { Calendar, User, Clock, Dumbbell, Target, CheckCircle, Circle, ArrowLeft, Play, Activity, TrendingUp, Info, ChevronLeft, ChevronRight } from 'lucide-react'
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 import type { ProgramWithDetails, WorkoutWithDetails } from "@/types"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
 interface UserProgramDetailProps {
   program: ProgramWithDetails
 }
 
 export function UserProgramDetail({ program }: UserProgramDetailProps) {
-  const [workouts, setWorkouts] = useState<WorkoutWithDetails[]>(program.workouts || [])
+  const [workouts] = useState<WorkoutWithDetails[]>(program.workouts || [])
+  const [currentDate, setCurrentDate] = useState(new Date())
+  const [showWorkoutSelectionDialog, setShowWorkoutSelectionDialog] = useState(false)
+  const [selectedDayWorkouts, setSelectedDayWorkouts] = useState<WorkoutWithDetails[]>([])
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -86,6 +91,97 @@ export function UserProgramDetail({ program }: UserProgramDetailProps) {
     return new Date(a).getTime() - new Date(b).getTime()
   })
 
+  // Calendar functions
+  const getDaysInMonth = (date: Date) => {
+    return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()
+  }
+
+  const getFirstDayOfMonth = (date: Date) => {
+    return new Date(date.getFullYear(), date.getMonth(), 1).getDay()
+  }
+
+  const getWorkoutsForDate = (date: Date) => {
+    const dateString = date.toDateString()
+    return workouts.filter(workout => {
+      if (!workout.scheduled_date) return false
+      const workoutDate = new Date(workout.scheduled_date)
+      return workoutDate.toDateString() === dateString
+    })
+  }
+
+  const navigateMonth = (direction: 'prev' | 'next') => {
+    setCurrentDate(prev => {
+      const newDate = new Date(prev)
+      if (direction === 'prev') {
+        newDate.setMonth(prev.getMonth() - 1)
+      } else {
+        newDate.setMonth(prev.getMonth() + 1)
+      }
+      return newDate
+    })
+  }
+
+  const handleDayClick = (date: Date) => {
+    const workoutsForDay = getWorkoutsForDate(date)
+    if (workoutsForDay.length === 1) {
+      window.location.href = `/dashboard/workouts/${workoutsForDay[0].id}`
+    } else if (workoutsForDay.length > 1) {
+      setSelectedDayWorkouts(workoutsForDay)
+      setShowWorkoutSelectionDialog(true)
+    }
+  }
+
+  const renderCalendar = () => {
+    const daysInMonth = getDaysInMonth(currentDate)
+    const firstDay = getFirstDayOfMonth(currentDate)
+    const today = new Date()
+    const days = []
+
+    // Empty cells for days before the first day of the month
+    for (let i = 0; i < firstDay; i++) {
+      days.push(<div key={`empty-${i}`} className="h-20 sm:h-24"></div>)
+    }
+
+    // Days of the month
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day)
+      const workoutsForDay = getWorkoutsForDate(date)
+      const isToday = date.toDateString() === today.toDateString()
+      const isPast = date < today && !isToday
+
+      days.push(
+        <div
+          key={day}
+          className={cn(
+            "h-20 sm:h-24 p-1 border border-gray-100 dark:border-gray-800 relative cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors flex flex-col",
+            isToday && "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800",
+            isPast && "text-gray-400 dark:text-gray-600"
+          )}
+          onClick={() => handleDayClick(date)}
+        >
+          <div className="text-xs sm:text-sm font-medium">{day}</div>
+          <div className="flex-1 overflow-y-auto scrollbar-hide mt-1 space-y-0.5">
+            {workoutsForDay.map(workout => (
+              <div
+                key={workout.id}
+                className={cn(
+                  "text-xs font-medium px-1 py-0.5 rounded truncate",
+                  workout.completed
+                    ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                    : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                )}
+                title={workout.name}
+              >
+                {workout.name}
+              </div>
+            ))}
+          </div>
+        </div>
+      )
+    }
+    return days
+  }
+
   return (
     <div className="container mx-auto px-4 py-6 max-w-4xl">
       {/* Navigation */}
@@ -133,68 +229,50 @@ export function UserProgramDetail({ program }: UserProgramDetailProps) {
                   {program.status.charAt(0).toUpperCase() + program.status.slice(1)}
                 </Badge>
               </div>
+
+              {/* Overall Progress - Moved to Header */}
+              {totalWorkouts > 0 && (
+                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-base sm:text-lg font-semibold">Overall Progress</h3>
+                    <span className="text-xs sm:text-sm text-gray-600 dark:text-gray-300">
+                      {completedWorkouts}/{totalWorkouts} workouts
+                    </span>
+                  </div>
+                  <Progress value={progress} className="h-2 sm:h-3" />
+                </div>
+              )}
+
+              {/* Stats Grid - Small cards in header */}
+              <div className="grid grid-cols-3 gap-2 mt-4">
+                <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border border-blue-200 dark:border-blue-800 rounded-lg p-2 text-center">
+                  <div className="w-4 h-4 mx-auto mb-1 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center">
+                    <Dumbbell className="h-2 w-2 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div className="text-sm font-bold text-blue-600 dark:text-blue-400">{totalWorkouts}</div>
+                  <div className="text-xs text-blue-600/80 dark:text-blue-400/80">Total</div>
+                </div>
+
+                <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 border border-green-200 dark:border-green-800 rounded-lg p-2 text-center">
+                  <div className="w-4 h-4 mx-auto mb-1 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
+                    <CheckCircle className="h-2 w-2 text-green-600 dark:text-green-400" />
+                  </div>
+                  <div className="text-sm font-bold text-green-600 dark:text-green-400">{completedWorkouts}</div>
+                  <div className="text-xs text-green-600/80 dark:text-green-400/80">Done</div>
+                </div>
+
+                <div className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 border border-orange-200 dark:border-orange-800 rounded-lg p-2 text-center">
+                  <div className="w-4 h-4 mx-auto mb-1 bg-orange-100 dark:bg-orange-900/30 rounded-full flex items-center justify-center">
+                    <Clock className="h-2 w-2 text-orange-600 dark:text-orange-400" />
+                  </div>
+                  <div className="text-sm font-bold text-orange-600 dark:text-orange-400">{upcomingWorkouts}</div>
+                  <div className="text-xs text-orange-600/80 dark:text-orange-400/80">Pending</div>
+                </div>
+              </div>
             </div>
           </div>
         </CardContent>
       </Card>
-
-      {/* Stats Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
-        <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border-blue-200 dark:border-blue-800">
-          <CardContent className="p-3 sm:p-4 text-center">
-            <div className="flex items-center justify-center mb-2">
-              <Dumbbell className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 dark:text-blue-400" />
-            </div>
-            <div className="text-lg sm:text-2xl font-bold text-blue-600 dark:text-blue-400">{totalWorkouts}</div>
-            <div className="text-xs sm:text-sm text-blue-600/80 dark:text-blue-400/80">Total</div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 border-green-200 dark:border-green-800">
-          <CardContent className="p-3 sm:p-4 text-center">
-            <div className="flex items-center justify-center mb-2">
-              <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-green-600 dark:text-green-400" />
-            </div>
-            <div className="text-lg sm:text-2xl font-bold text-green-600 dark:text-green-400">{completedWorkouts}</div>
-            <div className="text-xs sm:text-sm text-green-600/80 dark:text-green-400/80">Completed</div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 border-orange-200 dark:border-orange-800">
-          <CardContent className="p-3 sm:p-4 text-center">
-            <div className="flex items-center justify-center mb-2">
-              <Clock className="h-4 w-4 sm:h-5 sm:w-5 text-orange-600 dark:text-orange-400" />
-            </div>
-            <div className="text-lg sm:text-2xl font-bold text-orange-600 dark:text-orange-400">{upcomingWorkouts}</div>
-            <div className="text-xs sm:text-sm text-orange-600/80 dark:text-orange-400/80">Upcoming</div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 border-purple-200 dark:border-purple-800">
-          <CardContent className="p-3 sm:p-4 text-center">
-            <div className="flex items-center justify-center mb-2">
-              <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600 dark:text-purple-400" />
-            </div>
-            <div className="text-lg sm:text-2xl font-bold text-purple-600 dark:text-purple-400">{progress}%</div>
-            <div className="text-xs sm:text-sm text-purple-600/80 dark:text-purple-400/80">Progress</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Progress Bar */}
-      {totalWorkouts > 0 && (
-        <Card className="mb-6">
-          <CardContent className="p-4 sm:p-6">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-base sm:text-lg font-semibold">Overall Progress</h3>
-              <span className="text-xs sm:text-sm text-gray-600 dark:text-gray-300">
-                {completedWorkouts}/{totalWorkouts} workouts
-              </span>
-            </div>
-            <Progress value={progress} className="h-2 sm:h-3" />
-          </CardContent>
-        </Card>
-      )}
 
       {/* Tabs */}
       <Tabs defaultValue="workouts" className="space-y-6">
@@ -204,10 +282,10 @@ export function UserProgramDetail({ program }: UserProgramDetailProps) {
             <span className="hidden sm:inline">Workouts</span>
             <span className="sm:hidden">Workouts</span>
           </TabsTrigger>
-          <TabsTrigger value="details" className="flex items-center gap-2">
-            <Info className="h-4 w-4" />
-            <span className="hidden sm:inline">Details</span>
-            <span className="sm:hidden">Details</span>
+          <TabsTrigger value="calendar" className="flex items-center gap-2">
+            <Calendar className="h-4 w-4" />
+            <span className="hidden sm:inline">Calendar View</span>
+            <span className="sm:hidden">Calendar</span>
           </TabsTrigger>
         </TabsList>
 
@@ -220,7 +298,7 @@ export function UserProgramDetail({ program }: UserProgramDetailProps) {
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No workouts yet</h3>
                 <p className="text-gray-600 dark:text-gray-300 text-sm">
-                  Your coach has not added any workouts to this program yet.
+                  Your coach hasn&apos;t added any workouts to this program yet.
                 </p>
               </CardContent>
             </Card>
@@ -228,7 +306,7 @@ export function UserProgramDetail({ program }: UserProgramDetailProps) {
             <div className="space-y-3">
               {sortedDates.map((date) => (
                 <Card key={date}>
-                  <CardHeader className="">
+                  <CardHeader className="pb-3">
                     <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
                       <Calendar className="h-4 w-4 sm:h-5 sm:w-5" />
                       {date === "Unscheduled"
@@ -240,12 +318,11 @@ export function UserProgramDetail({ program }: UserProgramDetailProps) {
                           })}
                     </CardTitle>
                   </CardHeader>
-                  
                   <CardContent className="pt-0">
                     <div className="space-y-3">
                       {groupedWorkouts[date].map((workout, index) => (
-                        <div key={workout.id}>
-                          <div className="flex items-center gap-3 p-3 py-1 rounded-lg hover:bg-muted/50 transition-colors">
+                        <Link key={workout.id} href={`/dashboard/workouts/${workout.id}`} className="block">
+                          <div className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors">
                             <div className="flex-1 min-w-0">
                               <div className="flex items-start justify-between gap-3">
                                 <div className="flex-1 min-w-0">
@@ -276,19 +353,12 @@ export function UserProgramDetail({ program }: UserProgramDetailProps) {
                                   >
                                     {workout.completed ? "Done" : "Pending"}
                                   </Badge>
-                                  <Button variant="outline" size="sm" asChild>
-                                    <Link href={`/dashboard/workouts/${workout.id}`}>
-                                      <Play className="h-3 w-3 mr-1" />
-                                      <span className="hidden sm:inline">{workout.completed ? "View" : "Start"}</span>
-                                      <span className="sm:hidden">Go</span>
-                                    </Link>
-                                  </Button>
                                 </div>
                               </div>
                             </div>
                           </div>
                           {index < groupedWorkouts[date].length - 1 && <Separator className="mt-1" />}
-                        </div>
+                        </Link>
                       ))}
                     </div>
                   </CardContent>
@@ -298,54 +368,92 @@ export function UserProgramDetail({ program }: UserProgramDetailProps) {
           )}
         </TabsContent>
 
-        <TabsContent value="details" className="space-y-6">
+        <TabsContent value="calendar" className="space-y-4">
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Info className="h-5 w-5" />
-                Program Information
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Start Date</label>
-                  <p className="text-sm font-semibold">
-                    {program.start_date ? new Date(program.start_date).toLocaleDateString() : "Not set"}
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-600 dark:text-gray-400">End Date</label>
-                  <p className="text-sm font-semibold">
-                    {program.end_date ? new Date(program.end_date).toLocaleDateString() : "Not set"}
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Created</label>
-                  <p className="text-sm font-semibold">{new Date(program.created_at).toLocaleDateString()}</p>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Status</label>
-                  <div>
-                    <Badge className={getStatusColor(program.status)}>
-                      {program.status.charAt(0).toUpperCase() + program.status.slice(1)}
-                    </Badge>
-                  </div>
+            <CardHeader className="pb-4">
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2 sm:text-lg">
+                  <Calendar className="h-5 w-5" />
+                  Workout Schedule
+                </CardTitle>
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => navigateMonth('prev')}>
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="text-sm font-medium min-w-[120px] text-center">
+                    {currentDate.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+                  </span>
+                  <Button variant="ghost" size="sm" onClick={() => navigateMonth('next')}>
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
                 </div>
               </div>
-
-              {program.description && (
-                <div className="pt-4 border-t">
-                  <label className="text-sm font-medium text-gray-600 dark:text-gray-400 block mb-2">Description</label>
-                  <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
-                    <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{program.description}</p>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-7 gap-1 mb-2">
+                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                  <div key={day} className="h-6 flex items-center justify-center text-xs font-medium text-gray-600 dark:text-gray-400">
+                    {day}
                   </div>
-                </div>
-              )}
+                ))}
+              </div>
+              <div className="grid grid-cols-7 gap-1">
+                {renderCalendar()}
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Workout Selection Dialog */}
+      <Dialog open={showWorkoutSelectionDialog} onOpenChange={setShowWorkoutSelectionDialog}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Workouts for {selectedDayWorkouts[0]?.scheduled_date ? new Date(selectedDayWorkouts[0].scheduled_date).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "Selected Day"}</DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="max-h-[300px] pr-4">
+            <div className="grid gap-4 py-4">
+              {selectedDayWorkouts.map(workout => (
+                <Link
+                  key={workout.id}
+                  href={`/dashboard/workouts/${workout.id}`}
+                  className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors border"
+                  onClick={() => setShowWorkoutSelectionDialog(false)}
+                >
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-semibold text-sm sm:text-base text-gray-900 dark:text-white truncate">
+                      {workout.name}
+                    </h4>
+                    <div className="flex items-center gap-2 mt-1 text-xs sm:text-sm text-gray-600 dark:text-gray-400">
+                      <span className="capitalize">
+                        {workout.workout_type === "gym" ? "Strength" : "Cardio"}
+                      </span>
+                      {workout.scheduled_date && (
+                        <>
+                          <span>•</span>
+                          <span>{formatDate(workout.scheduled_date)}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <Badge
+                    variant={workout.completed ? "default" : "secondary"}
+                    className={cn(
+                      "text-xs",
+                      workout.completed
+                        ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                        : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
+                    )}
+                  >
+                    {workout.completed ? "Done" : "Pending"}
+                  </Badge>
+                  <Play className="h-4 w-4 text-muted-foreground" />
+                </Link>
+              ))}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

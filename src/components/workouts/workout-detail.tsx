@@ -937,7 +937,7 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
           <CardContent className="space-y-6">
             <div className="grid sm:grid-cols-2 gap-6">
               {workout.duration_minutes && (
-                <div className="align-middle flex gap-3">
+                <div className="align-middle flex items-center gap-3">
                   <Label className="flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-400">
                     <Timer className="h-4 w-4" />
                     Duration:
@@ -947,7 +947,7 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
               )}
 
               {workout.intensity_type && (
-                <div className="">
+                <div className="items-center">
                   <Label className="flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-400">
                     <Zap className="h-4 w-4" />
                     Intensity
@@ -959,7 +959,7 @@ export function WorkoutDetail({ workoutId }: WorkoutDetailProps) {
               )}
 
               {workout.target_tss && (
-                <div className=" flex align-middle gap-3 ">
+                <div className=" flex align-middle gap-3 items-center">
                   <Label className="text-sm font-medium text-gray-600 dark:text-gray-400">Training Stress Score:</Label>
                   <p className=" font-bold text-gray-900 dark:text-white">{workout.target_tss}</p>
                 </div>

@@ -1,7 +1,6 @@
 import { UserProgramDetail } from "@/components/programs/user-program-detail"
 import { createServerClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
-// import { UserProgramDetail } from "@/components/programs/user-program-detail"
 
 export default async function UserProgramDetailPage({
   params,
