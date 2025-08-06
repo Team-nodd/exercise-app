@@ -199,10 +199,10 @@ export function ClientList({ coachId }: ClientListProps) {
                       </CardDescription>
                     </div>
                   </div>
-                  <Button href={`/coach/clients/${client.id}`} size="sm">
+                  {/* <Button href={`/coach/clients/${client.id}`} size="sm">
                     <Eye className="h-4 w-4 mr-2" />
                     Calendar
-                  </Button>
+                  </Button> */}
                 </div>
               </CardHeader>
               <CardContent>

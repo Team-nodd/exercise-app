@@ -3,20 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import {
-  Users,
-  Calendar,
-  Dumbbell,
-  TrendingUp,
-  Plus,
-  RefreshCw,
-  Target,
-  ArrowRight,
-  Zap,
-  Activity,
-  Clock,
-  CheckCircle,
-} from "lucide-react"
+import { Users, Calendar, Dumbbell, TrendingUp, Plus, RefreshCw, Target, ArrowRight, Zap, Activity, Clock, CheckCircle } from 'lucide-react'
 import type { User } from "@/types"
 import { useDashboardData } from "@/lib/hooks/use-dashboard-data"
 
@@ -53,20 +40,6 @@ export function CoachDashboard({ coach }: CoachDashboardProps) {
               </div>
             </CardContent>
           </Card>
-
-          {/* Stats Skeleton */}
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-            {[...Array(5)].map((_, i) => (
-              <Card key={i} className="animate-pulse">
-                <CardContent className="p-4">
-                  <div className="space-y-2">
-                    <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-                    <div className="h-8 bg-gray-200 rounded w-1/2"></div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
         </div>
       </div>
     )
@@ -94,108 +67,65 @@ export function CoachDashboard({ coach }: CoachDashboardProps) {
 
   return (
     <div className="container mx-auto px-4 py-6 max-w-6xl">
-      {/* Welcome Header */}
+      {/* Welcome Header with Completed Workouts Stat */}
       <Card className="mb-6">
-        <CardContent className="p-6">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
-              <Users className="h-6 w-6 text-white" />
+        <CardContent className="p-4 sm:p-6">
+          <div className="flex flex-col gap-4">
+            {/* Greeting Section */}
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
+                <Users className="h-6 w-6 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
+                  {getGreeting()}, Coach {coach.name}!
+                </h1>
+                <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300 mt-1">
+                  Here&apos;s your coaching overview for today.
+                </p>
+              </div>
+              <div className="hidden sm:flex items-center gap-2">
+                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                  <Activity className="h-3 w-3 mr-1" />
+                  Active
+                </Badge>
+              </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
-                {getGreeting()}, Coach {coach.name}!
-              </h1>
-              <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300 mt-1">
-                Here&apos;s your coaching overview for today.
-              </p>
-            </div>
-            <div className="hidden sm:flex items-center gap-2">
-              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                <Activity className="h-3 w-3 mr-1" />
-                Active
-              </Badge>
+            
+            {/* Stats Grid in Header */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:ml-16">
+              <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 text-center">
+                <div className="w-6 h-6 mx-auto mb-1 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center">
+                  <Users className="h-3 w-3 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div className="text-lg font-bold text-blue-600 dark:text-blue-400">{stats?.totalClients || 0}</div>
+                <div className="text-xs text-blue-600/80 dark:text-blue-400/80">Total clients</div>
+              </div>
+              <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 border border-green-200 dark:border-green-800 rounded-lg p-3 text-center">
+                <div className="w-6 h-6 mx-auto mb-1 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
+                  <Target className="h-3 w-3 text-green-600 dark:text-green-400" />
+                </div>
+                <div className="text-lg font-bold text-green-600 dark:text-green-400">{stats?.totalPrograms || 0}</div>
+                <div className="text-xs text-green-600/80 dark:text-green-400/80">Created programs</div>
+              </div>
+              <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 border border-purple-200 dark:border-purple-800 rounded-lg p-3 text-center">
+                <div className="w-6 h-6 mx-auto mb-1 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center">
+                  <Activity className="h-3 w-3 text-purple-600 dark:text-purple-400" />
+                </div>
+                <div className="text-lg font-bold text-purple-600 dark:text-purple-400">{stats?.activePrograms || 0}</div>
+                <div className="text-xs text-purple-600/80 dark:text-purple-400/80">Active programs</div>
+              </div>
+              <div className="bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/20 border border-red-200 dark:border-red-800 rounded-lg p-3 text-center">
+                <div className="w-6 h-6 mx-auto mb-1 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
+                  <Clock className="h-3 w-3 text-red-600 dark:text-red-400" />
+                </div>
+                <div className="text-lg font-bold text-red-600 dark:text-red-400">{stats?.upcomingWorkouts || 0}</div>
+                <div className="text-xs text-red-600/80 dark:text-red-400/80">Scheduled this week</div>
+              </div>
             </div>
           </div>
         </CardContent>
       </Card>
-
-      {/* Stats Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 mb-6">
-        <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border-blue-200 dark:border-blue-800">
-          <CardContent className="p-3 sm:p-4">
-            <div className="flex items-center justify-between mb-2">
-              <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center">
-                <Users className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-              </div>
-              <span className="text-xs text-blue-600/70 dark:text-blue-400/70">Clients</span>
-            </div>
-            <div className="text-xl sm:text-2xl font-bold text-blue-600 dark:text-blue-400 mb-1">
-              {stats?.totalClients || 0}
-            </div>
-            <p className="text-xs text-blue-600/80 dark:text-blue-400/80">Total clients</p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 border-green-200 dark:border-green-800">
-          <CardContent className="p-3 sm:p-4">
-            <div className="flex items-center justify-between mb-2">
-              <div className="w-8 h-8 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
-                <Target className="h-4 w-4 text-green-600 dark:text-green-400" />
-              </div>
-              <span className="text-xs text-green-600/70 dark:text-green-400/70">Programs</span>
-            </div>
-            <div className="text-xl sm:text-2xl font-bold text-green-600 dark:text-green-400 mb-1">
-              {stats?.totalPrograms || 0}
-            </div>
-            <p className="text-xs text-green-600/80 dark:text-green-400/80">Created programs</p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 border-purple-200 dark:border-purple-800">
-          <CardContent className="p-3 sm:p-4">
-            <div className="flex items-center justify-between mb-2">
-              <div className="w-8 h-8 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center">
-                <Activity className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-              </div>
-              <span className="text-xs text-purple-600/70 dark:text-purple-400/70">Active</span>
-            </div>
-            <div className="text-xl sm:text-2xl font-bold text-purple-600 dark:text-purple-400 mb-1">
-              {stats?.activePrograms || 0}
-            </div>
-            <p className="text-xs text-purple-600/80 dark:text-purple-400/80">Active programs</p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 border-orange-200 dark:border-orange-800">
-          <CardContent className="p-3 sm:p-4">
-            <div className="flex items-center justify-between mb-2">
-              <div className="w-8 h-8 bg-orange-100 dark:bg-orange-900/30 rounded-full flex items-center justify-center">
-                <CheckCircle className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-              </div>
-              <span className="text-xs text-orange-600/70 dark:text-orange-400/70">Completed</span>
-            </div>
-            <div className="text-xl sm:text-2xl font-bold text-orange-600 dark:text-orange-400 mb-1">
-              {stats?.completedWorkouts || 0}
-            </div>
-            <p className="text-xs text-orange-600/80 dark:text-orange-400/80">Workouts done</p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/20 border-red-200 dark:border-red-800">
-          <CardContent className="p-3 sm:p-4">
-            <div className="flex items-center justify-between mb-2">
-              <div className="w-8 h-8 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
-                <Clock className="h-4 w-4 text-red-600 dark:text-red-400" />
-              </div>
-              <span className="text-xs text-red-600/70 dark:text-red-400/70">Upcoming</span>
-            </div>
-            <div className="text-xl sm:text-2xl font-bold text-red-600 dark:text-red-400 mb-1">
-              {stats?.upcomingWorkouts || 0}
-            </div>
-            <p className="text-xs text-red-600/80 dark:text-red-400/80">Scheduled this week</p>
-          </CardContent>
-        </Card>
-      </div>
 
       {/* Main Content Grid */}
       <div className="grid lg:grid-cols-3 gap-6">

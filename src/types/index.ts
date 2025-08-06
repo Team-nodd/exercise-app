@@ -38,3 +38,17 @@ export interface DashboardStats {
   upcomingWorkouts: number
   totalClients: number
 }
+
+export interface Comment {
+  id: number
+  user_id: string
+  workout_id: number | null
+  workout_exercise_id: number | null
+  comment_text: string
+  created_at: string
+  user?: {
+    id: string
+    name: string
+    role: "coach" | "user"
+  }
+}

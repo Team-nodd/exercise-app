@@ -39,8 +39,13 @@ export class NotificationService {
     try {
       console.log('🔔 NOTIFICATION SERVICE: Processing workout completion notifications for workout:', workoutId)
 
+      // Add timeout to prevent hanging requests
+      const timeoutPromise = new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error('Request timeout')), 10000)
+      )
+
       // Get workout details
-      const { data: workout, error: workoutError } = await this.supabase
+      const workoutPromise = this.supabase
         .from('workouts')
         .select(`
           *,
@@ -49,17 +54,21 @@ export class NotificationService {
         .eq('id', workoutId)
         .single()
 
+      const { data: workout, error: workoutError } = await Promise.race([workoutPromise, timeoutPromise]) as { data: WorkoutData & { program: ProgramData }, error: any }
+
       if (workoutError || !workout) {
         console.error('❌ NOTIFICATION SERVICE: Failed to fetch workout:', workoutError)
         return
       }
 
       // Get user details
-      const { data: user, error: userError } = await this.supabase
+      const userPromise = this.supabase
         .from('users')
         .select('*')
         .eq('id', workout.user_id)
         .single()
+
+      const { data: user, error: userError } = await Promise.race([userPromise, timeoutPromise]) as { data: UserData, error: any }
 
       if (userError || !user) {
         console.error('❌ NOTIFICATION SERVICE: Failed to fetch user:', userError)
@@ -69,11 +78,13 @@ export class NotificationService {
       // Get coach details if this is a user's workout
       let coach: UserData | null = null
       if (user.role === 'user' && workout.program?.coach_id) {
-        const { data: coachData, error: coachError } = await this.supabase
+        const coachPromise = this.supabase
           .from('users')
           .select('*')
           .eq('id', workout.program.coach_id)
           .single()
+
+        const { data: coachData, error: coachError } = await Promise.race([coachPromise, timeoutPromise]) as { data: UserData, error: any }
 
         if (!coachError && coachData) {
           coach = coachData
@@ -247,6 +258,122 @@ export class NotificationService {
       console.log('✅ NOTIFICATION SERVICE: Program assignment email sent to coach successfully')
     } else {
       console.error('❌ NOTIFICATION SERVICE: Failed to send program assignment email to coach')
+    }
+  }
+
+  // Notify coach when user comments on a workout
+  async notifyCoachWorkoutComment(workoutId: number, userId: string, coachId: string, commentText?: string): Promise<void> {
+    try {
+      // Get workout details
+      const { data: workout, error: workoutError } = await this.supabase
+        .from('workouts')
+        .select('name')
+        .eq('id', workoutId)
+        .single()
+
+      if (workoutError || !workout) {
+        console.error('Error fetching workout details:', workoutError)
+        return
+      }
+
+      // Get user details
+      const { data: user, error: userError } = await this.supabase
+        .from('users')
+        .select('name')
+        .eq('id', userId)
+        .single()
+
+      if (userError || !user) {
+        console.error('Error fetching user details:', userError)
+        return
+      }
+
+      const message = commentText 
+        ? `${user.name} commented on your workout "${workout.name}": "${commentText}"`
+        : `${user.name} commented on your workout "${workout.name}".`
+
+      const { error } = await this.supabase.from("notifications").insert({
+        user_id: coachId,
+        title: `New Comment on ${workout.name}`,
+        message: message,
+        type: "workout_comment",
+        related_id: String(workoutId),
+        read: false,
+      })
+
+      if (error) {
+        console.error("Error creating coach notification:", error)
+      }
+    } catch (error) {
+      console.error("Error notifying coach about comment:", error)
+    }
+  }
+
+  // Notify user when coach comments on a workout
+  async notifyUserWorkoutComment(workoutId: number, coachId: string, userId: string, commentText?: string): Promise<void> {
+    try {
+      // Get workout details
+      const { data: workout, error: workoutError } = await this.supabase
+        .from('workouts')
+        .select('name')
+        .eq('id', workoutId)
+        .single()
+
+      if (workoutError || !workout) {
+        console.error('Error fetching workout details:', workoutError)
+        return
+      }
+
+      // Get coach details
+      const { data: coach, error: coachError } = await this.supabase
+        .from('users')
+        .select('name')
+        .eq('id', coachId)
+        .single()
+
+      if (coachError || !coach) {
+        console.error('Error fetching coach details:', coachError)
+        return
+      }
+
+      const message = commentText 
+        ? `${coach.name} commented on your workout "${workout.name}": "${commentText}"`
+        : `${coach.name} commented on your workout "${workout.name}".`
+
+      const { error } = await this.supabase.from("notifications").insert({
+        user_id: userId,
+        title: `New Comment from ${coach.name}`,
+        message: message,
+        type: "coach_comment",
+        related_id: String(workoutId),
+        read: false,
+      })
+
+      if (error) {
+        console.error("Error creating user notification:", error)
+      }
+    } catch (error) {
+      console.error("Error notifying user about coach comment:", error)
+    }
+  }
+
+  // Delete a notification
+  async deleteNotification(notificationId: string): Promise<boolean> {
+    try {
+      const { error } = await this.supabase
+        .from("notifications")
+        .delete()
+        .eq("id", notificationId)
+
+      if (error) {
+        console.error("Error deleting notification:", error)
+        return false
+      }
+
+      return true
+    } catch (error) {
+      console.error("Error deleting notification:", error)
+      return false
     }
   }
 }

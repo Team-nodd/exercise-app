@@ -37,6 +37,7 @@ export default async function RootLayout({
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           <AuthProvider initialSession={session}>
             <div className="min-h-screen bg-background">
+              {/* <Navigation /> */}
               <Navigation />
               <main>{children}</main>
             </div>

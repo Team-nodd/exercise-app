@@ -175,7 +175,7 @@ export function NotificationSettings({ profile }: NotificationSettingsProps) {
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Workout Completed Notifications */}
-          <div className="flex items-center justify-between">
+          {/* <div className="flex items-center justify-between">
             <div className="space-y-1">
               <Label className="text-base font-medium">Workout Completed</Label>
               <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -192,7 +192,7 @@ export function NotificationSettings({ profile }: NotificationSettingsProps) {
                 disabled={isSettingPending('workout_completed_email')}
               />
             </div>
-          </div>
+          </div> */}
 
           {/* Program Assigned Notifications */}
           <div className="flex items-center justify-between">
