@@ -40,19 +40,17 @@ export function Navigation() {
   }
 
   const isActiveLink = (href: string) => {
-    // Special handling for root dashboards
-    if (href === "/" && pathname === "/") return true
-    if (href === "/dashboard" && pathname === "/dashboard") return true
-    if (href === "/coach/dashboard" && pathname === "/coach/dashboard") return true
-
-    // For other links, check if the pathname starts with the href
-    // and is either an exact match or followed by a '/'
-    if (href !== "/" && pathname.startsWith(href)) {
-      return pathname.length === href.length || pathname[href.length] === "/"
+    // Prevent false positives for base dashboard paths
+    if (
+      (href === "/dashboard" && pathname.startsWith("/dashboard/")) ||
+      (href === "/coach/dashboard" && pathname.startsWith("/coach/dashboard/"))
+    ) {
+      return false
     }
-
-    return pathname === href // Fallback for exact matches
+    // Active when href is a parent of the current pathname
+    return pathname === href || pathname.startsWith(`${href}/`)
   }
+  
 
   const getLinkClasses = (href: string, isMobile = false) => {
     const baseClasses = isMobile

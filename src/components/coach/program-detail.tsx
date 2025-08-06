@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client"
 
 import { useState, useEffect } from "react"
@@ -34,6 +35,7 @@ export function ProgramDetail({ program }: ProgramDetailProps) {
   const supabase = createClient()
 
   const [selectedWorkout, setSelectedWorkout] = useState<WorkoutWithDetails | null>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [workoutComments, setWorkoutComments] = useState<any[]>([])
   const [exerciseComments, setExerciseComments] = useState<Record<string, any[]>>({})
   const [newCoachComment, setNewCoachComment] = useState("")
