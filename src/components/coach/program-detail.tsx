@@ -359,12 +359,12 @@ export function ProgramDetail({ program }: ProgramDetailProps) {
       {/* Tabs */}
       <Tabs defaultValue="calendar" className="space-y-6">
         <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="calendar" className="flex items-center gap-2">
+          <TabsTrigger value="calendar" className="flex items-center gap-2 cursor-pointer">
             <Calendar className="h-4 w-4" />
             <span className="hidden sm:inline">Calendar View</span>
             <span className="sm:hidden">Calendar</span>
           </TabsTrigger>
-          <TabsTrigger value="workouts" className="flex items-center gap-2">
+          <TabsTrigger value="workouts" className="flex items-center gap-2 cursor-pointer">
             <Dumbbell className="h-4 w-4" />
             <span className="hidden sm:inline">Workouts</span>
             <span className="sm:hidden">List</span>

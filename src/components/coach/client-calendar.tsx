@@ -11,6 +11,7 @@ import Link from "next/link"
 import { cn } from "@/lib/utils"
 import type { User, WorkoutWithDetails, Program } from "@/types"
 import { SharedCalendar } from "../ui/shared-calendar"
+import { AppLink } from "../ui/app-link"
 
 interface ClientCalendarProps {
   client: User
@@ -211,10 +212,10 @@ export function ClientCalendar({ client }: ClientCalendarProps) {
     <div className="container mx-auto px-2 sm:px-4 py-4 sm:py-8 max-w-6xl">
       {/* Header */}
       <div className="mb-4 sm:mb-8">
-        <Link href="/coach/clients" className="flex items-center text-sm text-muted-foreground hover:text-primary mb-4">
+        <AppLink href="/coach/clients" className="flex items-center text-sm text-muted-foreground hover:text-primary mb-4">
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Clients
-        </Link>
+        </AppLink>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">

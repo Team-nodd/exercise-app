@@ -237,6 +237,7 @@ export function CoachPrograms({ coachId }: CoachProgramsProps) {
           const progress = calculateProgress(program)
           const totalWorkouts = program.workouts?.length || 0
           const completedWorkouts = program.workouts?.filter((w) => w.completed).length || 0
+          // console.log('program',program)
           return (
             <Card
               key={program.id}
