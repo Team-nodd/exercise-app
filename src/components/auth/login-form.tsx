@@ -6,14 +6,15 @@ import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
+import { useGlobalLoading } from "@/components/providers/loading-provider"
 
 export function LoginForm() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
-  const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const supabase = createClient()
+  const { loading, setLoading } = useGlobalLoading()
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -28,6 +29,7 @@ export function LoginForm() {
 
       if (authError) {
         setError(authError.message)
+        setLoading(false)
         return
       }
 
@@ -53,6 +55,7 @@ export function LoginForm() {
 
         if (createError) {
           setError("Failed to create user profile")
+          setLoading(false)
           return
         }
 
@@ -65,8 +68,9 @@ export function LoginForm() {
       window.location.href = redirectUrl
     } catch (error) {
       setError("An unexpected error occurred")
-    } finally {
       setLoading(false)
+    } finally {
+      // Don't setLoading(false) here, let the global loading reset on route change
     }
   }
 

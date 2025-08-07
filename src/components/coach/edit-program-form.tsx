@@ -15,6 +15,8 @@ import { toast } from "sonner"
 import { Loader2, ArrowLeft, AlertTriangle, Trash2 } from "lucide-react"
 import Link from "next/link"
 import type { User, ProgramWithDetails } from "@/types"
+import { useGlobalLoading } from "../providers/loading-provider"
+import { AppLink } from "../ui/app-link"
 
 interface EditProgramFormProps {
   program: ProgramWithDetails
@@ -28,7 +30,8 @@ export function EditProgramForm({ program }: EditProgramFormProps) {
   const [endDate, setEndDate] = useState(program.end_date || "")
   const [status, setStatus] = useState<"draft" | "active" | "paused" | "completed">(program.status)
   const [clients, setClients] = useState<User[]>([])
-  const [loading, setLoading] = useState(false)
+  // const [loading, setLoading] = useState(false)
+  const {loading, setLoading} = useGlobalLoading()
   const [loadingClients, setLoadingClients] = useState(true)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -144,15 +147,15 @@ export function EditProgramForm({ program }: EditProgramFormProps) {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto px-4 py-8 max-w-6xl">
       <div className="mb-8">
-        <Link
+        <AppLink
           href={`/coach/programs/${program.id}`}
           className="flex items-center text-sm text-muted-foreground hover:text-primary mb-4"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to {program.name}
-        </Link>
+        </AppLink>
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Edit Program</h1>
@@ -277,7 +280,7 @@ export function EditProgramForm({ program }: EditProgramFormProps) {
                 Update Program
               </Button>
               <Button type="button" variant="outline" asChild>
-                <Link href={`/coach/programs/${program.id}`}>Cancel</Link>
+                <AppLink href={`/coach/programs/${program.id}`}>Cancel</AppLink>
               </Button>
             </div>
           </form>

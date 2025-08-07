@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client"
 
 import type React from "react"
@@ -11,7 +12,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
-import { Loader2, Plus, Trash2, ArrowLeft, AlertTriangle, Send, User, Dumbbell, CalendarIcon, RefreshCw } from 'lucide-react'
+import { Loader2, Plus, Trash2, ArrowLeft, AlertTriangle, Send, User, Dumbbell, CalendarIcon } from 'lucide-react'
 import Link from "next/link"
 import type { ProgramWithDetails, Exercise, WorkoutWithDetails, WorkoutExerciseWithDetails } from "@/types"
 import { Badge } from "@/components/ui/badge"
@@ -19,6 +20,8 @@ import { format } from "date-fns"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
+import { notificationService } from "@/lib/notifications/notification-service"
+import { AppLink } from "../ui/app-link"
 
 interface EditWorkoutFormProps {
   program: ProgramWithDetails
@@ -50,11 +53,13 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
   const [workoutType, setWorkoutType] = useState<"gym" | "cardio">(workout.workout_type)
   const [scheduledDate, setScheduledDate] = useState(workout.scheduled_date || "")
   const [notes, setNotes] = useState(workout.notes || "")
+
   // Cardio specific fields
   const [intensityType, setIntensityType] = useState(workout.intensity_type || "")
   const [durationMinutes, setDurationMinutes] = useState(workout.duration_minutes?.toString() || "")
   const [targetTss, setTargetTss] = useState(workout.target_tss?.toString() || "")
   const [targetFtp, setTargetFtp] = useState(workout.target_ftp?.toString() || "")
+
   // Exercise management
   const [exercises, setExercises] = useState<Exercise[]>([])
   const [workoutExercises, setWorkoutExercises] = useState<WorkoutExercise[]>(initialExercises)
@@ -62,6 +67,7 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
   const [loadingExercises, setLoadingExercises] = useState(true)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
+
   // Comments
   const [workoutComments, setWorkoutComments] = useState<any[]>([])
   const [exerciseComments, setExerciseComments] = useState<Record<number, any>>({})
@@ -77,11 +83,13 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
     const fetchExercises = async () => {
       try {
         const { data, error } = await supabase.from("exercises").select("*").order("name", { ascending: true })
+
         if (error) {
           console.error("Error fetching exercises:", error)
           toast.error("Failed to load exercises. Please try again.")
           return
         }
+
         setExercises(data || [])
       } catch (error) {
         console.error("Error fetching exercises:", error)
@@ -90,6 +98,7 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
         setLoadingExercises(false)
       }
     }
+
     fetchExercises()
   }, [supabase])
 
@@ -105,8 +114,8 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
   const fetchComments = async () => {
     try {
       // Add timeout to prevent hanging requests
-      const timeoutPromise = new Promise<never>((_, reject) => 
-        setTimeout(() => reject(new Error('Request timeout')), 10000)
+      const timeoutPromise = new Promise<never>((_, reject) =>
+         setTimeout(() => reject(new Error('Request timeout')), 10000)
       )
 
       // Fetch workout comments
@@ -195,11 +204,13 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
   const updateExercise = (index: number, field: keyof WorkoutExercise, value: any) => {
     const updated = [...workoutExercises]
     updated[index] = { ...updated[index], [field]: value }
+
     // If exercise_id changed, update the exercise reference
     if (field === "exercise_id") {
       const exercise = exercises.find((ex) => ex.id === value)
       updated[index].exercise = exercise
     }
+
     setWorkoutExercises(updated)
   }
 
@@ -208,13 +219,16 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
     try {
       // Delete associated workout exercises first
       await supabase.from("workout_exercises").delete().eq("workout_id", workout.id)
+
       // Then delete the workout
       const { error } = await supabase.from("workouts").delete().eq("id", workout.id)
+
       if (error) {
         console.error("Error deleting workout:", error)
         toast.error("Failed to delete workout")
         return
       }
+
       toast.success("Workout deleted successfully")
       router.push(`/coach/programs/${program.id}`)
     } catch (error) {
@@ -229,6 +243,7 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
   // Add coach comment for workout
   const handleAddCoachWorkoutComment = async () => {
     if (!newCoachWorkoutComment.trim()) return
+
     setCommentLoading(true)
     try {
       const { data: userData, error: userError } = await supabase.auth.getUser()
@@ -246,16 +261,19 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
 
       if (commentError) throw commentError
 
-      // Create notification for the user
-      const { error: notificationError } = await supabase.from("notifications").insert({
-        user_id: program.user.id, // Notify the client
-        title: `New Comment from ${program.user.name}`,
-        message: `${program.user.name} commented on your workout "${workout.name}": "${newCoachWorkoutComment.trim()}"`,
-        type: "coach_comment",
-        related_id: commentData.id.toString(),
-      })
-
-      if (notificationError) console.error("Error creating notification:", notificationError)
+      // Use notification service to create notification
+      try {
+        await notificationService.notifyUserWorkoutComment(
+          workout.id,
+          userData.user.id, // Coach's ID
+          program.user.id, // Client's ID
+          newCoachWorkoutComment.trim()
+        )
+        console.log('✅ User notification sent successfully')
+      } catch (notificationError) {
+        console.error('❌ Error sending notification:', notificationError)
+        // Don't show error to user, just log it
+      }
 
       setNewCoachWorkoutComment("")
       await fetchComments() // Re-fetch comments to show the new one
@@ -272,6 +290,7 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
   const handleAddCoachExerciseComment = async (workoutExerciseId: number) => {
     const text = newCoachExerciseComments[workoutExerciseId] || ""
     if (!text.trim()) return
+
     setCommentLoading(true)
     try {
       const { data: userData, error: userError } = await supabase.auth.getUser()
@@ -290,16 +309,19 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
 
       if (commentError) throw commentError
 
-      // Create notification for the user
-      const { error: notificationError } = await supabase.from("notifications").insert({
-        user_id: program.user.id, // Notify the client
-        title: `New Comment from ${program.user.name}`,
-        message: `${program.user.name} commented on an exercise in "${workout.name}": "${text.trim()}"`,
-        type: "coach_comment",
-        related_id: commentData.id.toString(),
-      })
-
-      if (notificationError) console.error("Error creating notification:", notificationError)
+      // Use notification service to create notification
+      try {
+        await notificationService.notifyUserWorkoutComment(
+          workout.id,
+          userData.user.id, // Coach's ID
+          program.user.id, // Client's ID
+          text.trim()
+        )
+        console.log('✅ User notification sent successfully')
+      } catch (notificationError) {
+        console.error('❌ Error sending notification:', notificationError)
+        // Don't show error to user, just log it
+      }
 
       setNewCoachExerciseComments((prev) => ({ ...prev, [workoutExerciseId]: "" }))
       await fetchComments() // Re-fetch comments to show the new one
@@ -335,6 +357,7 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
+
     try {
       // Validate gym workouts have exercises
       if (workoutType === "gym" && workoutExercises.length === 0) {
@@ -342,6 +365,7 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
         setLoading(false)
         return
       }
+
       // Validate gym workouts have valid exercises
       if (workoutType === "gym") {
         const invalidExercises = workoutExercises.filter((ex) => ex.exercise_id === 0)
@@ -351,6 +375,7 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
           return
         }
       }
+
       // Update workout
       const workoutData = {
         name,
@@ -371,12 +396,15 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
         }),
         updated_at: new Date().toISOString(),
       }
+
       const { error: workoutError } = await supabase.from("workouts").update(workoutData).eq("id", workout.id)
+
       if (workoutError) {
         console.error("Error updating workout:", workoutError)
         toast.error("Failed to update workout")
         return
       }
+
       // Handle workout exercises for gym workouts
       if (workoutType === "gym") {
         // Get current exercise IDs in DB
@@ -386,6 +414,7 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
           .eq('workout_id', workout.id);
 
         if (fetchDbError) throw fetchDbError;
+
         const dbExerciseIds = new Set(currentDbExercises.map(ex => ex.id));
 
         // Determine exercises to delete (present in DB but not in current state)
@@ -397,6 +426,7 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
             .from('workout_exercises')
             .delete()
             .in('id', toDelete);
+
           if (deleteError) throw deleteError;
         }
 
@@ -413,6 +443,7 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
 
         if (upsertData.length > 0) {
           const { error: upsertError } = await supabase.from("workout_exercises").upsert(upsertData, { onConflict: 'id' });
+
           if (upsertError) {
             console.error("Error upserting workout exercises:", upsertError);
             toast.error("Workout updated but failed to update exercises.");
@@ -422,6 +453,7 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
         // For cardio workouts, remove any existing exercises
         await supabase.from("workout_exercises").delete().eq("workout_id", workout.id)
       }
+
       toast.success("Workout updated successfully!")
       router.push(`/coach/programs/${program.id}`)
     } catch (error) {
@@ -442,6 +474,7 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
             <div className="h-10 w-32 bg-gray-200 rounded animate-pulse"></div>
           </div>
           <div className="h-4 bg-gray-200 rounded w-1/2 mb-8 animate-pulse"></div>
+
           {/* Form Sections Skeleton */}
           {[...Array(3)].map((_, i) => (
             <Card key={i} className="animate-pulse">
@@ -464,13 +497,14 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
   return (
     <div className="container mx-auto px-4 py-6 max-w-6xl">
       <div className="mb-8">
-        <Link
+        <AppLink
           href={`/coach/programs/${program.id}`}
           className="flex items-center text-sm text-muted-foreground hover:text-primary mb-4 transition-colors"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to {program.name}
-        </Link>
+        </AppLink>
+
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">Edit Workout</h1>
@@ -485,6 +519,7 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
           </Button>
         </div>
       </div>
+
       {/* Delete Confirmation */}
       {showDeleteConfirm && (
         <Card className="mb-8 border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800">
@@ -511,6 +546,7 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
           </CardContent>
         </Card>
       )}
+
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Basic Workout Info */}
         <Card>
@@ -533,6 +569,7 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
                 required
               />
             </div>
+
             <div className="space-y-2">
               <Label htmlFor="workoutType">Workout Type *</Label>
               <Select value={workoutType} onValueChange={(value: "gym" | "cardio") => setWorkoutType(value)}>
@@ -545,6 +582,7 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
                 </SelectContent>
               </Select>
             </div>
+
             <div className="space-y-2">
               <Label htmlFor="scheduledDate">Scheduled Date</Label>
               <Popover>
@@ -570,6 +608,7 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
                 </PopoverContent>
               </Popover>
             </div>
+
             <div className="space-y-2">
               <Label htmlFor="notes">Notes</Label>
               <Textarea
@@ -582,6 +621,7 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
             </div>
           </CardContent>
         </Card>
+
         {/* Cardio Specific Fields */}
         {workoutType === "cardio" && (
           <Card>
@@ -640,6 +680,7 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
             </CardContent>
           </Card>
         )}
+
         {/* Gym Exercises */}
         {workoutType === "gym" && (
           <Card>
@@ -689,6 +730,7 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
+
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="space-y-2">
                             <Label>Exercise *</Label>
@@ -708,6 +750,7 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
                               </SelectContent>
                             </Select>
                           </div>
+
                           <div className="space-y-2">
                             <Label>Volume Level</Label>
                             <Select
@@ -726,6 +769,7 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
                               </SelectContent>
                             </Select>
                           </div>
+
                           <div className="space-y-2">
                             <Label>Sets</Label>
                             <Input
@@ -735,6 +779,7 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
                               min="1"
                             />
                           </div>
+
                           <div className="space-y-2">
                             <Label>Reps</Label>
                             <Input
@@ -744,6 +789,7 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
                               min="1"
                             />
                           </div>
+
                           <div className="space-y-2">
                             <Label>Weight</Label>
                             <Input
@@ -752,6 +798,7 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
                               placeholder="e.g., 80kg, BW"
                             />
                           </div>
+
                           <div className="space-y-2">
                             <Label>Rest (seconds)</Label>
                             <Input
@@ -764,6 +811,7 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
                             />
                           </div>
                         </div>
+
                         {workoutExercise.exercise && (
                           <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
                             <p className="text-sm text-blue-800 dark:text-blue-200">
@@ -775,6 +823,7 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
                             </p>
                           </div>
                         )}
+
                         {/* Exercise Comments */}
                         <div className="mt-4 space-y-3">
                           <h5 className="font-semibold text-sm">Comments for this Exercise</h5>
@@ -844,6 +893,7 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
             </CardContent>
           </Card>
         )}
+
         {/* Workout Comments Section */}
         <Card>
           <CardHeader className="pb-4">
@@ -914,10 +964,11 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
             </div>
           </CardContent>
         </Card>
+
         {/* Submit Buttons */}
         <div className="flex gap-4 justify-end">
           <Button type="button" variant="outline" asChild>
-            <Link href={`/coach/programs/${program.id}`}>Cancel</Link>
+            <AppLink href={`/coach/programs/${program.id}`}>Cancel</AppLink>
           </Button>
           <Button type="submit" disabled={loading}>
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

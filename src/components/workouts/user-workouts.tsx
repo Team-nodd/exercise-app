@@ -11,6 +11,7 @@ import Link from "next/link"
 import { cn } from "@/lib/utils"
 import type { WorkoutWithDetails, Program } from "@/types"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { AppLink } from "../ui/app-link"
 
 interface UserWorkoutsProps {
   userId: string
@@ -367,6 +368,7 @@ export function UserWorkouts({ userId }: UserWorkoutsProps) {
                       <Button
                         asChild
                         size="sm"
+                        href={`/dashboard/workouts/${workout.id}`}
                         className={cn(
                           "text-xs sm:text-sm",
                           workout.completed
@@ -374,10 +376,10 @@ export function UserWorkouts({ userId }: UserWorkoutsProps) {
                             : "bg-blue-600 hover:bg-blue-700 text-white",
                         )}
                       >
-                        <Link href={`/dashboard/workouts/${workout.id}`}>
+                        <AppLink href={`/dashboard/workouts/${workout.id}`}>
                           <Play className="h-3.5 w-3.5 mr-1.5" />
                           {workout.completed ? "View Details" : "Start Workout"}
-                        </Link>
+                        </AppLink>
                       </Button>
                     </div>
                   </div>

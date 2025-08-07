@@ -9,6 +9,7 @@ import Link from "next/link"
 import type { ProgramWithDetails } from "@/types"
 import { usePrograms } from "@/lib/hooks/use-programs"
 import { cn } from "@/lib/utils"
+import { AppLink } from "../ui/app-link"
 
 interface UserProgramsProps {
   userId: string
@@ -140,12 +141,12 @@ export function UserPrograms({ userId }: UserProgramsProps) {
             <p className="text-gray-600 dark:text-gray-300 mb-6 text-sm max-w-sm mx-auto">
               It looks like you have not been assigned any programs. Contact your coach to get started!
             </p>
-            <Link href="/dashboard/programs/browse">
+            <AppLink href="/dashboard/programs/browse">
               <Button>
                 <TrendingUp className="h-4 w-4 mr-2" />
                 Browse Programs
               </Button>
-            </Link>
+            </AppLink>
           </CardContent>
         </Card>
       ) : (
@@ -218,12 +219,12 @@ export function UserPrograms({ userId }: UserProgramsProps) {
                     </div>
 
                     <div className="pt-4">
-                      <Link href={`/dashboard/programs/${program.id}`}>
+                      <AppLink href={`/dashboard/programs/${program.id}`}>
                         <Button className="w-full" variant="default">
                           View Details
                           <ArrowRight className="h-4 w-4 ml-2" />
                         </Button>
-                      </Link>
+                      </AppLink>
                     </div>
                   </div>
                 </CardContent>

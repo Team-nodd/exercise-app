@@ -15,6 +15,8 @@ import { toast } from "sonner"
 import { Loader2, Plus, Trash2, ArrowLeft } from "lucide-react"
 import Link from "next/link"
 import type { ProgramWithDetails, Exercise } from "@/types"
+import { AppLink } from "../ui/app-link"
+import { useGlobalLoading } from "../providers/loading-provider"
 
 interface CreateWorkoutFormProps {
   program: ProgramWithDetails
@@ -46,7 +48,8 @@ export function CreateWorkoutForm({ program }: CreateWorkoutFormProps) {
   // Exercise management
   const [exercises, setExercises] = useState<Exercise[]>([])
   const [workoutExercises, setWorkoutExercises] = useState<WorkoutExercise[]>([])
-  const [loading, setLoading] = useState(false)
+  // const [loading, setLoading] = useState(false)
+  const {loading, setLoading} = useGlobalLoading()
   const [loadingExercises, setLoadingExercises] = useState(true)
 
   const router = useRouter()
@@ -208,15 +211,15 @@ export function CreateWorkoutForm({ program }: CreateWorkoutFormProps) {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto px-4 py-8 max-w-6xl">
       <div className="mb-8">
-        <Link
+        <AppLink
           href={`/coach/programs/${program.id}`}
           className="flex items-center text-sm text-muted-foreground hover:text-primary mb-4"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to {program.name}
-        </Link>
+        </AppLink>
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Create New Workout</h1>
         <p className="text-gray-600 dark:text-gray-300 mt-2">
           Add a workout to <strong>{program.name}</strong> for {program.user.name}
@@ -475,7 +478,7 @@ export function CreateWorkoutForm({ program }: CreateWorkoutFormProps) {
             Create Workout
           </Button>
           <Button type="button" variant="outline" asChild>
-            <Link href={`/coach/programs/${program.id}`}>Cancel</Link>
+            <AppLink href={`/coach/programs/${program.id}`}>Cancel</AppLink>
           </Button>
         </div>
       </form>

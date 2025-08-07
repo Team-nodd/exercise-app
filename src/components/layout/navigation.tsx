@@ -6,11 +6,13 @@ import { usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
 import { LogOut, Menu, X, Dumbbell, Calendar, Users, Home, User, Bell, Trash2 } from 'lucide-react'
 import { useAuth } from "@/components/providers/auth-provider"
+import { useGlobalLoading } from "@/components/providers/loading-provider"
 // import { useNotifications } from "@/lib/hooks/use-notifications"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import useNotifications from "@/lib/hooks/use-notifications"
+import { AppLink } from "../ui/app-link"
 
 export function Navigation() {
 const { profile, loading, signOut, user } = useAuth()
@@ -19,12 +21,14 @@ const [dropdownOpen, setDropdownOpen] = useState(false)
 const [signingOut, setSigningOut] = useState(false)
 const pathname = usePathname()
 const router = useRouter()
+const { setLoading } = useGlobalLoading()
 
 // Add notification hook
 const { notifications, unreadCount, deleteNotification, markNotificationAsRead } = useNotifications(profile?.id)
 const [notifSheetOpen, setNotifSheetOpen] = useState(false) // Use Sheet for notifications
 
 const handleNotificationClick = async (notificationId: string, relatedId?: string) => {
+  setLoading(true) // IMMEDIATE feedback
   await markNotificationAsRead(notificationId)
   setNotifSheetOpen(false) // Close notification sheet after clicking
   
@@ -32,17 +36,37 @@ const handleNotificationClick = async (notificationId: string, relatedId?: strin
   if (relatedId && profile) {
     try {
       if (profile.role === "coach") {
-        // For coach, navigate to the edit workout page
-        router.push(`/coach/workouts/${relatedId}/edit`)
+        // Parse related_id to get workout and program IDs
+        const match = relatedId.match(/workout:(\d+):program:(\d+)/)
+        if (match) {
+          const [, workoutId, programId] = match
+          // For coach, navigate to the edit workout page
+          router.push(`/coach/programs/${programId}/workouts/${workoutId}`)
+        } else {
+          // Fallback for old format or other notification types
+          router.push(`/coach/dashboard`)
+        }
       } else {
-        // For user, navigate to the workout detail page
-        router.push(`/dashboard/workouts/${relatedId}`)
+        // Parse related_id to get workout ID
+        const match = relatedId.match(/workout:(\d+):program:(\d+)/)
+        if (match) {
+          const [, workoutId] = match
+          // For user, navigate to the workout detail page
+          router.push(`/dashboard/workouts/${workoutId}`)
+        } else {
+          // Fallback for old format or other notification types
+          router.push(`/dashboard/workouts/${relatedId}`)
+        }
       }
     } catch (error) {
       console.error("Error navigating to notification:", error)
       // Fallback to dashboard
       router.push(profile.role === "coach" ? "/coach/dashboard" : "/dashboard")
+    } finally {
+      setLoading(false)
     }
+  } else {
+    setLoading(false)
   }
 }
 
@@ -55,10 +79,12 @@ const handleSignOut = async () => {
   try {
     setSigningOut(true)
     setDropdownOpen(false)
+    setLoading(true) // Show global loading indicator
     await signOut()
   } catch (error) {
     console.error("Navigation signout error:", error)
     setSigningOut(false)
+    setLoading(false) // Hide loading on error
   }
 }
 
@@ -123,48 +149,48 @@ return (
       <div className="flex justify-between h-16">
         <div className="flex items-center">
           <div className="flex-shrink-0">
-            <Link href={getDashboardLink()} className="flex items-center">
+            <AppLink href={getDashboardLink()} className="flex items-center">
               <Dumbbell className="h-8 w-8 text-primary" />
               <span className="ml-2 text-xl font-bold text-gray-900 dark:text-white">FitTracker</span>
-            </Link>
+            </AppLink>
           </div>
           {user && profile && (
             <div className="hidden md:ml-10 md:flex md:space-x-8">
-              <Link href={getDashboardLink()} className={getLinkClasses(getDashboardLink())}>
+              <AppLink href={getDashboardLink()} className={getLinkClasses(getDashboardLink())}>
                 <Home className="h-4 w-4 mr-2" />
                 Dashboard
-              </Link>
+              </AppLink>
               {profile.role === "coach" ? (
                 <>
-                  <Link href="/coach/programs" className={getLinkClasses("/coach/programs")}>
+                  <AppLink href="/coach/programs" className={getLinkClasses("/coach/programs")}>
                     <Calendar className="h-4 w-4 mr-2" />
                     Programs
-                  </Link>
-                  <Link href="/coach/clients" className={getLinkClasses("/coach/clients")}>
+                  </AppLink>
+                  <AppLink href="/coach/clients" className={getLinkClasses("/coach/clients")}>
                     <Users className="h-4 w-4 mr-2" />
                     Clients
-                  </Link>
-                  <Link href="/coach/exercises" className={getLinkClasses("/coach/exercises")}>
+                  </AppLink>
+                  <AppLink href="/coach/exercises" className={getLinkClasses("/coach/exercises")}>
                     <Dumbbell className="h-4 w-4 mr-2" />
                     Exercises
-                  </Link>
+                  </AppLink>
                 </>
               ) : (
                 <>
-                  <Link href="/dashboard/programs" className={getLinkClasses("/dashboard/programs")}>
+                  <AppLink href="/dashboard/programs" className={getLinkClasses("/dashboard/programs")}>
                     <Calendar className="h-4 w-4 mr-2" />
                     My Programs
-                  </Link>
-                  <Link href="/dashboard/workouts" className={getLinkClasses("/dashboard/workouts")}>
+                  </AppLink>
+                  <AppLink href="/dashboard/workouts" className={getLinkClasses("/dashboard/workouts")}>
                     <Dumbbell className="h-4 w-4 mr-2" />
                     Workouts
-                  </Link>
+                  </AppLink>
                 </>
               )}
-              <Link href="/dashboard/configuration" className={getLinkClasses("/dashboard/configuration")}>
+              <AppLink href="/dashboard/configuration" className={getLinkClasses("/dashboard/configuration")}>
                 <Bell className="h-4 w-4 mr-2" />
                 Configuration
-              </Link>
+              </AppLink>
             </div>
           )}
         </div>
@@ -209,7 +235,7 @@ return (
                             className={`p-3 border-b last:border-b-0 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 ${
                               !notif.read ? "bg-blue-50 dark:bg-blue-900/20" : ""
                             }`}
-                            onClick={() => handleNotificationClick(notif.id, notif.related_id)}
+                            onClick={() => handleNotificationClick(notif.id, notif.related_id ?? undefined)}
                           >
                             <div className="flex items-start justify-between">
                               <div className="flex-1 min-w-0">
@@ -257,10 +283,10 @@ return (
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
-                    <Link href="/profile/settings">
+                    <AppLink href="/profile/settings">
                       <User className="mr-2 h-4 w-4" />
                       <span>Profile Settings</span>
-                    </Link>
+                    </AppLink>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleSignOut} disabled={signingOut}>
@@ -273,10 +299,10 @@ return (
           ) : (
             <div className="flex items-center space-x-4">
               <Button asChild variant="ghost">
-                <Link href="/auth/login">Sign in</Link>
+                <AppLink href="/auth/login">Sign in</AppLink>
               </Button>
               <Button asChild>
-                <Link href="/auth/register">Sign up</Link>
+                <AppLink href="/auth/register">Sign up</AppLink>
               </Button>
             </div>
           )}
@@ -297,78 +323,78 @@ return (
                 <SheetContent side="right" className="w-full p-0"> {/* Removed max-w-xs */}
                   <div className="flex flex-col h-full">
                     <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-                      <Link href={getDashboardLink()} className="flex items-center" onClick={() => setMobileMenuOpen(false)}>
+                      <AppLink href={getDashboardLink()} className="flex items-center" onClick={() => { setLoading(true); setMobileMenuOpen(false); }}>
                         <Dumbbell className="h-8 w-8 text-primary" />
                         <span className="ml-2 text-xl font-bold text-gray-900 dark:text-white">FitTracker</span>
-                      </Link>
+                      </AppLink>
                     </div>
                     <div className="flex-1 px-2 pt-2 pb-3 space-y-1 overflow-y-auto">
-                      <Link
+                      <AppLink
                         href={getDashboardLink()}
                         className={getLinkClasses(getDashboardLink(), true)}
-                        onClick={() => setMobileMenuOpen(false)}
+                        onClick={() => { setLoading(true); setMobileMenuOpen(false); }}
                       >
                         Dashboard
-                      </Link>
+                      </AppLink>
                       {profile.role === "coach" ? (
                         <>
-                          <Link
+                          <AppLink
                             href="/coach/programs"
                             className={getLinkClasses("/coach/programs", true)}
-                            onClick={() => setMobileMenuOpen(false)}
+                            onClick={() => { setLoading(true); setMobileMenuOpen(false); }}
                           >
                             Programs
-                          </Link>
-                          <Link
+                          </AppLink>
+                          <AppLink
                             href="/coach/clients"
                             className={getLinkClasses("/coach/clients", true)}
-                            onClick={() => setMobileMenuOpen(false)}
+                            onClick={() => { setLoading(true); setMobileMenuOpen(false); }}
                           >
                             Clients
-                          </Link>
-                          <Link
+                          </AppLink>
+                          <AppLink
                             href="/coach/exercises"
                             className={getLinkClasses("/coach/exercises", true)}
-                            onClick={() => setMobileMenuOpen(false)}
+                            onClick={() => { setLoading(true); setMobileMenuOpen(false); }}
                           >
                             Exercises
-                          </Link>
+                          </AppLink>
                         </>
                       ) : (
                         <>
-                          <Link
+                          <AppLink
                             href="/dashboard/programs"
                             className={getLinkClasses("/dashboard/programs", true)}
-                            onClick={() => setMobileMenuOpen(false)}
+                            onClick={() => { setLoading(true); setMobileMenuOpen(false); }}
                           >
                             My Programs
-                          </Link>
-                          <Link
+                          </AppLink>
+                          <AppLink
                             href="/dashboard/workouts"
                             className={getLinkClasses("/dashboard/workouts", true)}
-                            onClick={() => setMobileMenuOpen(false)}
+                            onClick={() => { setLoading(true); setMobileMenuOpen(false); }}
                           >
                             Workouts
-                          </Link>
+                          </AppLink>
                         </>
                       )}
-                      <Link
+                      <AppLink
                         href="/dashboard/configuration"
                         className={getLinkClasses("/dashboard/configuration", true)}
-                        onClick={() => setMobileMenuOpen(false)}
+                        onClick={() => { setLoading(true); setMobileMenuOpen(false); }}
                       >
                         Configuration
-                      </Link>
+                      </AppLink>
                     </div>
                     <div className="p-4 border-t border-gray-200 dark:border-gray-700">
-                      <Link
+                      <AppLink
                         href="/profile/settings"
                         className="flex items-center w-full px-3 py-2 text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                         onClick={() => setMobileMenuOpen(false)}
                       >
                         <User className="h-5 w-5 mr-2" />
                         Profile Settings
-                      </Link>
+                      </AppLink>
                       <button
                         onClick={handleSignOut}
                         disabled={signingOut}

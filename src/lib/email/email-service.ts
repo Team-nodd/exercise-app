@@ -47,7 +47,7 @@ export class EmailService {
       to: recipientEmail,
       subject,
       html,
-      text
+      
     })
   }
 

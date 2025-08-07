@@ -199,10 +199,10 @@ export function ClientList({ coachId }: ClientListProps) {
                       </CardDescription>
                     </div>
                   </div>
-                  {/* <Button href={`/coach/clients/${client.id}`} size="sm">
+                  <Button href={`/coach/clients/${client.id}`} size="sm">
                     <Eye className="h-4 w-4 mr-2" />
-                    Calendar
-                  </Button> */}
+                    View Detail
+                  </Button>
                 </div>
               </CardHeader>
               <CardContent>
@@ -211,7 +211,7 @@ export function ClientList({ coachId }: ClientListProps) {
                     <h4 className="font-semibold text-base mb-2 text-gray-800 dark:text-gray-200">
                       Programs ({client.programs.length})
                     </h4>
-                    {client.programs.length === 0 ? (
+                    {/* {client.programs.length === 0 ? (
                       <p className="text-muted-foreground text-sm italic">No programs assigned yet.</p>
                     ) : (
                       <div className="space-y-3">
@@ -232,7 +232,7 @@ export function ClientList({ coachId }: ClientListProps) {
                               <Badge className={getStatusColor(program.status)}>
                                 {program.status.charAt(0).toUpperCase() + program.status.slice(1)}
                               </Badge>
-                              <Button variant="outline" size="sm" href={`/coach/programs/${program.id}`}>
+                              <Button variant="outline" size="sm" href={`/coach/clients/${client.id}`}>
                                 <Eye className="h-3 w-3 mr-1" />
                                 View
                               </Button>
@@ -245,7 +245,7 @@ export function ClientList({ coachId }: ClientListProps) {
                           </p>
                         )}
                       </div>
-                    )}
+                    )} */}
                   </div>
                   <div className="flex justify-between items-center pt-4 border-t border-gray-200 dark:border-gray-800">
                     <div className="text-xs text-gray-500">

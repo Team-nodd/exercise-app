@@ -1,7 +1,7 @@
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
-import Link from "next/link"
+import { AppLink } from "@/components/ui/app-link" // Use AppLink instead of next/link
 
 import { cn } from "@/lib/utils"
 
@@ -65,13 +65,13 @@ function Button({
 
   if (href) {
     return (
-      <Link
+      <AppLink
         data-slot="button"
         className={cn(buttonVariants({ variant, size, className }))}
         href={href}
       >
         {children}
-      </Link>
+      </AppLink>
     )
   }
 

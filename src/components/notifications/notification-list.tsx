@@ -8,12 +8,14 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Bell, CheckCircle2, MessageSquare, Dumbbell, Loader2, RefreshCw } from 'lucide-react'
 import { cn } from "@/lib/utils"
 import Link from "next/link"
-// Remove the problematic import, define NotificationWithUser inline for now
+
 export type NotificationWithUser = {
   id: string
   user_id: string
   type: string
-  message: string
+  message: string | null
+  title: string
+  related_id: string | null
   created_at: string
   read: boolean
   user: {
@@ -149,26 +151,32 @@ export function NotificationList({ userId, onNotificationClick }: NotificationLi
   }
 
   const getNotificationLink = (notification: NotificationWithUser) => {
+    if (!notification.related_id) return "#";
+    
     switch (notification.type) {
       case "workout_completed":
       case "user_comment":
       case "coach_comment":
-        // Assuming related_id is workout_id for these types
-        // Need to determine if it's a coach or user viewing to construct the correct path
-        // For simplicity, let's assume user_id in notification is the recipient.
-        // If recipient is a user, link to /dashboard/workouts/[id]
-        // If recipient is a coach, link to /coach/programs/[programId]/workouts/[workoutId]
-        // This requires fetching programId for coach notifications.
-        // For now, let's make a generic link or link to dashboard.
-        // A more robust solution would store program_id in related_id or have a more complex routing logic.
-        if (notification.user?.role === "user") {
-          return `/dashboard/workouts/${notification.related_id}`
-        } else if (notification.user?.role === "coach") {
-          // This is tricky. If related_id is workoutId, we need programId.
-          // For now, link to coach dashboard.
-          return `/coach/dashboard`
+        // Parse related_id to get workout and program IDs
+        const match = notification.related_id.match(/workout:(\d+):program:(\d+)/)
+        if (match) {
+          const [, workoutId, programId] = match
+          // For workout-related notifications, check user role to determine correct route
+          if (notification.user?.role === "coach") {
+            // Coach should go to edit workout page
+            return `/coach/programs/${programId}/workouts/${workoutId}`
+          } else {
+            // User should go to workout detail page
+            return `/dashboard/workouts/${workoutId}`
+          }
+        } else {
+          // Fallback for old format
+          if (notification.user?.role === "coach") {
+            return `/coach/dashboard`
+          } else {
+            return `/dashboard/workouts/${notification.related_id}`
+          }
         }
-        return "#"
       case "program_assigned":
         if (notification.user?.role === "user") {
           return `/dashboard/programs/${notification.related_id}`
@@ -251,7 +259,7 @@ export function NotificationList({ userId, onNotificationClick }: NotificationLi
                   </div>
                   <div className="flex-1">
                     <p className="text-sm font-medium text-gray-900 dark:text-white">
-                      {/* {notification.title} */}
+                      {notification.title}
                     </p>
                     {notification.message && (
                       <p className="text-xs text-gray-700 dark:text-gray-300 mt-0.5 line-clamp-2">

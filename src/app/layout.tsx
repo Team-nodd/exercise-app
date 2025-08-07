@@ -3,9 +3,14 @@ import "./globals.css"
 import type { Metadata } from "next"
 import { ThemeProvider } from "@/components/theme-provider"
 import { AuthProvider } from "@/components/providers/auth-provider"
-import { Navigation } from "@/components/layout/navigation"
+// import { Navigation } from "@/components/layout/navigation"
 import { Toaster } from "@/components/ui/sonner"
 import { createServerClient } from "@/lib/supabase/server"
+import { LoadingProvider } from "@/components/providers/loading-provider"
+import { GlobalLoadingIndicator } from "@/components/ui/global-loading-indicator"
+import { LoadingResetOnRouteChange } from "@/lib/loading/loading-reset-change"
+import { Navigation } from "@/components/layout/navigation"
+// import Navigation from "@/components/layout/navigation"
 
 export const metadata: Metadata = {
   title: "FitTracker Pro - Exercise Program Management",
@@ -35,14 +40,18 @@ export default async function RootLayout({
       </head>
       <body className="font-poppins antialiased" suppressHydrationWarning>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          <AuthProvider initialSession={session}>
-            <div className="min-h-screen bg-background">
-              {/* <Navigation /> */}
-              <Navigation />
-              <main>{children}</main>
-            </div>
-            <Toaster />
-          </AuthProvider>
+          <LoadingProvider>
+            <AuthProvider initialSession={session}>
+              <div className="min-h-screen bg-background">
+                {/* <Navigation /> */}
+                <Navigation />
+                <GlobalLoadingIndicator />
+                <LoadingResetOnRouteChange />
+                <main>{children}</main>
+              </div>
+              <Toaster />
+            </AuthProvider>
+          </LoadingProvider>
         </ThemeProvider>
       </body>
     </html>

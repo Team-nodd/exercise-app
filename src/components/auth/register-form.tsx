@@ -7,13 +7,16 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useGlobalLoading } from "@/components/providers/loading-provider"
 
 export function RegisterForm() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  // const [loading, setLoading]= useState(false)
   const [name, setName] = useState("")
   const [role, setRole] = useState<"user" | "coach">("user")
-  const [loading, setLoading] = useState(false)
+  // const [loading, setLoading] = useState(false)
+  const {loading, setLoading} = useGlobalLoading()  
   const [error, setError] = useState("")
   const supabase = createClient()
 
@@ -46,7 +49,7 @@ export function RegisterForm() {
       }
 
       // Create user profile
-      const { data: profile, error: profileError } = await supabase
+      const { error: profileError } = await supabase
         .from("users")
         .upsert({
           id: authData.user.id,

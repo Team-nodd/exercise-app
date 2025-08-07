@@ -187,24 +187,23 @@ export function useDashboardData({ userId, coachId, isCoach = false }: UseDashbo
 
       // Fetch recent clients
       const clientIds = [...new Set(coachData.map(p => p.user_id))].slice(0, 5)
+      let clientsData: User[] = []
       if (clientIds.length > 0) {
-        const { data: clientsData, error: clientsError } = await supabase
+        const { data, error } = await supabase
           .from('users')
           .select('*')
           .in('id', clientIds)
           .limit(5)
-
-        if (clientsError) {
-          console.error('Error fetching recent clients:', clientsError)
-        } else if (clientsData) {
-          setRecentClients(clientsData)
+        if (!error && data) {
+          clientsData = data
+          setRecentClients(data)
         }
       }
-
-      // Cache the results
+      // Cache the results AFTER clientsData is available
       dashboardCache.set(cacheKey, {
         data: {
-          stats, recentClients: recentClients,
+          stats,
+          recentClients: clientsData,
           upcomingWorkouts: []
         },
         timestamp: Date.now()

@@ -14,7 +14,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner"
 import { Loader2, ArrowLeft, Plus } from "lucide-react"
 import Link from "next/link"
-import { ImageUpload } from "@/components/ui/image-upload"
+import { AppLink } from "../ui/app-link"
+// import { ImageUpload } from "@/components/ui/image-upload"
 
 const CATEGORIES = ["Chest", "Back", "Shoulders", "Arms", "Legs", "Core", "Cardio", "Full Body", "Flexibility"]
 
@@ -27,6 +28,7 @@ const EQUIPMENT_TYPES = [
   "Resistance Band",
   "Kettlebell",
   "Medicine Ball",
+  "None",
   "Other",
 ]
 
@@ -96,15 +98,15 @@ export function CreateExerciseForm() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto px-4 py-8 max-w-6xl">
       <div className="mb-8">
-        <Link
+        <AppLink
           href="/coach/exercises"
           className="flex items-center text-sm text-muted-foreground hover:text-primary mb-4"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Exercise Library
-        </Link>
+        </AppLink>
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Create New Exercise</h1>
           <p className="text-gray-600 dark:text-gray-300 mt-2">Add a new exercise to your library</p>
@@ -206,7 +208,7 @@ export function CreateExerciseForm() {
                 Create Exercise
               </Button>
               <Button type="button" variant="outline" asChild>
-                <Link href="/coach/exercises">Cancel</Link>
+                <AppLink href="/coach/exercises">Cancel</AppLink>
               </Button>
             </div>
           </form>

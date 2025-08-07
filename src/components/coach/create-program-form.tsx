@@ -15,6 +15,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2, ArrowLeft } from "lucide-react"
 import Link from "next/link"
 import type { User } from "@/types"
+import { AppLink } from "../ui/app-link"
+import { LoadingProvider, useGlobalLoading } from "../providers/loading-provider"
 
 interface CreateProgramFormProps {
   coachId: string
@@ -28,7 +30,8 @@ export function CreateProgramForm({ coachId }: CreateProgramFormProps) {
   const [endDate, setEndDate] = useState("")
   const [status, setStatus] = useState<"draft" | "active">("draft")
   const [clients, setClients] = useState<User[]>([])
-  const [loading, setLoading] = useState(false)
+  // const [loading, setLoading] = useState(false)
+  const {loading, setLoading} = useGlobalLoading()
   const [loadingClients, setLoadingClients] = useState(true)
 
   const router = useRouter()
@@ -124,15 +127,15 @@ export function CreateProgramForm({ coachId }: CreateProgramFormProps) {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto px-4 py-8 max-w-6xl">
       <div className="mb-8">
-        <Link
+        <AppLink
           href="/coach/programs"
           className="flex items-center text-sm text-muted-foreground hover:text-primary mb-4"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Programs
-        </Link>
+        </AppLink>
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Create New Program</h1>
         <p className="text-gray-600 dark:text-gray-300 mt-2">Design a personalized fitness program for your client</p>
       </div>
@@ -215,7 +218,7 @@ export function CreateProgramForm({ coachId }: CreateProgramFormProps) {
                 Create Program
               </Button>
               <Button type="button" variant="outline" asChild>
-                <Link href="/coach/programs">Cancel</Link>
+                <AppLink href="/coach/programs">Cancel</AppLink>
               </Button>
             </div>
           </form>

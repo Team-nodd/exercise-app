@@ -3,7 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Users, Calendar, Dumbbell, TrendingUp, Plus, RefreshCw, Target, ArrowRight, Zap, Activity, Clock, CheckCircle } from 'lucide-react'
+import { Users, Calendar, Dumbbell, TrendingUp, Plus, RefreshCw, Target, ArrowRight, Zap, Activity, Clock } from 'lucide-react'
 import type { User } from "@/types"
 import { useDashboardData } from "@/lib/hooks/use-dashboard-data"
 
@@ -101,27 +101,24 @@ export function CoachDashboard({ coach }: CoachDashboardProps) {
                 <div className="text-lg font-bold text-blue-600 dark:text-blue-400">{stats?.totalClients || 0}</div>
                 <div className="text-xs text-blue-600/80 dark:text-blue-400/80">Total clients</div>
               </div>
+              
               <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 border border-green-200 dark:border-green-800 rounded-lg p-3 text-center">
                 <div className="w-6 h-6 mx-auto mb-1 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
                   <Target className="h-3 w-3 text-green-600 dark:text-green-400" />
                 </div>
-                <div className="text-lg font-bold text-green-600 dark:text-green-400">{stats?.totalPrograms || 0}</div>
-                <div className="text-xs text-green-600/80 dark:text-green-400/80">Created programs</div>
+                <div className="text-lg font-bold text-green-600 dark:text-green-400">{stats?.activePrograms || 0}</div>
+                <div className="text-xs text-green-600/80 dark:text-green-400/80">Active programs</div>
               </div>
+
               <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 border border-purple-200 dark:border-purple-800 rounded-lg p-3 text-center">
                 <div className="w-6 h-6 mx-auto mb-1 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center">
                   <Activity className="h-3 w-3 text-purple-600 dark:text-purple-400" />
                 </div>
-                <div className="text-lg font-bold text-purple-600 dark:text-purple-400">{stats?.activePrograms || 0}</div>
-                <div className="text-xs text-purple-600/80 dark:text-purple-400/80">Active programs</div>
+                <div className="text-lg font-bold text-purple-600 dark:text-purple-400">{stats?.totalPrograms || 0}</div>
+                <div className="text-xs text-purple-600/80 dark:text-purple-400/80">Created programs</div>
               </div>
-              <div className="bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/20 border border-red-200 dark:border-red-800 rounded-lg p-3 text-center">
-                <div className="w-6 h-6 mx-auto mb-1 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
-                  <Clock className="h-3 w-3 text-red-600 dark:text-red-400" />
-                </div>
-                <div className="text-lg font-bold text-red-600 dark:text-red-400">{stats?.upcomingWorkouts || 0}</div>
-                <div className="text-xs text-red-600/80 dark:text-red-400/80">Scheduled this week</div>
-              </div>
+
+
             </div>
           </div>
         </CardContent>
