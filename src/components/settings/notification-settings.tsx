@@ -251,16 +251,7 @@ export function NotificationSettings({ profile }: NotificationSettingsProps) {
         <H6 >Notification Settings</H6>
         <div className="text-sm text-gray-600 dark:text-gray-400 space-y-2">
           <p>
-          {profile.role !== 'user'? <>• <strong>Workout Completed:</strong> {getNotificationDescription(profile.role, 'workout_completed_email')}</> : '' }
-          </p>
-          <p>
-            • <strong>Program Assigned:</strong> {profile.role === 'user' 
-              ? 'Get notified when a new program is assigned to you'
-              : 'Get notified when you assign programs to clients'
-            }
-          </p>
-          <p>
-            {profile.role !== "user" ? <>• <strong>Weekly Progress:</strong> {getNotificationDescription(profile.role, 'weekly_progress_email')}</> : ''}
+            • <strong>Program Assigned:</strong> {getNotificationDescription(profile.role, 'program_assigned_email')}
           </p>
         </div>
         
