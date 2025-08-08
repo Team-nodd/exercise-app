@@ -14,7 +14,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { toast } from "sonner"
 import { ArrowLeft, Save, Trash2 } from "lucide-react"
 import type { Exercise } from "@/types"
-import { ImageUpload } from "@/components/ui/image-upload"
 
 interface EditExerciseFormProps {
   exerciseId: string
@@ -97,7 +96,7 @@ export function EditExerciseForm({ exerciseId }: EditExerciseFormProps) {
     }
 
     fetchExercise()
-  }, [exerciseId, supabase, toast])
+  }, [exerciseId, supabase])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

@@ -74,7 +74,6 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
   const [workoutComments, setWorkoutComments] = useState<any[]>([])
   const [exerciseComments, setExerciseComments] = useState<Record<number, any>>({})
   const [newCoachWorkoutComment, setNewCoachWorkoutComment] = useState("")
-  const [newCoachExerciseComments, setNewCoachExerciseComments] = useState<Record<number, string>>({})
   const [commentLoading, setCommentLoading] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
@@ -250,10 +249,10 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
             const next = [...prev, data]
             next.sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
             return next
-          })
+          })  
         }
       } catch (e) {
-        // ignore
+        console.error(e)
       }
     })()
 
@@ -401,73 +400,6 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
     }
   }
 
-  // Add coach comment for exercise
-  const handleAddCoachExerciseComment = async (workoutExerciseId: number) => {
-    const text = newCoachExerciseComments[workoutExerciseId] || ""
-    if (!text.trim()) return
-
-    setCommentLoading(true)
-    try {
-      const { data: userData, error: userError } = await supabase.auth.getUser()
-      if (userError || !userData.user) {
-        toast.error("You must be logged in as coach to comment.")
-        setCommentLoading(false)
-        return
-      }
-
-      const { data: commentData, error: commentError } = await supabase.from("comments").insert({
-        user_id: userData.user.id,
-        workout_id: workout.id,
-        workout_exercise_id: workoutExerciseId,
-        comment_text: text.trim(),
-      }).select().single()
-
-      if (commentError) throw commentError
-
-      // Use notification service to create notification
-      try {
-        await notificationService.notifyUserWorkoutComment(
-          workout.id,
-          userData.user.id, // Coach's ID
-          program.user.id, // Client's ID
-          text.trim()
-        )
-        console.log('✅ User notification sent successfully')
-      } catch (notificationError) {
-        console.error('❌ Error sending notification:', notificationError)
-        // Don't show error to user, just log it
-      }
-
-      setNewCoachExerciseComments((prev) => ({ ...prev, [workoutExerciseId]: "" }))
-      await fetchComments() // Re-fetch comments to show the new one
-      toast.success("Comment added successfully!")
-    } catch (err) {
-      console.error("Failed to add comment:", err)
-      toast.error("Failed to add comment")
-    } finally {
-      setCommentLoading(false)
-    }
-  }
-
-  const handleDeleteComment = async (commentId: number) => {
-    try {
-      const { error } = await supabase
-        .from("comments")
-        .delete()
-        .eq("id", commentId)
-
-      if (error) {
-        toast.error("Failed to delete comment")
-        return
-      }
-
-      await fetchComments() // Re-fetch comments
-      toast.success("Comment deleted successfully")
-    } catch (error) {
-      console.error("Error deleting comment:", error)
-      toast.error("Failed to delete comment")
-    }
-  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

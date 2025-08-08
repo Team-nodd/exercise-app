@@ -3,7 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Users, Calendar, Dumbbell, TrendingUp, Plus, RefreshCw, Target, ArrowRight, Zap, Activity, Clock } from 'lucide-react'
+import { Users, Calendar, Dumbbell, TrendingUp, Plus, RefreshCw, Target, ArrowRight, Zap, Activity } from 'lucide-react'
 import type { User } from "@/types"
 import { useDashboardData } from "@/lib/hooks/use-dashboard-data"
 

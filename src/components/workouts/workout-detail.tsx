@@ -9,10 +9,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { CheckCircle, Circle, Dumbbell, Target, Weight, Timer, Save, AlertCircle, ArrowLeft, MessageSquare, Send, User, Calendar, Zap, TrendingUp, Activity, ChevronDown, Loader2, RefreshCw, CheckCircle2, Clock, Repeat, BookOpen, Trash2, Mail } from 'lucide-react';
+import { CheckCircle, Circle, Dumbbell,  AlertCircle, ArrowLeft, MessageSquare, Send,  Calendar, Zap,  Activity, ChevronDown, Loader2, RefreshCw, CheckCircle2, Clock,  Mail, Save, Timer} from 'lucide-react';
 import type { WorkoutWithDetails, WorkoutExerciseWithDetails, Comment } from '@/types';
 import { notificationService } from '@/lib/notifications/notification-service';
-import Link from 'next/link';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
@@ -27,6 +26,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import Image from 'next/image';
 
 interface WorkoutDetailProps {
   workoutId: string;
@@ -654,25 +654,6 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
     }
   };
 
-  const handleDeleteComment = async (commentId: number) => {
-    try {
-      const { error } = await supabase
-        .from('comments')
-        .delete()
-        .eq('id', commentId);
-
-      if (error) {
-        toast('Failed to delete comment');
-        return;
-      }
-
-      setWorkoutComments(prev => prev.filter(c => c.id !== commentId));
-      toast('Comment deleted successfully');
-    } catch (error) {
-      console.error('Error deleting comment:', error);
-      toast('Failed to delete comment');
-    }
-  };
 
   const toggleExpanded = (exerciseId: string) => {
     setExpandedExercises(prev => ({
@@ -751,26 +732,6 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
     }));
   };
 
-  const formatDate = (dateString: string | null) => {
-    if (!dateString) return 'No date set';
-    const date = new Date(dateString);
-    const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-
-    if (date.toDateString() === today.toDateString()) {
-      return 'Today';
-    } else if (date.toDateString() === tomorrow.toDateString()) {
-      return 'Tomorrow';
-    } else {
-      return date.toLocaleDateString('en-US', {
-        weekday: 'long',
-        month: 'long',
-        day: 'numeric',
-        year: 'numeric',
-      });
-    }
-  };
 
   const getWorkoutIcon = (type: string, completed: boolean) => {
     const IconComponent = type === 'gym' ? Dumbbell : Activity;
@@ -1043,7 +1004,9 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
                       {/* Exercise Image/Icon */}
                       <div className="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100 dark:bg-gray-800">
                         {exercise.exercise.image_url ? (
-                          <img
+                          <Image
+                            width={48}
+                            height={48}
                             src={exercise.exercise.image_url || '/placeholder.svg'}
                             alt={exercise.exercise.name}
                             className="w-full h-full object-cover"
@@ -1351,16 +1314,6 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
                       <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed flex-1">
                         {comment.comment_text}
                       </p>
-                      {/* {profile?.id === comment.user?.id && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeleteComment(comment.id)}
-                          className="text-red-500 hover:text-red-600 dark:hover:text-red-400 ml-2"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      )} */}
                     </div>
                   </div>
                 </div>

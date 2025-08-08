@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -9,7 +9,8 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Search, Dumbbell, Plus, RefreshCw, Image as ImageIcon } from "lucide-react"
 import type { Exercise, CardioExercise } from "@/types"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tabs,  TabsList, TabsTrigger } from "@/components/ui/tabs"
+import Image from "next/image"
 
 export function ExerciseLibrary() {
   const [activeTab, setActiveTab] = useState<"gym" | "cardio">("gym")
@@ -288,7 +289,9 @@ export function ExerciseLibrary() {
                   <CardTitle className="flex items-center gap-2 text-lg sm:text-xl font-semibold">
                     {exercise.image_url ? (
                       <div className="w-8 h-8 rounded-md overflow-hidden flex-shrink-0">
-                        <img
+                        <Image
+                          width={32}
+                          height={32}
                           src={exercise.image_url}
                           alt={exercise.name}
                           className="w-full h-full object-cover"
@@ -321,7 +324,9 @@ export function ExerciseLibrary() {
                 <CardContent>
                   {exercise.image_url && (
                     <div className="mb-4 rounded-lg overflow-hidden">
-                      <img
+                      <Image
+                        width={32}
+                        height={32}
                         src={exercise.image_url}
                         alt={exercise.name}
                         className="w-full h-48 object-cover"

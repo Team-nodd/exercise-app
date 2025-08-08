@@ -6,7 +6,7 @@ create table if not exists public.cardio_exercises (
   duration_minutes integer null,
   target_tss integer null,
   target_ftp integer null,
-  created_by uuid references public.users(id) on delete set null,
+  created_by uuid not null references public.users(id) on delete cascade,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

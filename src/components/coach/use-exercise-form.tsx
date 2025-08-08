@@ -14,6 +14,7 @@ import { toast } from "sonner"
 import { ArrowLeft, Loader2, Dumbbell } from "lucide-react"
 import Link from "next/link"
 import type { Exercise, ProgramWithDetails, WorkoutWithDetails } from "@/types"
+import Image from "next/image"
 
 interface UseExerciseFormProps {
   exercise: Exercise
@@ -197,7 +198,9 @@ export function UseExerciseForm({ exercise, coachId }: UseExerciseFormProps) {
             <CardTitle className="flex items-center gap-2">
               {exercise.image_url ? (
                 <div className="w-8 h-8 rounded-md overflow-hidden flex-shrink-0">
-                  <img
+                  <Image
+                    width={32}
+                    height={32}
                     src={exercise.image_url}
                     alt={exercise.name}
                     className="w-full h-full object-cover"
@@ -220,7 +223,9 @@ export function UseExerciseForm({ exercise, coachId }: UseExerciseFormProps) {
           <CardContent>
             {exercise.image_url && (
               <div className="mb-4 rounded-lg overflow-hidden">
-                <img
+                <Image
+                  width={32}
+                  height={32}
                   src={exercise.image_url}
                   alt={exercise.name}
                   className="w-full h-48 object-cover"

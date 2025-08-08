@@ -1,30 +1,22 @@
-# FitTracker Pro - Exercise Program Management
+# FitTracker Pro – Exercise & Coaching Platform
 
-A professional exercise program management system for coaches and athletes, built with Next.js, Supabase, and TypeScript.
+A production-ready coaching and athlete platform built with Next.js, Supabase, and TypeScript.
 
-## 🚀 Features
+## 🚀 Highlights
 
-### For Coaches
+- Coach and Athlete roles with secure Supabase Auth (RLS enabled)
+- Programs with calendar view (drag/drop via shared calendar)
+- Workouts (Gym and Cardio) with immediate UI updates on duplication/reschedule
+- Exercise Library with tabs: Gym Exercises and Cardio Templates
+- Cardio Templates (name, intensity_type, duration_minutes, target_tss, target_ftp)
+- Optimistic “Send Workout Email” from workout detail with success/failure toasts
+- Coach notified when an athlete successfully sends a workout email
 
-- **Program Management**: Create and manage personalized exercise programs for athletes
-- **Exercise Library**: Build and maintain a comprehensive exercise database
-- **Athlete Tracking**: Monitor athlete progress and workout completion
-- **Dashboard**: Overview of all programs and athlete performance
+## 🛠 Tech Stack
 
-### For Athletes
-
-- **Workout Tracking**: View and complete assigned workouts
-- **Progress Monitoring**: Track performance and workout history
-- **Program Overview**: See current and upcoming training programs
-- **Personal Dashboard**: Monitor personal fitness journey
-
-## 🛠️ Tech Stack
-
-- **Frontend**: Next.js 15, React 19, TypeScript
-- **Styling**: Tailwind CSS 4, shadcn/ui components
-- **Backend**: Supabase (PostgreSQL, Auth, Real-time)
-- **Authentication**: Supabase Auth with role-based access
-- **Database**: PostgreSQL with Row Level Security (RLS)
+- Next.js 15, React 19, TypeScript
+- Tailwind CSS, shadcn/ui
+- Supabase (PostgreSQL, Auth, RLS)
 
 ## 📋 Prerequisites
 
@@ -34,94 +26,57 @@ A professional exercise program management system for coaches and athletes, buil
 
 ## 🚀 Getting Started
 
-### 1. Clone the Repository
+### 1. Clone
 
 ```bash
 git clone <repository-url>
 cd exercise-app
 ```
 
-### 2. Install Dependencies
+### 2. Install
 
 ```bash
 npm install
 ```
 
-### 3. Set Up Environment Variables
+### 3. Environment
 
-Create a `.env.local` file in the root directory:
-
-```bash
-# Supabase Configuration
-NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
-```
-
-**To get your Supabase credentials:**
-
-1. Go to your [Supabase Dashboard](https://supabase.com/dashboard)
-2. Select your project
-3. Navigate to **Settings → API**
-4. Copy the **Project URL** and **anon/public key**
-
-### 4. Set Up Database
-
-#### Option A: Run SQL Scripts (Recommended)
-
-1. Go to your Supabase Dashboard → **SQL Editor**
-2. Run the following scripts in order:
-
-```sql
--- 1. Create database schema
--- Run the schema from src/types/database.ts
-
--- 2. Set up RLS policies
--- Run supabase-rls-policies.sql
-
--- 3. Create database trigger for user profiles
--- Run supabase-trigger.sql
-
--- 4. Create test coach account (optional)
--- Run create-coach-user.sql
-```
-
-#### Option B: Use Supabase CLI
+Create `.env.local`:
 
 ```bash
-# Install Supabase CLI
-npm install -g supabase
-
-# Initialize and push schema
-supabase init
-supabase db push
+NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=YOUR_ANON_KEY
 ```
 
-### 5. Configure Authentication
+Find values in Supabase → Settings → API.
 
-1. Go to **Authentication → Settings** in your Supabase Dashboard
-2. Configure your authentication providers
-3. For development, you can disable email confirmations temporarily
+### 4. Database
 
-### 6. Start Development Server
+Migrations live in `supabase/migrations/` and are idempotent.
+
+```bash
+# Link once
+npx supabase link --project-ref YOUR_PROJECT_REF
+
+# Push migrations
+npx supabase db push
+
+# Generate local TS types from live schema
+npx supabase gen types typescript --project-id YOUR_PROJECT_REF > src/types/database.ts
+```
+
+### 5. Start Development Server
 
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) to view the application.
+Open http://localhost:3000.
 
-## 👥 User Roles
+## 👥 Roles
 
-### Coach Account
-
-- **Email**: `coach@test.com`
-- **Password**: `password123`
-- **Access**: Coach dashboard, program management, exercise library
-
-### Athlete Account
-
-- Register through the signup form
-- Access: Personal dashboard, workout tracking, progress monitoring
+- Coach: manages programs, workouts, exercises, cardio templates
+- Athlete: views programs, completes workouts, sends summaries
 
 ## 🏗️ Project Structure
 
@@ -146,157 +101,51 @@ src/
 └── styles/              # Global styles
 ```
 
-## 🔧 Configuration
+## 🔧 Key Features
 
-### Database Schema
+- Users: profiles with role
+- Exercises: library with instructions and images
+- Cardio Templates: reusable cardio definitions
+- Programs: owned by a coach, assigned to an athlete
+- Workouts: gym or cardio; gym has nested workout_exercises
+- Notifications: in-app notifications with RLS
 
-The application uses the following main tables:
+## 🧪 Testing (quick manual)
 
-- **users**: User profiles with roles (coach/athlete)
-- **exercises**: Exercise library with instructions
-- **programs**: Training programs created by coaches
-- **workouts**: Individual workout sessions
-- **workout_exercises**: Exercise details within workouts
-
-### Authentication
-
-- **Supabase Auth**: Handles user authentication
-- **Role-based Access**: Coaches and athletes have different permissions
-- **Row Level Security**: Database-level security policies
-
-## 🚀 Deployment
-
-### Vercel (Recommended)
-
-1. Push your code to GitHub
-2. Connect your repository to Vercel
-3. Add environment variables in Vercel dashboard
-4. Deploy
-
-### Other Platforms
-
-The application can be deployed to any platform that supports Next.js:
-
-- Netlify
-- Railway
-- DigitalOcean App Platform
-- AWS Amplify
-
-## 🧪 Testing
-
-### Manual Testing
-
-1. **Test Coach Login**:
-
-   - Use credentials: `coach@test.com` / `password123`
-   - Should redirect to `/coach/dashboard`
-
-2. **Test Registration**:
-
-   - Create a new athlete account
-   - Verify email confirmation (if enabled)
-
-3. **Test Authentication Flow**:
-   - Use the debug components on the login page
-   - Check browser console for detailed logs
-
-### Debug Components
-
-The application includes debug components for troubleshooting:
-
-- **Supabase Test**: Tests database connectivity
-- **Auth Test**: Tests authentication flow
-- **Connection Test**: Verifies environment variables
+- Login as coach → create program → create workouts → verify calendar
+- Use Exercise in Program (Gym) → choose program and workout → verify items
+- Use Cardio in Program → choose program and workout → apply template
+- Workout Detail → Send Email → check optimistic toast and coach notification
 
 ## 🔒 Security
 
-- **Row Level Security (RLS)**: Database-level access control
-- **Environment Variables**: Sensitive data stored securely
-- **Input Validation**: Client and server-side validation
-- **Authentication**: Secure user authentication with Supabase
+- Supabase RLS on all user data
+- Notifications and cardio templates have scoped policies
 
-## 📝 API Documentation
+## 🧩 Supabase Client
 
-### Supabase Client
-
-The application uses Supabase for:
-
-- **Authentication**: User signup, login, session management
-- **Database**: CRUD operations on all tables
-- **Real-time**: Live updates (future feature)
-
-### Key Functions
-
-```typescript
-// Create Supabase client
-import { createClient } from '@/lib/supabase/client'
-const supabase = createClient()
-
-// Authentication
-await supabase.auth.signUp({ email, password })
-await supabase.auth.signInWithPassword({ email, password })
-
-// Database operations
-await supabase.from('users').select('*')
-await supabase.from('programs').insert({ ... })
-```
+- Auth: signup, login, session
+- DB: CRUD via `supabase.from(...).select/insert/update/delete`
 
 ## 🐛 Troubleshooting
 
-### Common Issues
-
-1. **"Email not confirmed" error**:
-
-   - Disable email confirmations in Supabase Auth settings
-   - Or manually confirm the user in Supabase dashboard
-
-2. **"Missing environment variables"**:
-
-   - Ensure `.env.local` file exists with correct Supabase credentials
-   - Restart development server after adding environment variables
-
-3. **"Connection failed"**:
-
-   - Check Supabase project status
-   - Verify URL and API key are correct
-   - Check network connectivity
-
-4. **"RLS policy violation"**:
-   - Run the RLS policies script in Supabase SQL Editor
-   - Ensure user has proper permissions
-
-### Debug Steps
-
-1. Check browser console for error messages
-2. Use debug components on login page
-3. Verify Supabase project configuration
-4. Check environment variables
-5. Test database connectivity
+- Ensure `.env.local` Supabase vars are set and correct
+- Run `npx supabase db push` if DB schema changes
+- Re-generate `src/types/database.ts` after schema changes
 
 ## 🤝 Contributing
 
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+4. Submit a pull request
 
 ## 📄 License
 
-This project is licensed under the MIT License.
+MIT
 
 ## 🆘 Support
 
-For support and questions:
-
-- Check the troubleshooting section
-- Review Supabase documentation
-- Open an issue on GitHub
-
-## 🔄 Updates
-
-Stay updated with the latest changes:
-
-- Follow the repository for updates
-- Check the changelog
-- Review breaking changes in major versions
+- Check troubleshooting above
+- Supabase docs
+- Open an issue

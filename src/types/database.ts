@@ -80,7 +80,7 @@ export interface Database {
           duration_minutes: number | null
           target_tss: number | null
           target_ftp: number | null
-          created_by: string | null
+          created_by: string
           created_at: string
           updated_at: string
         }
@@ -91,7 +91,7 @@ export interface Database {
           duration_minutes?: number | null
           target_tss?: number | null
           target_ftp?: number | null
-          created_by?: string | null
+          created_by: string
           created_at?: string
           updated_at?: string
         }

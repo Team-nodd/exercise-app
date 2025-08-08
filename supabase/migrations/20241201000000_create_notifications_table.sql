@@ -21,14 +21,35 @@ CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created
 ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
 
 -- Create RLS policies
-CREATE POLICY "Users can view their own notifications" ON notifications
-  FOR SELECT USING (auth.uid() = user_id);
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'notifications' AND policyname = 'Users can view their own notifications'
+  ) THEN
+    CREATE POLICY "Users can view their own notifications" ON notifications
+      FOR SELECT USING (auth.uid() = user_id);
+  END IF;
+END $$;
 
-CREATE POLICY "Users can insert their own notifications" ON notifications
-  FOR INSERT WITH CHECK (auth.uid() = user_id);
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'notifications' AND policyname = 'Users can insert their own notifications'
+  ) THEN
+    CREATE POLICY "Users can insert their own notifications" ON notifications
+      FOR INSERT WITH CHECK (auth.uid() = user_id);
+  END IF;
+END $$;
 
-CREATE POLICY "Users can update their own notifications" ON notifications
-  FOR UPDATE USING (auth.uid() = user_id);
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'notifications' AND policyname = 'Users can update their own notifications'
+  ) THEN
+    CREATE POLICY "Users can update their own notifications" ON notifications
+      FOR UPDATE USING (auth.uid() = user_id);
+  END IF;
+END $$;
 
 -- Create function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_notifications_updated_at()
