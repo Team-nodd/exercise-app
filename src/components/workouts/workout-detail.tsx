@@ -65,7 +65,6 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
   const [emailAddress, setEmailAddress] = useState('');
   const [emailNote, setEmailNote] = useState('');
-  const [emailSending, setEmailSending] = useState(false);
   const [coachEmail, setCoachEmail] = useState<string>('');
 
   // State for exercise expansion and editing
@@ -487,45 +486,58 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
     setEmailDialogOpen(true);
   };
 
-  // Handle sending email
-  const handleSendEmail = async () => {
+  // Handle sending email (optimistic, non-blocking)
+  const handleSendEmail = () => {
     if (!emailAddress.trim()) {
       toast('Please enter an email address');
       return;
     }
 
-    setEmailSending(true);
-    try {
-      const response = await fetch('/api/send-workout-email', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          to: emailAddress.trim(),
-          workoutName: workout?.name,
-          programName: workout?.program?.name,
-          completedAt: new Date().toISOString(),
-          userName: profile?.name || 'User',
-          note: emailNote.trim(),
-          workoutType: workout?.workout_type,
-        }),
+    // Capture data before clearing UI
+    const to = emailAddress.trim();
+    const payload = {
+      to,
+      workoutName: workout?.name,
+      programName: workout?.program?.name,
+      completedAt: new Date().toISOString(),
+      userName: profile?.name || 'User',
+      note: emailNote.trim(),
+      workoutType: workout?.workout_type,
+    };
+
+    // Optimistic close and clear so user can continue
+    setEmailDialogOpen(false);
+    setEmailAddress('');
+    setEmailNote('');
+
+    // Fire in background; notify on completion
+    fetch('/api/send-workout-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error('Failed to send email');
+        toast('Email sent successfully!');
+
+        // Notify coach only if a client sent the email and a coach exists
+        if (workout?.program?.coach_id && profile?.role === 'user') {
+          try {
+            await notificationService.notifyCoachWorkoutEmailSent(
+              Number(workoutId),
+              userId,
+              workout.program.coach_id
+            );
+          } catch (e) {
+            // Log only; don’t block UX
+            console.error('Error notifying coach about email:', e);
+          }
+        }
+      })
+      .catch((err) => {
+        console.error('Error sending email:', err);
+        toast('Failed to send email. Please try again.');
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to send email');
-      }
-
-      toast('Email sent successfully!');
-      setEmailDialogOpen(false);
-      setEmailAddress('');
-      setEmailNote('');
-    } catch (error) {
-      console.error('Error sending email:', error);
-      toast('Failed to send email. Please try again.');
-    } finally {
-      setEmailSending(false);
-    }
   };
 
   // Add new workout comment
@@ -1399,25 +1411,15 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
             <Button
               variant="outline"
               onClick={() => setEmailDialogOpen(false)}
-              disabled={emailSending}
             >
               Cancel
             </Button>
             <Button
               onClick={handleSendEmail}
-              disabled={emailSending || !emailAddress.trim()}
+              disabled={!emailAddress.trim()}
             >
-              {emailSending ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Sending...
-                </>
-              ) : (
-                <>
-                  <Send className="h-4 w-4 mr-2" />
-                  Send Email
-                </>
-              )}
+              <Send className="h-4 w-4 mr-2" />
+              Send Email
             </Button>
           </DialogFooter>
         </DialogContent>

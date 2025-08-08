@@ -36,6 +36,75 @@ export class NotificationService {
     return NotificationService.instance
   }
 
+  // Notify coach when client sends a workout email summary successfully
+  async notifyCoachWorkoutEmailSent(
+    workoutId: number,
+    userId: string,
+    coachId: string
+  ): Promise<void> {
+    try {
+      // Get workout details with program_id
+      const { data: workout, error: workoutError } = await this.supabase
+        .from('workouts')
+        .select('name, program_id')
+        .eq('id', workoutId)
+        .single()
+
+      if (workoutError || !workout) {
+        console.error('Error fetching workout details:', workoutError)
+        return
+      }
+
+      // Get user details
+      const { data: user, error: userError } = await this.supabase
+        .from('users')
+        .select('name')
+        .eq('id', userId)
+        .single()
+
+      if (userError || !user) {
+        console.error('Error fetching user details:', userError)
+        return
+      }
+
+      const relatedId = `workout:${workoutId}:program:${workout.program_id}`
+
+      // Use the API endpoint to create the notification
+      const response = await fetch('/api/notifications/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          recipientId: coachId,
+          title: `Workout Email Sent`,
+          message: `${user.name} sent a workout summary email for "${workout.name}".`,
+          type: 'workout_email_sent',
+          relatedId,
+        }),
+      })
+
+      if (!response.ok) {
+        let details: unknown = null
+        try {
+          details = await response.json()
+        } catch {
+          try {
+            details = await response.text()
+          } catch {
+            details = { error: 'Unknown error' }
+          }
+        }
+        console.error('Error creating coach email-sent notification:', details)
+      } else {
+        console.log('✅ Coach email-sent notification created successfully')
+      }
+    } catch (error) {
+      console.error('Error notifying coach about email sent:', error)
+    }
+  }
+
   async sendWorkoutCompletedNotifications(workoutId: number): Promise<void> {
     try {
       console.log('🔔 NOTIFICATION SERVICE: Processing workout completion notifications for workout:', workoutId)
