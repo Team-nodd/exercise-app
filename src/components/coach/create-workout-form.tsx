@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -13,8 +13,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
 import { Loader2, Plus, Trash2, ArrowLeft } from "lucide-react"
-import Link from "next/link"
-import type { ProgramWithDetails, Exercise } from "@/types"
+// import Link from "next/link"
+import type { ProgramWithDetails, Exercise, CardioExercise } from "@/types"
 import { AppLink } from "../ui/app-link"
 import { useGlobalLoading } from "../providers/loading-provider"
 
@@ -51,8 +51,11 @@ export function CreateWorkoutForm({ program }: CreateWorkoutFormProps) {
   // const [loading, setLoading] = useState(false)
   const {loading, setLoading} = useGlobalLoading()
   const [loadingExercises, setLoadingExercises] = useState(true)
+  const [cardioTemplates, setCardioTemplates] = useState<CardioExercise[]>([])
+  const [selectedCardioId, setSelectedCardioId] = useState<string>("")
 
   const router = useRouter()
+  const searchParams = useSearchParams()
   // const { toast } = useToast()
   const supabase = createClient()
 
@@ -76,6 +79,40 @@ export function CreateWorkoutForm({ program }: CreateWorkoutFormProps) {
 
     fetchExercises()
   }, [supabase])
+
+  // Load cardio templates authored by the program's coach
+  useEffect(() => {
+    const fetchCardio = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("cardio_exercises")
+          .select("*")
+          .eq("created_by", program.coach_id)
+          .order("created_at", { ascending: false })
+        if (!error) setCardioTemplates(data as CardioExercise[])
+      } catch {
+        // ignore
+      }
+    }
+    fetchCardio()
+  }, [program.coach_id, supabase])
+
+  // Prefill from cardioId in query params
+  useEffect(() => {
+    const cardioId = searchParams?.get("cardioId")
+    if (cardioId && cardioTemplates.length > 0) {
+      setWorkoutType("cardio")
+      setSelectedCardioId(cardioId)
+      const t = cardioTemplates.find((ct) => String(ct.id) === cardioId)
+      if (t) {
+        setName(t.name)
+        setIntensityType(t.intensity_type || "")
+        setDurationMinutes(t.duration_minutes ? String(t.duration_minutes) : "")
+        setTargetTss(t.target_tss ? String(t.target_tss) : "")
+        setTargetFtp(t.target_ftp ? String(t.target_ftp) : "")
+      }
+    }
+  }, [searchParams, cardioTemplates])
 
   const addExercise = () => {
     setWorkoutExercises([
@@ -290,6 +327,30 @@ export function CreateWorkoutForm({ program }: CreateWorkoutFormProps) {
               <CardDescription>Specific parameters for cardio workouts</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>Select Cardio Type</Label>
+                <Select value={selectedCardioId} onValueChange={(v) => {
+                  setSelectedCardioId(v)
+                  const t = cardioTemplates.find(ct => String(ct.id) === v)
+                  if (t) {
+                    setIntensityType(t.intensity_type || "")
+                    setDurationMinutes(t.duration_minutes ? String(t.duration_minutes) : "")
+                    setTargetTss(t.target_tss ? String(t.target_tss) : "")
+                    setTargetFtp(t.target_ftp ? String(t.target_ftp) : "")
+                  }
+                }}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose a cardio type (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {cardioTemplates.map(ct => (
+                      <SelectItem key={ct.id} value={String(ct.id)}>
+                        {ct.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="intensityType">Intensity Type</Label>

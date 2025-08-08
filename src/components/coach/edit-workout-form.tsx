@@ -13,8 +13,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
 import { Loader2, Plus, Trash2, ArrowLeft, AlertTriangle, Send, User, Dumbbell, CalendarIcon } from 'lucide-react'
-import Link from "next/link"
-import type { ProgramWithDetails, Exercise, WorkoutWithDetails, WorkoutExerciseWithDetails } from "@/types"
+// import Link from "next/link"
+import type { ProgramWithDetails, Exercise, WorkoutWithDetails, WorkoutExerciseWithDetails, CardioExercise } from "@/types"
 import { Badge } from "@/components/ui/badge"
 import { format } from "date-fns"
 import { Calendar } from "@/components/ui/calendar"
@@ -65,6 +65,8 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
   const [workoutExercises, setWorkoutExercises] = useState<WorkoutExercise[]>(initialExercises)
   const [loading, setLoading] = useState(false)
   const [loadingExercises, setLoadingExercises] = useState(true)
+  const [cardioTemplates, setCardioTemplates] = useState<CardioExercise[]>([])
+  const [selectedCardioId, setSelectedCardioId] = useState<string>("")
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
@@ -101,6 +103,23 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
 
     fetchExercises()
   }, [supabase])
+
+  // Load cardio templates authored by the program's coach
+  useEffect(() => {
+    const fetchCardio = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("cardio_exercises")
+          .select("*")
+          .eq("created_by", program.coach_id)
+          .order("created_at", { ascending: false })
+        if (!error) setCardioTemplates(data as CardioExercise[])
+      } catch {
+        // ignore
+      }
+    }
+    fetchCardio()
+  }, [program.coach_id, supabase])
 
   useEffect(() => {
     const fetchCurrentUser = async () => {
@@ -730,6 +749,30 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>Select Cardio Type</Label>
+                <Select value={selectedCardioId} onValueChange={(v) => {
+                  setSelectedCardioId(v)
+                  const t = cardioTemplates.find(ct => String(ct.id) === v)
+                  if (t) {
+                    setIntensityType(t.intensity_type || "")
+                    setDurationMinutes(t.duration_minutes ? String(t.duration_minutes) : "")
+                    setTargetTss(t.target_tss ? String(t.target_tss) : "")
+                    setTargetFtp(t.target_ftp ? String(t.target_ftp) : "")
+                  }
+                }}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose a cardio type (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {cardioTemplates.map(ct => (
+                      <SelectItem key={ct.id} value={String(ct.id)}>
+                        {ct.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="intensityType">Intensity Type</Label>

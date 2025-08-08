@@ -2,8 +2,8 @@
 
 import type React from "react"
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useEffect, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -11,26 +11,33 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "sonner"
 import { Loader2, ArrowLeft, Plus } from "lucide-react"
-import Link from "next/link"
 import { AppLink } from "../ui/app-link"
 // import { ImageUpload } from "@/components/ui/image-upload"
 
 const CATEGORIES = ["Chest", "Back", "Shoulders", "Arms", "Legs", "Core", "Cardio", "Full Body", "Flexibility"]
 
-const EQUIPMENT_TYPES = [
-  "Barbell",
-  "Dumbbell",
-  "Cable",
-  "Machine",
-  "Bodyweight",
-  "Resistance Band",
-  "Kettlebell",
-  "Medicine Ball",
-  "None",
-  "Other",
-]
+  const EQUIPMENT_TYPES = [
+    "Barbell",
+    "Dumbbell",
+    "Cable",
+    "Machine",
+    "Bodyweight",
+    "Resistance Band",
+    "Kettlebell",
+    "Medicine Ball",
+    "Bike",
+    "Elliptical",
+    "Rowing Machine",
+    "Stair Climber",
+    "Treadmill",
+    "Stationary Bike",
+    "Elliptical",
+    "None",
+    "Other",
+  ]
 
 const MUSCLE_GROUPS = [
   "Chest",
@@ -41,6 +48,10 @@ const MUSCLE_GROUPS = [
   "Forearms",
   "Quadriceps",
   "Hamstrings",
+  "Hip",
+  "Thigh",
+  "Calves",
+  "Neck",
   "Glutes",
   "Calves",
   "Abs",
@@ -49,15 +60,28 @@ const MUSCLE_GROUPS = [
 ]
 
 export function CreateExerciseForm() {
+  const [activeTab, setActiveTab] = useState<"gym" | "cardio">("gym")
   const [name, setName] = useState("")
   const [category, setCategory] = useState("")
   const [equipment, setEquipment] = useState("")
   const [muscleGroups, setMuscleGroups] = useState<string[]>([])
   const [instructions, setInstructions] = useState("")
-  const [imageUrl, setImageUrl] = useState("")
+  const [imageUrl] = useState("")
   const [loading, setLoading] = useState(false)
 
+  // Cardio template fields
+  const [cardioName, setCardioName] = useState("")
+  const [intensityType, setIntensityType] = useState("")
+  const [durationMinutes, setDurationMinutes] = useState("")
+  const [targetTss, setTargetTss] = useState("")
+  const [targetFtp, setTargetFtp] = useState("")
+
   const router = useRouter()
+  const searchParams = useSearchParams()
+  useEffect(() => {
+    const typeParam = searchParams.get("type")
+    if (typeParam === "cardio") setActiveTab("cardio")
+  }, [searchParams])
   const supabase = createClient()
 
   const handleMuscleGroupToggle = (muscleGroup: string) => {
@@ -71,24 +95,45 @@ export function CreateExerciseForm() {
     setLoading(true)
 
     try {
-      const { error } = await supabase.from("exercises").insert({
-        name,
-        category: category || null,
-        equipment: equipment || null,
-        muscle_groups: muscleGroups.length > 0 ? muscleGroups : null,
-        instructions: instructions || null,
-        image_url: imageUrl || null,
-      })
+      if (activeTab === "gym") {
+        const { error } = await supabase.from("exercises").insert({
+          name,
+          category: category || null,
+          equipment: equipment || null,
+          muscle_groups: muscleGroups.length > 0 ? muscleGroups : null,
+          instructions: instructions || null,
+          image_url: imageUrl || null,
+        })
 
-      if (error) {
-        console.error("Error creating exercise:", error)
-        toast("Failed to create exercise",)
-        return
+        if (error) {
+          console.error("Error creating exercise:", error)
+          toast("Failed to create exercise")
+          return
+        }
+
+        toast("Exercise created successfully!")
+        router.push("/coach/exercises")
+      } else {
+        const { data: userData } = await supabase.auth.getUser()
+        const createdBy = userData?.user?.id || null
+        const { error } = await supabase.from("cardio_exercises").insert({
+          name: cardioName.trim(),
+          intensity_type: intensityType || null,
+          duration_minutes: durationMinutes ? Number.parseInt(durationMinutes) : null,
+          target_tss: targetTss ? Number.parseInt(targetTss) : null,
+          target_ftp: targetFtp ? Number.parseInt(targetFtp) : null,
+          created_by: createdBy,
+        })
+
+        if (error) {
+          console.error("Error creating cardio template:", error)
+          toast("Failed to create cardio type")
+          return
+        }
+
+        toast("Cardio type created successfully!")
+        router.push("/coach/exercises")
       }
-
-      toast("Exercise created successfully!")
-
-      router.push("/coach/exercises")
     } catch (error) {
       console.error("Error creating exercise:", error)
       toast("An unexpected error occurred")
@@ -115,11 +160,18 @@ export function CreateExerciseForm() {
 
       <Card className="max-w-2xl">
         <CardHeader>
-          <CardTitle>Exercise Details</CardTitle>
-          <CardDescription>Fill in the exercise information</CardDescription>
+          <CardTitle>Create Exercise</CardTitle>
+          <CardDescription>Create either a Gym or Cardio template</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v === "cardio" ? "cardio" : "gym")} className="space-y-4">
+            <TabsList className="grid grid-cols-2 w-full max-w-xs">
+              <TabsTrigger value="gym">Gym</TabsTrigger>
+              <TabsTrigger value="cardio">Cardio</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="gym" className="space-y-6">
+              <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
               <Label htmlFor="name">Exercise Name *</Label>
               <Input
@@ -201,17 +253,58 @@ export function CreateExerciseForm() {
               />
             </div> */}
 
-            <div className="flex gap-4">
-              <Button type="submit" disabled={loading}>
-                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                <Plus className="mr-2 h-4 w-4" />
-                Create Exercise
-              </Button>
-              <Button type="button" variant="outline" asChild>
-                <AppLink href="/coach/exercises">Cancel</AppLink>
-              </Button>
-            </div>
-          </form>
+              <div className="flex gap-4">
+                <Button type="submit" disabled={loading}>
+                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create Exercise
+                </Button>
+                <Button type="button" variant="outline" asChild>
+                  <AppLink href="/coach/exercises">Cancel</AppLink>
+                </Button>
+              </div>
+              </form>
+            </TabsContent>
+
+            <TabsContent value="cardio" className="space-y-6">
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="space-y-2">
+                  <Label htmlFor="cardioName">Cardio Name *</Label>
+                  <Input id="cardioName" value={cardioName} onChange={(e) => setCardioName(e.target.value)} required />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="intensityType">Intensity Type</Label>
+                    <Input id="intensityType" value={intensityType} onChange={(e) => setIntensityType(e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="durationMinutes">Duration (minutes)</Label>
+                    <Input id="durationMinutes" type="number" value={durationMinutes} onChange={(e) => setDurationMinutes(e.target.value)} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="targetTss">Target TSS</Label>
+                    <Input id="targetTss" type="number" value={targetTss} onChange={(e) => setTargetTss(e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="targetFtp">Target FTP</Label>
+                    <Input id="targetFtp" type="number" value={targetFtp} onChange={(e) => setTargetFtp(e.target.value)} />
+                  </div>
+                </div>
+                <div className="flex gap-4">
+                  <Button type="submit" disabled={loading}>
+                    {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    <Plus className="mr-2 h-4 w-4" />
+                    Create Cardio Type
+                  </Button>
+                  <Button type="button" variant="outline" asChild>
+                    <AppLink href="/coach/exercises">Cancel</AppLink>
+                  </Button>
+                </div>
+              </form>
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
     </div>

@@ -72,6 +72,41 @@ export interface Database {
           updated_at?: string
         }
       }
+      cardio_exercises: {
+        Row: {
+          id: number
+          name: string
+          intensity_type: string | null
+          duration_minutes: number | null
+          target_tss: number | null
+          target_ftp: number | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          name: string
+          intensity_type?: string | null
+          duration_minutes?: number | null
+          target_tss?: number | null
+          target_ftp?: number | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          name?: string
+          intensity_type?: string | null
+          duration_minutes?: number | null
+          target_tss?: number | null
+          target_ftp?: number | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
       programs: {
         Row: {
           id: number

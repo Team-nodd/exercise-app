@@ -15,6 +15,7 @@ export interface Exercise {
 export type Program = Database["public"]["Tables"]["programs"]["Row"]
 export type Workout = Database["public"]["Tables"]["workouts"]["Row"]
 export type WorkoutExercise = Database["public"]["Tables"]["workout_exercises"]["Row"]
+export type CardioExercise = Database["public"]["Tables"]["cardio_exercises"]["Row"]
 
 export interface ProgramWithDetails extends Program {
   coach: User
