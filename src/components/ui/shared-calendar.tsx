@@ -26,6 +26,31 @@ interface SharedCalendarProps {
   isReadOnly?: boolean
 }
 
+// Helper function to format date consistently (avoiding timezone issues)
+const formatDateForComparison = (date: Date): string => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+// Helper function to parse date string to local date
+const parseWorkoutDate = (dateString: string): Date => {
+  // If the date string includes time, extract just the date part
+  const datePart = dateString.split('T')[0]
+  const [year, month, day] = datePart.split('-').map(Number)
+  // Create date in local timezone
+  return new Date(year, month - 1, day)
+}
+
+// Helper function to create date string for database (start of day in UTC)
+const createDateStringForDB = (date: Date): string => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}T00:00:00.000Z`
+}
+
 export function SharedCalendar({ 
   workouts, 
   onWorkoutUpdate, 
@@ -66,13 +91,17 @@ export function SharedCalendar({
     return new Date(date.getFullYear(), date.getMonth(), 1).getDay()
   }
 
+  // FIXED: Better date comparison that avoids timezone issues
   const getWorkoutsForDate = (date: Date) => {
+    const targetDateString = formatDateForComparison(date)
+    
     return workouts.filter(workout => {
       if (!workout.scheduled_date) return false
-      const workoutDate = new Date(workout.scheduled_date)
-      // Use date-only comparison to avoid timezone issues
-      const workoutDateString = workoutDate.toISOString().split('T')[0]
-      const targetDateString = date.toISOString().split('T')[0]
+      
+      // Parse the workout date properly
+      const workoutDate = parseWorkoutDate(workout.scheduled_date)
+      const workoutDateString = formatDateForComparison(workoutDate)
+      
       return workoutDateString === targetDateString
     })
   }
@@ -89,47 +118,46 @@ export function SharedCalendar({
     })
   }
 
-  // Move workout to new date
+  // FIXED: Move workout to new date with proper timezone handling
   const moveWorkout = async (workoutId: number, newDate: Date) => {
-  if (isReadOnly) return false
+    if (isReadOnly) return false
+    
+    try {
+      // Create a proper date string for the database
+      const dateString = createDateStringForDB(newDate)
+      
+      const { error } = await supabase
+        .from("workouts")
+        .update({
+          scheduled_date: dateString,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", workoutId)
 
-  try {
-    // Create a proper date string for the new date (start of day in local timezone)
-    const localDate = new Date(newDate.getFullYear(), newDate.getMonth(), newDate.getDate())
-    const dateString = localDate.toISOString()
+      if (error) {
+        console.error("Error moving workout:", error)
+        toast.error("Failed to move workout")
+        return false
+      }
 
-    const { error } = await supabase
-      .from("workouts")
-      .update({
-        scheduled_date: dateString,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", workoutId)
-
-    if (error) {
+      // Update local state immediately with the new date
+      const updatedWorkouts = workouts.map(w => 
+        w.id === workoutId 
+          ? { ...w, scheduled_date: dateString }
+          : w
+      )
+      
+      // Call the parent update function to trigger re-render
+      onWorkoutUpdate?.(updatedWorkouts)
+      
+      toast.success(`Workout moved to ${newDate.toLocaleDateString()}`)
+      return true
+    } catch (error) {
       console.error("Error moving workout:", error)
-      toast.error("Failed to move workout")
+      toast.error("An unexpected error occurred")
       return false
     }
-
-    // Update local state immediately with the new date
-    const updatedWorkouts = workouts.map(w => 
-      w.id === workoutId 
-        ? { ...w, scheduled_date: dateString }
-        : w
-    )
-    
-    // Call the parent update function to trigger re-render
-    onWorkoutUpdate?.(updatedWorkouts)
-    
-    toast.success(`Workout moved to ${newDate.toLocaleDateString()}`)
-    return true
-  } catch (error) {
-    console.error("Error moving workout:", error)
-    toast.error("An unexpected error occurred")
-    return false
   }
-}
 
   // Duplicate workout
   const duplicateWorkout = async (workoutId: number, targetDate?: Date) => {
@@ -156,7 +184,7 @@ export function SharedCalendar({
         user_id: originalWorkout.user_id,
         name: `${originalWorkout.name} (Copy)`,
         workout_type: originalWorkout.workout_type,
-        scheduled_date: targetDate ? targetDate.toISOString() : null,
+        scheduled_date: targetDate ? createDateStringForDB(targetDate) : null,
         notes: originalWorkout.notes,
         intensity_type: originalWorkout.intensity_type,
         duration_minutes: originalWorkout.duration_minutes,
@@ -248,88 +276,112 @@ export function SharedCalendar({
 
   // Handle day click
   const handleDayClick = (date: Date, e?: React.MouseEvent) => {
-  if (e) {
-    e.stopPropagation()
-  }
-  
-  const workoutsForDay = getWorkoutsForDate(date)
-  
-  if (workoutsForDay.length === 0) return
+    if (e) {
+      e.stopPropagation()
+    }
+    
+    const workoutsForDay = getWorkoutsForDate(date)
+    
+    if (workoutsForDay.length === 0) return
 
-  if (isMobile || workoutsForDay.length > 1) {
-    setSelectedDate(date)
-    setSelectedDayWorkouts(workoutsForDay)
-    setShowWorkoutDialog(true)
-    setExpandedDate(null)
-  } else {
-    if (expandedDate?.toDateString() === date.toDateString()) {
+    if (isMobile || workoutsForDay.length > 1) {
+      setSelectedDate(date)
+      setSelectedDayWorkouts(workoutsForDay)
+      setShowWorkoutDialog(true)
       setExpandedDate(null)
     } else {
-      setExpandedDate(date)
-      setShowWorkoutDialog(false)
+      if (expandedDate?.toDateString() === date.toDateString()) {
+        setExpandedDate(null)
+      } else {
+        setExpandedDate(date)
+        setShowWorkoutDialog(false)
+      }
     }
   }
-}
 
   // Drag and drop handlers
   const handleDragStart = (e: React.DragEvent, workout: WorkoutWithDetails) => {
-  if (isReadOnly) return
-  
-  e.stopPropagation()
-  setDraggedWorkout(workout)
-  e.dataTransfer.effectAllowed = 'move'
-  e.dataTransfer.setData('text/plain', workout.id.toString())
-}
+    if (isReadOnly) return
+    
+    e.stopPropagation()
+    setDraggedWorkout(workout)
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', workout.id.toString())
+  }
 
-const handleDragOver = (e: React.DragEvent, date: Date) => {
-  if (isReadOnly || !draggedWorkout) return
-  
-  e.preventDefault()
-  e.stopPropagation()
-  e.dataTransfer.dropEffect = 'move'
-  setDragOverDate(date)
+  const handleDragOver = (e: React.DragEvent, date: Date) => {
+    if (isReadOnly || !draggedWorkout) return
+    
+    e.preventDefault()
+    e.stopPropagation()
+    e.dataTransfer.dropEffect = 'move'
+    setDragOverDate(date)
 
-  // Edge navigation for coaches - improved logic
-  if (userRole === "coach") {
-    const calendarGrid = e.currentTarget.closest('.grid.grid-cols-7')
-    if (!calendarGrid) return
+    // Edge navigation for coaches - improved logic
+    if (userRole === "coach") {
+      const calendarGrid = e.currentTarget.closest('.grid.grid-cols-7')
+      if (!calendarGrid) return
 
-    const rect = calendarGrid.getBoundingClientRect()
-    const mouseX = e.clientX
-    const edgeThreshold = 80 // Increased threshold for better control
-    const bufferZone = 20 // Buffer zone to prevent accidental triggers
+      const rect = calendarGrid.getBoundingClientRect()
+      const mouseX = e.clientX
+      const edgeThreshold = 80 // Increased threshold for better control
+      const bufferZone = 20 // Buffer zone to prevent accidental triggers
 
-    const nearLeftEdge = mouseX - rect.left < edgeThreshold && mouseX - rect.left > bufferZone
-    const nearRightEdge = rect.right - mouseX < edgeThreshold && rect.right - mouseX > bufferZone
+      const nearLeftEdge = mouseX - rect.left < edgeThreshold && mouseX - rect.left > bufferZone
+      const nearRightEdge = rect.right - mouseX < edgeThreshold && rect.right - mouseX > bufferZone
 
-    if (nearLeftEdge || nearRightEdge) {
-      const direction = nearLeftEdge ? 'prev' : 'next'
+      if (nearLeftEdge || nearRightEdge) {
+        const direction = nearLeftEdge ? 'prev' : 'next'
+        
+        // Only start navigation if direction changed or no navigation is active
+        if (navigationDirection !== direction) {
+          // Clear any existing timeout
+          if (autoNavigateTimeout) {
+            clearTimeout(autoNavigateTimeout)
+          }
+          
+          setNavigationDirection(direction)
+          
+          // Initial delay before first navigation (longer delay)
+          const timeout = setTimeout(() => {
+            navigateMonth(direction)
+            
+            // Set up slower continuous navigation
+            const continuousTimeout = setInterval(() => {
+              navigateMonth(direction)
+            }, 1500) // Slower interval - 1.5 seconds instead of 1.2
+            
+            setAutoNavigateTimeout(continuousTimeout as any)
+          }, 1200) // Longer initial delay - 1.2 seconds instead of 1
 
-      // Only start navigation if direction changed or no navigation is active
-      if (navigationDirection !== direction) {
-        // Clear any existing timeout
+          setAutoNavigateTimeout(timeout)
+        }
+      } else {
+        // Clear navigation when not at edge or in buffer zone
         if (autoNavigateTimeout) {
           clearTimeout(autoNavigateTimeout)
+          setAutoNavigateTimeout(null)
         }
-        
-        setNavigationDirection(direction)
-
-        // Initial delay before first navigation (longer delay)
-        const timeout = setTimeout(() => {
-          navigateMonth(direction)
-          
-          // Set up slower continuous navigation
-          const continuousTimeout = setInterval(() => {
-            navigateMonth(direction)
-          }, 1500) // Slower interval - 1.5 seconds instead of 1.2
-          
-          setAutoNavigateTimeout(continuousTimeout as any)
-        }, 1200) // Longer initial delay - 1.2 seconds instead of 1
-
-        setAutoNavigateTimeout(timeout)
+        setNavigationDirection(null)
       }
-    } else {
-      // Clear navigation when not at edge or in buffer zone
+    }
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    
+    // Get the calendar grid bounds
+    const calendarGrid = e.currentTarget.closest('.grid.grid-cols-7')
+    if (!calendarGrid) return
+    
+    const rect = calendarGrid.getBoundingClientRect()
+    const x = e.clientX
+    const y = e.clientY
+    
+    // Only clear states if we're actually leaving the calendar grid area
+    if (x < rect.left - 10 || x > rect.right + 10 || y < rect.top - 10 || y > rect.bottom + 10) {
+      setDragOverDate(null)
       if (autoNavigateTimeout) {
         clearTimeout(autoNavigateTimeout)
         setAutoNavigateTimeout(null)
@@ -337,428 +389,396 @@ const handleDragOver = (e: React.DragEvent, date: Date) => {
       setNavigationDirection(null)
     }
   }
-}
 
-const handleDragLeave = (e: React.DragEvent) => {
-  e.preventDefault()
-  e.stopPropagation()
-  
-  // Get the calendar grid bounds
-  const calendarGrid = e.currentTarget.closest('.grid.grid-cols-7')
-  if (!calendarGrid) return
-  
-  const rect = calendarGrid.getBoundingClientRect()
-  const x = e.clientX
-  const y = e.clientY
-  
-  // Only clear states if we're actually leaving the calendar grid area
-  if (x < rect.left - 10 || x > rect.right + 10 || y < rect.top - 10 || y > rect.bottom + 10) {
+  const handleDrop = async (e: React.DragEvent, date: Date) => {
+    if (isReadOnly || !draggedWorkout) return
+    
+    e.preventDefault()
+    e.stopPropagation()
+    
     setDragOverDate(null)
+    
+    // Clear any auto-navigation timeouts
     if (autoNavigateTimeout) {
       clearTimeout(autoNavigateTimeout)
       setAutoNavigateTimeout(null)
     }
     setNavigationDirection(null)
-  }
-}
 
-  const handleDrop = async (e: React.DragEvent, date: Date) => {
-  if (isReadOnly || !draggedWorkout) return
-  
-  e.preventDefault()
-  e.stopPropagation()
-  
-  setDragOverDate(null)
-  
-  // Clear any auto-navigation timeouts
-  if (autoNavigateTimeout) {
-    clearTimeout(autoNavigateTimeout)
-    setAutoNavigateTimeout(null)
-  }
-  setNavigationDirection(null)
+    // FIXED: Better date comparison for drop check
+    const originalDate = draggedWorkout.scheduled_date ? parseWorkoutDate(draggedWorkout.scheduled_date) : null
+    const targetDateString = formatDateForComparison(date)
+    const originalDateString = originalDate ? formatDateForComparison(originalDate) : null
+    
+    if (originalDateString === targetDateString) {
+      setDraggedWorkout(null)
+      return
+    }
 
-  // Check if we're dropping on the same date (compare date strings)
-  const originalDate = draggedWorkout.scheduled_date ? new Date(draggedWorkout.scheduled_date) : null
-  const targetDateString = date.toISOString().split('T')[0]
-  const originalDateString = originalDate ? originalDate.toISOString().split('T')[0] : null
-  
-  if (originalDateString === targetDateString) {
+    // If dropping on a different month, navigate to that month
+    if (date.getMonth() !== currentDate.getMonth() || date.getFullYear() !== currentDate.getFullYear()) {
+      setCurrentDate(new Date(date.getFullYear(), date.getMonth(), 1))
+    }
+
+    const success = await moveWorkout(draggedWorkout.id, date)
     setDraggedWorkout(null)
-    return
   }
 
-  // If dropping on a different month, navigate to that month
-  if (date.getMonth() !== currentDate.getMonth() || date.getFullYear() !== currentDate.getFullYear()) {
-    setCurrentDate(new Date(date.getFullYear(), date.getMonth(), 1))
-  }
-
-  const success = await moveWorkout(draggedWorkout.id, date)
-  setDraggedWorkout(null)
-}
-
+  // FIXED: Format date for input field properly
   const formatDateForInput = (dateString: string | null) => {
     if (!dateString) return ""
-    const date = new Date(dateString)
-    return date.toISOString().split("T")[0]
+    const date = parseWorkoutDate(dateString)
+    return formatDateForComparison(date)
   }
 
-const renderCalendar = () => {
-  const daysInMonth = getDaysInMonth(currentDate)
-  const firstDay = getFirstDayOfMonth(currentDate)
-  const today = new Date()
-  const days = []
+  const renderCalendar = () => {
+    const daysInMonth = getDaysInMonth(currentDate)
+    const firstDay = getFirstDayOfMonth(currentDate)
+    const today = new Date()
+    const days = []
 
-  // Calculate previous month info
-  const prevMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1)
-  const daysInPrevMonth = getDaysInMonth(prevMonth)
-  
-  // Calculate next month info
-  const nextMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1)
+    // Calculate previous month info
+    const prevMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1)
+    const daysInPrevMonth = getDaysInMonth(prevMonth)
+    
+    // Calculate next month info
+    const nextMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1)
 
-  // Add days from previous month to fill the first row
-  for (let i = firstDay - 1; i >= 0; i--) {
-    const day = daysInPrevMonth - i
-    const date = new Date(prevMonth.getFullYear(), prevMonth.getMonth(), day)
-    const workoutsForDay = getWorkoutsForDate(date)
-    const isToday = date.toDateString() === today.toDateString()
-    const isDragOver = dragOverDate?.toDateString() === date.toDateString()
-    const isExpanded = expandedDate?.toDateString() === date.toDateString()
+    // Add days from previous month to fill the first row
+    for (let i = firstDay - 1; i >= 0; i--) {
+      const day = daysInPrevMonth - i
+      const date = new Date(prevMonth.getFullYear(), prevMonth.getMonth(), day)
+      const workoutsForDay = getWorkoutsForDate(date)
+      const isToday = formatDateForComparison(date) === formatDateForComparison(today)
+      const isDragOver = dragOverDate && formatDateForComparison(dragOverDate) === formatDateForComparison(date)
+      const isExpanded = expandedDate && formatDateForComparison(expandedDate) === formatDateForComparison(date)
 
-    days.push(
-      <div key={`prev-${day}`} className="relative">
-        <div
-          className={cn(
-            "h-20 sm:h-24 p-1 border border-gray-100 dark:border-gray-800 relative cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors flex flex-col opacity-40",
-            isToday && "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800",
-            isDragOver && "bg-green-100 dark:bg-green-900/20 border-green-300 dark:border-green-700 opacity-100",
-            isExpanded && "bg-blue-100 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700 opacity-100",
-            workoutsForDay.length === 0 && !isDragOver && "cursor-default"
-          )}
-          onClick={(e) => handleDayClick(date, e)}
-          onDragOver={(e) => handleDragOver(e, date)}
-          onDragLeave={handleDragLeave}
-          onDrop={(e) => handleDrop(e, date)}
-        >
-          <div className="text-xs sm:text-sm font-medium text-gray-400 dark:text-gray-600">{day}</div>
-          <div className="flex-1 overflow-y-auto scrollbar-hide mt-1 space-y-0.5">
-            {workoutsForDay.map(workout => (
-              <div
-                key={workout.id}
-                draggable={!isReadOnly}
-                onDragStart={(e) => handleDragStart(e, workout)}
-                className={cn(
-                  "text-xs font-medium px-1 py-0.5 rounded truncate",
-                  !isReadOnly && "cursor-move",
-                  workout.completed
-                    ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                    : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-                  draggedWorkout?.id === workout.id && "opacity-50"
-                )}
-                title={workout.name}
-              >
-                {workout.name}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Expanded view for desktop single workout */}
-        {isExpanded && workoutsForDay.length === 1 && !isMobile && (
-          <div className="absolute top-full left-0 right-0 z-10 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 mt-1">
-            <div className="space-y-2">
-              <h4 className="font-semibold text-sm">{workoutsForDay[0].name}</h4>
-              <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                {workoutsForDay[0].workout_type === "gym" ? (
-                  <Dumbbell className="h-3 w-3" />
-                ) : (
-                  <Clock className="h-3 w-3" />
-                )}
-                <span className="capitalize">{workoutsForDay[0].workout_type}</span>
-                {workoutsForDay[0].duration_minutes && (
-                  <span>• {workoutsForDay[0].duration_minutes}min</span>
-                )}
-              </div>
-              {workoutsForDay[0].notes && (
-                <p className="text-xs text-gray-600 dark:text-gray-400">{workoutsForDay[0].notes}</p>
-              )}
-              <div className="flex gap-2 pt-2">
-                {userRole === "user" && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    href={`/dashboard/workouts/${workoutsForDay[0].id}`}
-                    className="text-xs h-7"
-                  >
-                    Start Workout
-                  </Button>
-                )}
-                {userRole === "coach" && (
-                  <>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setEditingWorkout(workoutsForDay[0])}
-                      className="text-xs h-7"
-                    >
-                      <Edit className="h-3 w-3 mr-1" />
-                      
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => duplicateWorkout(workoutsForDay[0].id, date)}
-                      disabled={duplicatingWorkout === workoutsForDay[0].id}
-                      className="text-xs h-7"
-                    >
-                      {duplicatingWorkout === workoutsForDay[0].id ? (
-                        <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                      ) : (
-                        <Copy className="h-3 w-3 mr-1" />
-                      )}
-
-                    </Button>
-                  </>
-                )}
-              </div>
+      days.push(
+        <div key={`prev-${day}`} className="relative">
+          <div
+            className={cn(
+              "h-20 sm:h-24 p-1 border border-gray-100 dark:border-gray-800 relative cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors flex flex-col opacity-40",
+              isToday && "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800",
+              isDragOver && "bg-green-100 dark:bg-green-900/20 border-green-300 dark:border-green-700 opacity-100",
+              isExpanded && "bg-blue-100 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700 opacity-100",
+              workoutsForDay.length === 0 && !isDragOver && "cursor-default"
+            )}
+            onClick={(e) => handleDayClick(date, e)}
+            onDragOver={(e) => handleDragOver(e, date)}
+            onDragLeave={handleDragLeave}
+            onDrop={(e) => handleDrop(e, date)}
+          >
+            <div className="text-xs sm:text-sm font-medium text-gray-400 dark:text-gray-600">{day}</div>
+            <div className="flex-1 overflow-y-auto scrollbar-hide mt-1 space-y-0.5">
+              {workoutsForDay.map(workout => (
+                <div
+                  key={workout.id}
+                  draggable={!isReadOnly}
+                  onDragStart={(e) => handleDragStart(e, workout)}
+                  className={cn(
+                    "text-xs font-medium px-1 py-0.5 rounded truncate",
+                    !isReadOnly && "cursor-move",
+                    workout.completed
+                      ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                      : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+                    draggedWorkout?.id === workout.id && "opacity-50"
+                  )}
+                  title={workout.name}
+                >
+                  {workout.name}
+                </div>
+              ))}
             </div>
           </div>
-        )}
-      </div>
-    )
-  }
-
-  // Days of the current month
-  for (let day = 1; day <= daysInMonth; day++) {
-    const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day)
-    const workoutsForDay = getWorkoutsForDate(date)
-    const isToday = date.toDateString() === today.toDateString()
-    const isPast = date < today && !isToday
-    const isDragOver = dragOverDate?.toDateString() === date.toDateString()
-    const isExpanded = expandedDate?.toDateString() === date.toDateString()
-
-    days.push(
-      <div key={day} className="relative">
-        <div
-          className={cn(
-            "h-20 sm:h-24 p-1 border border-gray-100 dark:border-gray-800 relative cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors flex flex-col",
-            isToday && "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800",
-            isPast && "text-gray-400 dark:text-gray-600",
-            isDragOver && "bg-green-100 dark:bg-green-900/20 border-green-300 dark:border-green-700",
-            isExpanded && "bg-blue-100 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700",
-            workoutsForDay.length === 0 && !isDragOver && "cursor-default"
-          )}
-          onClick={(e) => handleDayClick(date, e)}
-          onDragOver={(e) => handleDragOver(e, date)}
-          onDragLeave={handleDragLeave}
-          onDrop={(e) => handleDrop(e, date)}
-        >
-          <div className="text-xs sm:text-sm font-medium">{day}</div>
-          <div className="flex-1 overflow-y-auto scrollbar-hide mt-1 space-y-0.5">
-            {workoutsForDay.map(workout => (
-              <div
-                key={workout.id}
-                draggable={!isReadOnly}
-                onDragStart={(e) => handleDragStart(e, workout)}
-                className={cn(
-                  "text-xs font-medium px-1 py-0.5 rounded truncate",
-                  !isReadOnly && "cursor-move",
-                  workout.completed
-                    ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                    : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-                  draggedWorkout?.id === workout.id && "opacity-50"
+          {/* Expanded view for desktop single workout */}
+          {isExpanded && workoutsForDay.length === 1 && !isMobile && (
+            <div className="absolute top-full left-0 right-0 z-10 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 mt-1">
+              <div className="space-y-2">
+                <h4 className="font-semibold text-sm">{workoutsForDay[0].name}</h4>
+                <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                  {workoutsForDay[0].workout_type === "gym" ? (
+                    <Dumbbell className="h-3 w-3" />
+                  ) : (
+                    <Clock className="h-3 w-3" />
+                  )}
+                  <span className="capitalize">{workoutsForDay[0].workout_type}</span>
+                  {workoutsForDay[0].duration_minutes && (
+                    <span>• {workoutsForDay[0].duration_minutes}min</span>
+                  )}
+                </div>
+                {workoutsForDay[0].notes && (
+                  <p className="text-xs text-gray-600 dark:text-gray-400">{workoutsForDay[0].notes}</p>
                 )}
-                title={workout.name}
-              >
-                {workout.name}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Expanded view for desktop single workout */}
-        {isExpanded && workoutsForDay.length === 1 && !isMobile && (
-          <div className="absolute top-full left-0 right-0 z-10 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 mt-1">
-            <div className="space-y-2">
-              <h4 className="font-semibold text-sm">{workoutsForDay[0].name}</h4>
-              <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                {workoutsForDay[0].workout_type === "gym" ? (
-                  <Dumbbell className="h-3 w-3" />
-                ) : (
-                  <Clock className="h-3 w-3" />
-                )}
-                <span className="capitalize">{workoutsForDay[0].workout_type}</span>
-                {workoutsForDay[0].duration_minutes && (
-                  <span>• {workoutsForDay[0].duration_minutes}min</span>
-                )}
-              </div>
-              {workoutsForDay[0].notes && (
-                <p className="text-xs text-gray-600 dark:text-gray-400">{workoutsForDay[0].notes}</p>
-              )}
-              <div className="flex gap-2 pt-2">
-                {userRole === "user" && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    href={`/dashboard/workouts/${workoutsForDay[0].id}`}
-                    className="text-xs h-7"
-                  >
-                    Start Workout
-                  </Button>
-                )}
-                {userRole === "coach" && (
-                  <>
+                <div className="flex gap-2 pt-2">
+                  {userRole === "user" && (
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => setEditingWorkout(workoutsForDay[0])}
+                      href={`/dashboard/workouts/${workoutsForDay[0].id}`}
                       className="text-xs h-7"
                     >
-                      <Edit className="h-3 w-3 mr-1" />
-                      
+                      Start Workout
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => duplicateWorkout(workoutsForDay[0].id, date)}
-                      disabled={duplicatingWorkout === workoutsForDay[0].id}
-                      className="text-xs h-7"
-                    >
-                      {duplicatingWorkout === workoutsForDay[0].id ? (
-                        <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                      ) : (
-                        <Copy className="h-3 w-3 mr-1" />
-                      )}
-                      
-                    </Button>
-                  </>
-                )}
+                  )}
+                  {userRole === "coach" && (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setEditingWorkout(workoutsForDay[0])}
+                        className="text-xs h-7"
+                      >
+                        <Edit className="h-3 w-3 mr-1" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => duplicateWorkout(workoutsForDay[0].id, date)}
+                        disabled={duplicatingWorkout === workoutsForDay[0].id}
+                        className="text-xs h-7"
+                      >
+                        {duplicatingWorkout === workoutsForDay[0].id ? (
+                          <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                        ) : (
+                          <Copy className="h-3 w-3 mr-1" />
+                        )}
+                      </Button>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        )}
-      </div>
-    )
-  }
-
-  // Calculate how many days we need from next month to complete the grid
-  const totalCellsUsed = firstDay + daysInMonth
-  const totalRows = Math.ceil(totalCellsUsed / 7)
-  const totalCells = totalRows * 7
-  const nextMonthDays = totalCells - totalCellsUsed
-
-  // Add days from next month to fill the remaining cells
-  for (let day = 1; day <= nextMonthDays; day++) {
-    const date = new Date(nextMonth.getFullYear(), nextMonth.getMonth(), day)
-    const workoutsForDay = getWorkoutsForDate(date)
-    const isToday = date.toDateString() === today.toDateString()
-    const isDragOver = dragOverDate?.toDateString() === date.toDateString()
-    const isExpanded = expandedDate?.toDateString() === date.toDateString()
-
-    days.push(
-      <div key={`next-${day}`} className="relative">
-        <div
-          className={cn(
-            "h-20 sm:h-24 p-1 border border-gray-100 dark:border-gray-800 relative cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors flex flex-col opacity-40",
-            isToday && "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800",
-            isDragOver && "bg-green-100 dark:bg-green-900/20 border-green-300 dark:border-green-700 opacity-100",
-            isExpanded && "bg-blue-100 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700 opacity-100",
-            workoutsForDay.length === 0 && !isDragOver && "cursor-default"
           )}
-          onClick={(e) => handleDayClick(date, e)}
-          onDragOver={(e) => handleDragOver(e, date)}
-          onDragLeave={handleDragLeave}
-          onDrop={(e) => handleDrop(e, date)}
-        >
-          <div className="text-xs sm:text-sm font-medium text-gray-400 dark:text-gray-600">{day}</div>
-          <div className="flex-1 overflow-y-auto scrollbar-hide mt-1 space-y-0.5">
-            {workoutsForDay.map(workout => (
-              <div
-                key={workout.id}
-                draggable={!isReadOnly}
-                onDragStart={(e) => handleDragStart(e, workout)}
-                className={cn(
-                  "text-xs font-medium px-1 py-0.5 rounded truncate",
-                  !isReadOnly && "cursor-move",
-                  workout.completed
-                    ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                    : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-                  draggedWorkout?.id === workout.id && "opacity-50"
-                )}
-                title={workout.name}
-              >
-                {workout.name}
-              </div>
-            ))}
-          </div>
         </div>
+      )
+    }
 
-        {/* Expanded view for desktop single workout */}
-        {isExpanded && workoutsForDay.length === 1 && !isMobile && (
-          <div className="absolute top-full left-0 right-0 z-10 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 mt-1">
-            <div className="space-y-2">
-              <h4 className="font-semibold text-sm">{workoutsForDay[0].name}</h4>
-              <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                {workoutsForDay[0].workout_type === "gym" ? (
-                  <Dumbbell className="h-3 w-3" />
-                ) : (
-                  <Clock className="h-3 w-3" />
-                )}
-                <span className="capitalize">{workoutsForDay[0].workout_type}</span>
-                {workoutsForDay[0].duration_minutes && (
-                  <span>• {workoutsForDay[0].duration_minutes}min</span>
-                )}
-              </div>
-              {workoutsForDay[0].notes && (
-                <p className="text-xs text-gray-600 dark:text-gray-400">{workoutsForDay[0].notes}</p>
-              )}
-              <div className="flex gap-2 pt-2">
-                {userRole === "user" && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    href={`/dashboard/workouts/${workoutsForDay[0].id}`}
-                    className="text-xs h-7"
-                  >
-                    Start Workout
-                  </Button>
-                )}
-                {userRole === "coach" && (
-                  <>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setEditingWorkout(workoutsForDay[0])}
-                      className="text-xs h-7"
-                    >
-                      <Edit className="h-3 w-3 mr-1" />
-                      
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => duplicateWorkout(workoutsForDay[0].id, date)}
-                      disabled={duplicatingWorkout === workoutsForDay[0].id}
-                      className="text-xs h-7"
-                    >
-                      {duplicatingWorkout === workoutsForDay[0].id ? (
-                        <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                      ) : (
-                        <Copy className="h-3 w-3 mr-1" />
-                      )}
-                      
-                    </Button>
-                  </>
-                )}
-              </div>
+    // Days of the current month
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day)
+      const workoutsForDay = getWorkoutsForDate(date)
+      const isToday = formatDateForComparison(date) === formatDateForComparison(today)
+      const isPast = date < today && !isToday
+      const isDragOver = dragOverDate && formatDateForComparison(dragOverDate) === formatDateForComparison(date)
+      const isExpanded = expandedDate && formatDateForComparison(expandedDate) === formatDateForComparison(date)
+
+      days.push(
+        <div key={day} className="relative">
+          <div
+            className={cn(
+              "h-20 sm:h-24 p-1 border border-gray-100 dark:border-gray-800 relative cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors flex flex-col",
+              isToday && "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800",
+              isPast && "text-gray-400 dark:text-gray-600",
+              isDragOver && "bg-green-100 dark:bg-green-900/20 border-green-300 dark:border-green-700",
+              isExpanded && "bg-blue-100 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700",
+              workoutsForDay.length === 0 && !isDragOver && "cursor-default"
+            )}
+            onClick={(e) => handleDayClick(date, e)}
+            onDragOver={(e) => handleDragOver(e, date)}
+            onDragLeave={handleDragLeave}
+            onDrop={(e) => handleDrop(e, date)}
+          >
+            <div className="text-xs sm:text-sm font-medium">{day}</div>
+            <div className="flex-1 overflow-y-auto scrollbar-hide mt-1 space-y-0.5">
+              {workoutsForDay.map(workout => (
+                <div
+                  key={workout.id}
+                  draggable={!isReadOnly}
+                  onDragStart={(e) => handleDragStart(e, workout)}
+                  className={cn(
+                    "text-xs font-medium px-1 py-0.5 rounded truncate",
+                    !isReadOnly && "cursor-move",
+                    workout.completed
+                      ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                      : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+                    draggedWorkout?.id === workout.id && "opacity-50"
+                  )}
+                  title={workout.name}
+                >
+                  {workout.name}
+                </div>
+              ))}
             </div>
           </div>
-        )}
-      </div>
-    )
-  }
+          {/* Expanded view for desktop single workout */}
+          {isExpanded && workoutsForDay.length === 1 && !isMobile && (
+            <div className="absolute top-full left-0 right-0 z-10 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 mt-1">
+              <div className="space-y-2">
+                <h4 className="font-semibold text-sm">{workoutsForDay[0].name}</h4>
+                <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                  {workoutsForDay[0].workout_type === "gym" ? (
+                    <Dumbbell className="h-3 w-3" />
+                  ) : (
+                    <Clock className="h-3 w-3" />
+                  )}
+                  <span className="capitalize">{workoutsForDay[0].workout_type}</span>
+                  {workoutsForDay[0].duration_minutes && (
+                    <span>• {workoutsForDay[0].duration_minutes}min</span>
+                  )}
+                </div>
+                {workoutsForDay[0].notes && (
+                  <p className="text-xs text-gray-600 dark:text-gray-400">{workoutsForDay[0].notes}</p>
+                )}
+                <div className="flex gap-2 pt-2">
+                  {userRole === "user" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      href={`/dashboard/workouts/${workoutsForDay[0].id}`}
+                      className="text-xs h-7"
+                    >
+                      Start Workout
+                    </Button>
+                  )}
+                  {userRole === "coach" && (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setEditingWorkout(workoutsForDay[0])}
+                        className="text-xs h-7"
+                      >
+                        <Edit className="h-3 w-3 mr-1" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => duplicateWorkout(workoutsForDay[0].id, date)}
+                        disabled={duplicatingWorkout === workoutsForDay[0].id}
+                        className="text-xs h-7"
+                      >
+                        {duplicatingWorkout === workoutsForDay[0].id ? (
+                          <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                        ) : (
+                          <Copy className="h-3 w-3 mr-1" />
+                        )}
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )
+    }
 
-  return days
-}
+    // Calculate how many days we need from next month to complete the grid
+    const totalCellsUsed = firstDay + daysInMonth
+    const totalRows = Math.ceil(totalCellsUsed / 7)
+    const totalCells = totalRows * 7
+    const nextMonthDays = totalCells - totalCellsUsed
+
+    // Add days from next month to fill the remaining cells
+    for (let day = 1; day <= nextMonthDays; day++) {
+      const date = new Date(nextMonth.getFullYear(), nextMonth.getMonth(), day)
+      const workoutsForDay = getWorkoutsForDate(date)
+      const isToday = formatDateForComparison(date) === formatDateForComparison(today)
+      const isDragOver = dragOverDate && formatDateForComparison(dragOverDate) === formatDateForComparison(date)
+      const isExpanded = expandedDate && formatDateForComparison(expandedDate) === formatDateForComparison(date)
+
+      days.push(
+        <div key={`next-${day}`} className="relative">
+          <div
+            className={cn(
+              "h-20 sm:h-24 p-1 border border-gray-100 dark:border-gray-800 relative cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors flex flex-col opacity-40",
+              isToday && "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800",
+              isDragOver && "bg-green-100 dark:bg-green-900/20 border-green-300 dark:border-green-700 opacity-100",
+              isExpanded && "bg-blue-100 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700 opacity-100",
+              workoutsForDay.length === 0 && !isDragOver && "cursor-default"
+            )}
+            onClick={(e) => handleDayClick(date, e)}
+            onDragOver={(e) => handleDragOver(e, date)}
+            onDragLeave={handleDragLeave}
+            onDrop={(e) => handleDrop(e, date)}
+          >
+            <div className="text-xs sm:text-sm font-medium text-gray-400 dark:text-gray-600">{day}</div>
+            <div className="flex-1 overflow-y-auto scrollbar-hide mt-1 space-y-0.5">
+              {workoutsForDay.map(workout => (
+                <div
+                  key={workout.id}
+                  draggable={!isReadOnly}
+                  onDragStart={(e) => handleDragStart(e, workout)}
+                  className={cn(
+                    "text-xs font-medium px-1 py-0.5 rounded truncate",
+                    !isReadOnly && "cursor-move",
+                    workout.completed
+                      ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                      : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+                    draggedWorkout?.id === workout.id && "opacity-50"
+                  )}
+                  title={workout.name}
+                >
+                  {workout.name}
+                </div>
+              ))}
+            </div>
+          </div>
+          {/* Expanded view for desktop single workout */}
+          {isExpanded && workoutsForDay.length === 1 && !isMobile && (
+            <div className="absolute top-full left-0 right-0 z-10 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 mt-1">
+              <div className="space-y-2">
+                <h4 className="font-semibold text-sm">{workoutsForDay[0].name}</h4>
+                <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                  {workoutsForDay[0].workout_type === "gym" ? (
+                    <Dumbbell className="h-3 w-3" />
+                  ) : (
+                    <Clock className="h-3 w-3" />
+                  )}
+                  <span className="capitalize">{workoutsForDay[0].workout_type}</span>
+                  {workoutsForDay[0].duration_minutes && (
+                    <span>• {workoutsForDay[0].duration_minutes}min</span>
+                  )}
+                </div>
+                {workoutsForDay[0].notes && (
+                  <p className="text-xs text-gray-600 dark:text-gray-400">{workoutsForDay[0].notes}</p>
+                )}
+                <div className="flex gap-2 pt-2">
+                  {userRole === "user" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      href={`/dashboard/workouts/${workoutsForDay[0].id}`}
+                      className="text-xs h-7"
+                    >
+                      Start Workout
+                    </Button>
+                  )}
+                  {userRole === "coach" && (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setEditingWorkout(workoutsForDay[0])}
+                        className="text-xs h-7"
+                      >
+                        <Edit className="h-3 w-3 mr-1" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => duplicateWorkout(workoutsForDay[0].id, date)}
+                        disabled={duplicatingWorkout === workoutsForDay[0].id}
+                        className="text-xs h-7"
+                      >
+                        {duplicatingWorkout === workoutsForDay[0].id ? (
+                          <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                        ) : (
+                          <Copy className="h-3 w-3 mr-1" />
+                        )}
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )
+    }
+
+    return days
+  }
 
   useEffect(() => {
     return () => {
@@ -796,14 +816,14 @@ const renderCalendar = () => {
             <div className={cn(
               "absolute left-0 top-0 w-20 h-full border-r-2 z-10 flex items-center justify-center transition-all duration-300 pointer-events-none",
               navigationDirection === 'prev' 
-                ? "bg-blue-300/30 dark:bg-blue-700/30 border-blue-400 dark:border-blue-600" 
+                ? "bg-blue-300/30 dark:bg-blue-700/30 border-blue-400 dark:border-blue-600"
                 : "bg-blue-200/15 dark:bg-blue-800/15 border-blue-300/50 dark:border-blue-700/50"
             )}>
               <div className="flex flex-col items-center gap-1">
                 <ChevronLeft className={cn(
                   "h-6 w-6 transition-all duration-300",
                   navigationDirection === 'prev' 
-                    ? "text-blue-700 dark:text-blue-300 scale-110" 
+                    ? "text-blue-700 dark:text-blue-300 scale-110"
                     : "text-blue-600/60 dark:text-blue-400/60"
                 )} />
                 <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">
@@ -814,14 +834,14 @@ const renderCalendar = () => {
             <div className={cn(
               "absolute right-0 top-0 w-20 h-full border-l-2 z-10 flex items-center justify-center transition-all duration-300 pointer-events-none",
               navigationDirection === 'next' 
-                ? "bg-blue-300/30 dark:bg-blue-700/30 border-blue-400 dark:border-blue-600" 
+                ? "bg-blue-300/30 dark:bg-blue-700/30 border-blue-400 dark:border-blue-600"
                 : "bg-blue-200/15 dark:bg-blue-800/15 border-blue-300/50 dark:border-blue-700/50"
             )}>
               <div className="flex flex-col items-center gap-1">
                 <ChevronRight className={cn(
                   "h-6 w-6 transition-all duration-300",
                   navigationDirection === 'next' 
-                    ? "text-blue-700 dark:text-blue-300 scale-110" 
+                    ? "text-blue-700 dark:text-blue-300 scale-110"
                     : "text-blue-600/60 dark:text-blue-400/60"
                 )} />
                 <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">
@@ -997,7 +1017,7 @@ const renderCalendar = () => {
                   onChange={(e) =>
                     setEditingWorkout({
                       ...editingWorkout,
-                      scheduled_date: e.target.value ? new Date(e.target.value).toISOString() : null,
+                      scheduled_date: e.target.value ? createDateStringForDB(new Date(e.target.value)) : null,
                     })
                   }
                 />
