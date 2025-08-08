@@ -17,6 +17,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { AppLink } from '../ui/app-link';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useRouter } from 'next/navigation';
 import {
   Dialog,
   DialogContent,
@@ -60,6 +62,7 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
   const [commentLoading, setCommentLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<any>(null); // State to store current user profile
+  const [programs, setPrograms] = useState<Array<{ id: number; name: string }>>([]);
 
   // Email dialog states
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
@@ -78,6 +81,7 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
   }>>({});
 
   const supabase = createClient();
+  const router = useRouter();
 
   // Get current user profile
   useEffect(() => {
@@ -113,6 +117,30 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
     
     if (workout) {
       fetchCoachEmail();
+    }
+  }, [workout, supabase]);
+
+  // Fetch all programs for this workout's client to populate program selector
+  useEffect(() => {
+    async function fetchPrograms() {
+      try {
+        if (!workout) return;
+        const clientUserId = workout.program?.user_id || workout.user_id;
+        if (!clientUserId) return;
+        const { data, error } = await supabase
+          .from('programs')
+          .select('id, name')
+          .eq('user_id', clientUserId)
+          .order('created_at', { ascending: false });
+        if (!error && data) {
+          setPrograms(data as Array<{ id: number; name: string }>);
+        }
+      } catch {
+        // ignore
+      }
+    }
+    if (workout) {
+      fetchPrograms();
     }
   }, [workout, supabase]);
 
@@ -856,9 +884,46 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
                 <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white truncate">
                   {workout.name}
                 </h1>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                  Program: {workout.program?.name || 'N/A'}
-                </p>
+                <div className="text-sm text-gray-600 dark:text-gray-400 mt-1 flex items-center gap-2">
+                  <span className="whitespace-nowrap">Program:</span>
+                  {programs.length > 0 ? (
+                    <div className="min-w-[180px]">
+                      <Select
+                        value={workout.program?.id ? String(workout.program.id) : 'all'}
+                        onValueChange={(value) => {
+                          if (value === 'all') {
+                            if (profile?.role === 'coach') {
+                              router.push('/coach/programs');
+                            } else {
+                              router.push('/dashboard/programs');
+                            }
+                            return;
+                          }
+                          const target = String(value);
+                          if (profile?.role === 'coach') {
+                            router.push(`/coach/programs/${target}`);
+                          } else {
+                            router.push(`/dashboard/programs/${target}`);
+                          }
+                        }}
+                      >
+                        <SelectTrigger className="h-8">
+                          <SelectValue placeholder="Select program" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Programs</SelectItem>
+                          {programs.map((p) => (
+                            <SelectItem key={p.id} value={String(p.id)}>
+                              {p.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ) : (
+                    <span>{workout.program?.name || 'N/A'}</span>
+                  )}
+                </div>
                 <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400 mt-2">
                   <div className="flex items-center gap-1.5">
                     <Calendar className="h-4 w-4" />

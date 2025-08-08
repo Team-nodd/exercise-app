@@ -1,19 +1,21 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client"
 
-import { useState, useEffect } from "react"
+import { useMemo, useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
-import { Calendar, User, Plus, Dumbbell, Clock, ArrowLeft, Copy, Loader2, RefreshCw } from 'lucide-react'
+import { Calendar, User, Plus, Dumbbell, Clock, ArrowLeft, Copy, Loader2, RefreshCw, CheckCircle } from 'lucide-react'
 import { toast } from "sonner"
 import Link from "next/link"
-import type { ProgramWithDetails, WorkoutWithDetails } from "@/types"
+import type { Program, ProgramWithDetails, WorkoutWithDetails } from "@/types"
 import { cn } from "@/lib/utils"
 import { SharedCalendar } from "../ui/shared-calendar"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useRouter } from "next/navigation"
 
 
 interface ProgramDetailProps {
@@ -28,8 +30,11 @@ export function ProgramDetail({ program }: ProgramDetailProps) {
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleValue, setTitleValue] = useState(program.name)
   const [titleSaving, setTitleSaving] = useState(false)
+  const [programs, setPrograms] = useState<Pick<Program, "id" | "name">[]>([])
+  const [activeStatFilter, setActiveStatFilter] = useState<"all" | "completed" | "pending">("all")
 
   const supabase = createClient()
+  const router = useRouter()
 
   const fetchWorkouts = async () => {
     setLoading(true)
@@ -61,7 +66,47 @@ export function ProgramDetail({ program }: ProgramDetailProps) {
 
   useEffect(() => {
     fetchWorkouts()
-  }, [program.id, supabase])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [program.id])
+
+  // Fetch all programs for this client (for header filter)
+  useEffect(() => {
+    const fetchPrograms = async () => {
+      try {
+        const { data, error: programsError } = await supabase
+          .from("programs")
+          .select("id, name")
+          .eq("user_id", program.user.id)
+          .order("created_at", { ascending: false })
+
+        if (!programsError) {
+          setPrograms((data || []) as any)
+        }
+      } catch {
+        // ignore silently
+      }
+    }
+    fetchPrograms()
+  }, [program.user.id, supabase])
+
+  // Filter workouts by stat selection
+  const filteredWorkouts = useMemo(() => {
+    switch (activeStatFilter) {
+      case "completed":
+        return workouts.filter(w => w.completed)
+      case "pending":
+        return workouts.filter(w => !w.completed)
+      default:
+        return workouts
+    }
+  }, [workouts, activeStatFilter])
+
+  const stats = useMemo(() => {
+    const total = workouts.length
+    const completed = workouts.filter(w => w.completed).length
+    const pending = total - completed
+    return { total, completed, pending }
+  }, [workouts])
 
   const duplicateWorkout = async (workoutId: number, targetDate?: Date) => {
     setDuplicatingWorkout(workoutId)
@@ -206,9 +251,7 @@ export function ProgramDetail({ program }: ProgramDetailProps) {
     }
   }
 
-  const handleWorkoutUpdate = (updatedWorkouts: WorkoutWithDetails[]) => {
-    setWorkouts(updatedWorkouts)
-  }
+  // Note: calendar view uses ClientCalendar; local list view manages its own updates
 
   if (loading) {
     return (
@@ -274,46 +317,140 @@ export function ProgramDetail({ program }: ProgramDetailProps) {
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Programs
         </Link>
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            {editingTitle ? (
-              <Input
-                value={titleValue}
-                onChange={(e) => setTitleValue(e.target.value)}
-                onBlur={handleTitleSave}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    handleTitleSave()
-                  } else if (e.key === "Escape") {
-                    setEditingTitle(false)
-                    setTitleValue(program.name)
-                  }
-                }}
-                disabled={titleSaving}
-                autoFocus
-                className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-1 px-2 py-1"
-              />
-            ) : (
-              <h1
-                className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-1 cursor-pointer hover:underline"
-                onClick={() => setEditingTitle(true)}
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") setEditingTitle(true)
-                }}
-              >
-                {titleValue}
-              </h1>
-            )}
-            <p className="text-gray-600 dark:text-gray-300 mt-2 text-sm sm:text-base">{program.description}</p>
+        <div className="flex flex-col gap-4">
+          {/* Header Row: Title (User · Program) and Actions */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              {editingTitle ? (
+                <Input
+                  value={titleValue}
+                  onChange={(e) => setTitleValue(e.target.value)}
+                  onBlur={handleTitleSave}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      handleTitleSave()
+                    } else if (e.key === "Escape") {
+                      setEditingTitle(false)
+                      setTitleValue(program.name)
+                    }
+                  }}
+                  disabled={titleSaving}
+                  autoFocus
+                  className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-1 px-2 py-1"
+                />
+              ) : (
+                <h1
+                  className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-1"
+                >
+                  {program.user.name}
+                  <span className="mx-2">·</span>
+                  <button
+                    className="hover:underline"
+                    onClick={() => setEditingTitle(true)}
+                    aria-label="Edit program title"
+                  >
+                    {titleValue}
+                  </button>
+                </h1>
+              )}
+              {program.description && (
+                <p className="text-gray-600 dark:text-gray-300 mt-1 text-sm sm:text-base">{program.description}</p>
+              )}
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+              {/* Program Filter */}
+              {programs.length > 0 && (
+                <div className="w-full sm:w-56">
+                  <Select
+                    value={String(program.id)}
+                    onValueChange={(value) => {
+                      if (Number(value) !== program.id) router.push(`/coach/programs/${value}`)
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Filter by program" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {programs.map((p) => (
+                        <SelectItem key={p.id} value={String(p.id)}>
+                          {p.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              <Badge className={getStatusColor(program.status)}>
+                {program.status.charAt(0).toUpperCase() + program.status.slice(1)}
+              </Badge>
+              <Button size="sm" href={`/coach/programs/${program.id}/edit`}>
+                Edit
+              </Button>
+            </div>
           </div>
-          <div className="flex gap-3">
-            <Badge className={getStatusColor(program.status)}>
-              {program.status.charAt(0).toUpperCase() + program.status.slice(1)}
-            </Badge>
-            <Button size="sm" href={`/coach/programs/${program.id}/edit`}>
-              Edit
-            </Button>
+
+          {/* Stats Cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            <Card 
+              className={cn(
+                "cursor-pointer transition-all duration-200 hover:shadow-md bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20",
+                activeStatFilter === "all" 
+                  ? "border-2 border-blue-500 shadow-md ring-2 ring-blue-200 dark:ring-blue-800" 
+                  : "border-blue-200 dark:border-blue-800 hover:border-blue-300"
+              )}
+              onClick={() => setActiveStatFilter("all")}
+            >
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1">
+                <CardTitle className="text-xs font-medium text-blue-600 dark:text-blue-400">Total</CardTitle>
+                <Dumbbell className="h-3 w-3 text-blue-600 dark:text-blue-400" />
+              </CardHeader>
+              <CardContent className="pb-2">
+                <div className="text-lg font-bold text-blue-800 dark:text-blue-200">{stats.total}</div>
+                <p className="text-xs text-blue-600/80 dark:text-blue-400/80">All workouts in this program</p>
+              </CardContent>
+            </Card>
+
+            <Card 
+              className={cn(
+                "cursor-pointer transition-all duration-200 hover:shadow-md bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20",
+                activeStatFilter === "completed" 
+                  ? "border-2 border-green-500 shadow-md ring-2 ring-green-200 dark:ring-green-800" 
+                  : "border-green-200 dark:border-green-800 hover:border-green-300"
+              )}
+              onClick={() => setActiveStatFilter("completed")}
+            >
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1">
+                <CardTitle className="text-xs font-medium text-green-600 dark:text-green-400">Completed</CardTitle>
+                <CheckCircle className="h-3 w-3 text-green-600 dark:text-green-400" />
+              </CardHeader>
+              <CardContent className="pb-2">
+                <div className="text-lg font-bold text-green-800 dark:text-green-200">{stats.completed}</div>
+                <p className="text-xs text-green-600/80 dark:text-green-400/80">
+                  {stats.total > 0 ? `${Math.round((stats.completed / stats.total) * 100)}% complete` : "No workouts"}
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card 
+              className={cn(
+                "cursor-pointer transition-all duration-200 hover:shadow-md bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20",
+                activeStatFilter === "pending" 
+                  ? "border-2 border-orange-500 shadow-md ring-2 ring-orange-200 dark:ring-orange-800" 
+                  : "border-orange-200 dark:border-orange-800 hover:border-orange-300"
+              )}
+              onClick={() => setActiveStatFilter("pending")}
+            >
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1">
+                <CardTitle className="text-xs font-medium text-orange-600 dark:text-orange-400">Pending</CardTitle>
+                <Clock className="h-3 w-3 text-orange-600 dark:text-orange-400" />
+              </CardHeader>
+              <CardContent className="pb-2">
+                <div className="text-lg font-bold text-orange-800 dark:text-orange-200">{stats.pending}</div>
+                <p className="text-xs text-orange-600/80 dark:text-orange-400/80">
+                  {stats.total > 0 ? `${Math.round((stats.pending / stats.total) * 100)}% remaining` : "No workouts"}
+                </p>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>
@@ -373,8 +510,17 @@ export function ProgramDetail({ program }: ProgramDetailProps) {
 
         <TabsContent value="calendar" className="space-y-4">
           <SharedCalendar
-            workouts={workouts}
-            onWorkoutUpdate={handleWorkoutUpdate}
+            workouts={filteredWorkouts}
+            onWorkoutUpdate={(updated) => {
+              setWorkouts((prev) => {
+                const map = new Map(prev.map((w) => [w.id, w]))
+                for (const w of updated) {
+                  const existing = map.get(w.id)
+                  map.set(w.id, existing ? { ...existing, ...w } : w)
+                }
+                return Array.from(map.values())
+              })
+            }}
             userRole="coach"
             programId={program.id}
             userId={program.user.id}

@@ -265,6 +265,7 @@ export function CreateWorkoutForm({ program }: CreateWorkoutFormProps) {
                 type="date"
                 value={scheduledDate}
                 onChange={(e) => setScheduledDate(e.target.value)}
+                required
               />
             </div>
 

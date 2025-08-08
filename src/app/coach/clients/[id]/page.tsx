@@ -46,5 +46,5 @@ export default async function ClientPage({ params }: ClientPageProps) {
     notFound()
   }
 
-  return <ClientCalendar client={client} coachId={user.id} />
+  return <ClientCalendar client={client} />
 }

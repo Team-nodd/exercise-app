@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
@@ -6,8 +5,7 @@ import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import {  Dumbbell, Clock, ArrowLeft, Target, CheckCircle, RefreshCw } from 'lucide-react'
-import Link from "next/link"
+import {  Dumbbell, Clock, ArrowLeft, CheckCircle, RefreshCw } from 'lucide-react'
 import { cn } from "@/lib/utils"
 import type { User, WorkoutWithDetails, Program } from "@/types"
 import { SharedCalendar } from "../ui/shared-calendar"
@@ -15,20 +13,23 @@ import { AppLink } from "../ui/app-link"
 
 interface ClientCalendarProps {
   client: User
+  initialProgramId?: number
 }
 
 interface WorkoutWithProgram extends WorkoutWithDetails {
   program: Program
 }
 
-type StatFilter = "all" | "completed" | "pending" | "unscheduled"
+type StatFilter = "all" | "completed" | "pending" 
 
-export function ClientCalendar({ client }: ClientCalendarProps) {
+export function ClientCalendar({ client, initialProgramId }: ClientCalendarProps) {
   const [workouts, setWorkouts] = useState<WorkoutWithProgram[]>([])
   const [programs, setPrograms] = useState<Program[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [selectedProgram, setSelectedProgram] = useState<string>("all")
+  const [selectedProgram, setSelectedProgram] = useState<string>(
+    initialProgramId ? String(initialProgramId) : "all"
+  )
   const [activeStatFilter, setActiveStatFilter] = useState<StatFilter>("all")
 
   const supabase = createClient()
@@ -96,8 +97,6 @@ export function ClientCalendar({ client }: ClientCalendarProps) {
         return programFilteredWorkouts.filter(w => w.completed)
       case "pending":
         return programFilteredWorkouts.filter(w => !w.completed)
-      case "unscheduled":
-        return programFilteredWorkouts.filter(w => !w.scheduled_date)
       default:
         return programFilteredWorkouts
     }
@@ -108,24 +107,24 @@ export function ClientCalendar({ client }: ClientCalendarProps) {
     const totalWorkouts = programFilteredWorkouts.length
     const completedWorkouts = programFilteredWorkouts.filter((w) => w.completed).length
     const pendingWorkouts = totalWorkouts - completedWorkouts
-    const unscheduledWorkouts = programFilteredWorkouts.filter((w) => !w.scheduled_date).length
 
     return {
       total: totalWorkouts,
       completed: completedWorkouts,
       pending: pendingWorkouts,
-      unscheduled: unscheduledWorkouts
     }
   }, [programFilteredWorkouts])
 
   const handleWorkoutUpdate = (updatedWorkouts: WorkoutWithDetails[]) => {
-    // Update the workouts state with the updated data
-    setWorkouts(prev => 
-      prev.map(workout => {
-        const updated = updatedWorkouts.find(w => w.id === workout.id)
-        return updated ? { ...workout, ...updated } : workout
-      })
-    )
+    // Merge updates and include any brand-new workouts
+    setWorkouts(prev => {
+      const map = new Map(prev.map(w => [w.id, w]))
+      for (const w of updatedWorkouts) {
+        const existing = map.get(w.id)
+        map.set(w.id, existing ? { ...existing, ...w } : w)
+      }
+      return Array.from(map.values())
+    })
   }
 
   const handleStatCardClick = (filter: StatFilter) => {
@@ -318,30 +317,6 @@ export function ClientCalendar({ client }: ClientCalendarProps) {
           </CardContent>
         </Card>
 
-        <Card 
-          className={cn(
-            "cursor-pointer transition-all duration-200 hover:shadow-md bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20",
-            activeStatFilter === "unscheduled" 
-              ? "border-2 border-purple-500 shadow-md ring-2 ring-purple-200 dark:ring-purple-800" 
-              : "border-purple-200 dark:border-purple-800 hover:border-purple-300"
-          )}
-          onClick={() => handleStatCardClick("unscheduled")}
-        >
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1">
-            <CardTitle className="text-xs font-medium text-purple-600 dark:text-purple-400">
-              Unscheduled
-            </CardTitle>
-            <Target className="h-3 w-3 text-purple-600 dark:text-purple-400" />
-          </CardHeader>
-          <CardContent className="pb-2">
-            <div className="text-lg font-bold text-purple-800 dark:text-purple-200">
-              {stats.unscheduled}
-            </div>
-            <p className="text-xs text-purple-600/80 dark:text-purple-400/80">
-              Need scheduling
-            </p>
-          </CardContent>
-        </Card>
       </div>
 
       {/* Active Filter Indicator */}
