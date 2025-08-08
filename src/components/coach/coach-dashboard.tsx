@@ -156,7 +156,7 @@ export function CoachDashboard({ coach }: CoachDashboardProps) {
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Users className="h-5 w-5" />
-                Recent Clients
+                Active Clients
               </CardTitle>
               {recentClients && recentClients.length > 0 && (
                 <Button href="/coach/clients" variant="ghost" size="sm">
