@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import type { User, DashboardStats, WorkoutWithDetails, Program } from '@/types'
+import type { User, DashboardStats, WorkoutWithDetails } from '@/types'
 
 interface UseDashboardDataOptions {
   userId?: string
@@ -15,6 +15,7 @@ interface DashboardData {
   loading: boolean
   error: string | null
   refetch: () => void
+  refetchQuietly: () => void
 }
 
 // Cache for dashboard data to prevent unnecessary refetches
@@ -39,39 +40,8 @@ export function useDashboardData({ userId, coachId, isCoach = false }: UseDashbo
 
   const cacheKey = `${isCoach ? 'coach' : 'user'}_${userId || coachId}`
 
-  const fetchDashboardData = useCallback(async () => {
-    try {
-      setLoading(true)
-      setError(null)
-
-      // Check cache first
-      const cached = dashboardCache.get(cacheKey)
-      if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-        console.log('📦 Using cached dashboard data')
-        setStats(cached.data.stats)
-        setUpcomingWorkouts(cached.data.upcomingWorkouts)
-        setRecentClients(cached.data.recentClients || [])
-        setLoading(false)
-        return
-      }
-
-      console.log(`🔄 Fetching fresh dashboard data for ${isCoach ? 'coach' : 'user'}:`, userId || coachId)
-
-      if (isCoach && coachId) {
-        await fetchCoachDashboardData(coachId)
-      } else if (userId) {
-        await fetchUserDashboardData(userId)
-      }
-
-    } catch (error) {
-      console.error('❌ Dashboard data fetch error:', error)
-      setError(error instanceof Error ? error.message : 'Failed to fetch dashboard data')
-    } finally {
-      setLoading(false)
-    }
-  }, [userId, coachId, isCoach, supabase, cacheKey])
-
-  const fetchUserDashboardData = async (userId: string) => {
+  // Define fetch helpers before usage to satisfy linter and avoid use-before-declare
+  const fetchUserDashboardData = useCallback(async (userId: string) => {
     // Optimized single query for user stats
     const { data: userStats, error: statsError } = await supabase
       .from('workouts')
@@ -92,15 +62,16 @@ export function useDashboardData({ userId, coachId, isCoach = false }: UseDashbo
     }
 
     if (userStats) {
-      const programs = userStats.reduce((acc, workout) => {
+      const programMap = userStats.reduce((acc, workout) => {
         if (workout.program) {
-          acc[workout.program.id] = workout.program
+          const prog = workout.program as unknown as { id: number; status: string; user_id: string }
+          acc[String(prog.id)] = prog
         }
         return acc
-      }, {} as Record<number, { id: number; status: string; user_id: string }>)
+      }, {} as Record<string, { id: number; status: string; user_id: string }>)
 
-      const totalPrograms = Object.keys(programs).length
-      const activePrograms = Object.values(programs).filter((p) => p.status === 'active').length
+      const totalPrograms = Object.keys(programMap).length
+      const activePrograms = Object.values(programMap).filter((p) => p.status === 'active').length
       const completedWorkouts = userStats.filter(w => w.completed).length
       
       const today = new Date()
@@ -141,9 +112,9 @@ export function useDashboardData({ userId, coachId, isCoach = false }: UseDashbo
         timestamp: Date.now()
       })
     }
-  }
+  }, [supabase, cacheKey])
 
-  const fetchCoachDashboardData = async (coachId: string) => {
+  const fetchCoachDashboardData = useCallback(async (coachId: string) => {
     // Optimized query for coach stats
     const { data: coachData, error: coachError } = await supabase
       .from('programs')
@@ -210,17 +181,62 @@ export function useDashboardData({ userId, coachId, isCoach = false }: UseDashbo
         timestamp: Date.now()
       })
     }
-  }
+  }, [supabase, cacheKey])
 
-  const refetch = useCallback(() => {
+  
+
+  const refetch = useCallback(async () => {
     // Clear cache and refetch
     dashboardCache.delete(cacheKey)
-    fetchDashboardData()
-  }, [fetchDashboardData, cacheKey])
+    // Non-silent fetch
+    try {
+      setLoading(true)
+      setError(null)
+      if (isCoach && coachId) {
+        await fetchCoachDashboardData(coachId)
+      } else if (userId) {
+        await fetchUserDashboardData(userId)
+      }
+    } finally {
+      setLoading(false)
+    }
+  }, [cacheKey, isCoach, coachId, userId, fetchCoachDashboardData, fetchUserDashboardData])
+
+  const refetchQuietly = useCallback(async () => {
+    dashboardCache.delete(cacheKey)
+    try {
+      // Silent fetch
+      if (isCoach && coachId) {
+        await fetchCoachDashboardData(coachId)
+      } else if (userId) {
+        await fetchUserDashboardData(userId)
+      }
+    } catch {
+      // ignore
+    }
+  }, [cacheKey, isCoach, coachId, userId, fetchCoachDashboardData, fetchUserDashboardData])
 
   useEffect(() => {
-    fetchDashboardData()
-  }, [fetchDashboardData])
+    // Initial load (non-silent)
+    ;(async () => {
+      try {
+        setLoading(true)
+        setError(null)
+        const cached = dashboardCache.get(cacheKey)
+        if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+          setStats(cached.data.stats)
+          setUpcomingWorkouts(cached.data.upcomingWorkouts)
+          setRecentClients(cached.data.recentClients || [])
+        } else if (isCoach && coachId) {
+          await fetchCoachDashboardData(coachId)
+        } else if (userId) {
+          await fetchUserDashboardData(userId)
+        }
+      } finally {
+        setLoading(false)
+      }
+    })()
+  }, [cacheKey, isCoach, coachId, userId, fetchCoachDashboardData, fetchUserDashboardData])
 
   return {
     stats,
@@ -228,6 +244,7 @@ export function useDashboardData({ userId, coachId, isCoach = false }: UseDashbo
     recentClients,
     loading,
     error,
-    refetch
+    refetch,
+    refetchQuietly
   }
 } 

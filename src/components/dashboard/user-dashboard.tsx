@@ -7,7 +7,6 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Calendar, Dumbbell, TrendingUp, Clock, RefreshCw, Target, Activity, Play, ArrowRight, CheckCircle, Zap, Filter } from 'lucide-react'
-import Link from "next/link"
 import { useDashboardData } from "@/lib/hooks/use-dashboard-data"
 import { User, WorkoutWithDetails, Program } from "@/types"
 import { SharedCalendar } from "../ui/shared-calendar"
@@ -18,7 +17,7 @@ interface UserDashboardProps {
 }
 
 export function UserDashboard({ user }: UserDashboardProps) {
-  const { stats, upcomingWorkouts, loading, error, refetch } = useDashboardData({
+  const { stats, upcomingWorkouts, loading, error, refetch, refetchQuietly } = useDashboardData({
     userId: user.id,
     isCoach: false,
   })
@@ -93,8 +92,10 @@ export function UserDashboard({ user }: UserDashboardProps) {
 
   const handleWorkoutUpdate = (updatedWorkouts: WorkoutWithDetails[]) => {
     setWorkouts(updatedWorkouts)
-    // You might want to refetch data here to ensure consistency
-    refetch()
+    // Background sync without triggering loading state
+    if (refetchQuietly) {
+      refetchQuietly()
+    }
   }
 
   if (loading) {
