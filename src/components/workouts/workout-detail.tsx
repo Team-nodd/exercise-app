@@ -249,6 +249,76 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
     }
   }, [workout, fetchComments]);
 
+  // Scroll to hashed comment id inside the comments list when available
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const hash = window.location.hash;
+    if (!hash) return;
+    const el = document.querySelector(hash) as HTMLElement | null;
+    if (el) {
+      const scrollParent = (node: HTMLElement | null): HTMLElement | null => {
+        let current: HTMLElement | null = node?.parentElement || null;
+        while (current) {
+          const style = window.getComputedStyle(current);
+          const overflowY = style.overflowY;
+          const canScroll = (overflowY === 'auto' || overflowY === 'scroll') && current.scrollHeight > current.clientHeight;
+          if (canScroll) return current;
+          current = current.parentElement;
+        }
+        return null;
+      };
+
+      setTimeout(() => {
+        const container = scrollParent(el);
+        if (container) {
+          const containerRect = container.getBoundingClientRect();
+          const elRect = el.getBoundingClientRect();
+          const offset = elRect.top - containerRect.top + container.scrollTop - container.clientHeight / 2 + el.clientHeight / 2;
+          container.scrollTo({ top: Math.max(0, offset), behavior: 'smooth' });
+        } else {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        el.classList.add('ring-2', 'ring-blue-500', 'ring-offset-2');
+        setTimeout(() => el.classList.remove('ring-2', 'ring-blue-500', 'ring-offset-2'), 2000);
+      }, 150);
+    }
+  }, [workoutComments]);
+
+  // If a specific comment id is in the hash but not yet loaded, try to fetch it and append
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const match = window.location.hash.match(/^#comment-(\d+)$/);
+    if (!match) return;
+    const commentId = Number.parseInt(match[1]);
+    if (!commentId) return;
+
+    const exists = workoutComments.some(c => c.id === commentId);
+    if (exists) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('comments')
+          .select('*, user:users(id, name, role)')
+          .eq('id', commentId)
+          .single();
+
+        if (!cancelled && !error && data && data.workout_id === Number(workoutId)) {
+          setWorkoutComments(prev => {
+            const next = [...prev, data as any];
+            next.sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+            return next;
+          });
+        }
+      } catch (e) {
+        // ignore
+      }
+    })();
+
+    return () => { cancelled = true };
+  }, [supabase, workoutId, workoutComments]);
+
   useEffect(() => {
     fetchWorkoutData();
   }, [fetchWorkoutData]);
@@ -462,12 +532,30 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
   const handleAddWorkoutComment = async () => {
     if (!newWorkoutComment.trim()) return;
 
+    // Optimistic insert
+    const now = new Date().toISOString();
+    const tempId = -Date.now();
+    const tempComment: Comment = {
+      id: tempId as unknown as number,
+      workout_id: Number(workoutId),
+      workout_exercise_id: null,
+      user_id: profile?.id || 'me',
+      comment_text: newWorkoutComment.trim(),
+      created_at: now,
+      user: { id: profile?.id, name: profile?.name, role: profile?.role } as any,
+    };
+
+    setWorkoutComments(prev => [...prev, tempComment]);
+    const sentText = newWorkoutComment.trim();
+    setNewWorkoutComment('');
     setCommentLoading(true);
-    setError(null); // Clear previous errors
+    setError(null);
 
     try {
       const user = supabase.auth.getUser ? (await supabase.auth.getUser()).data.user : null;
       if (!user) {
+        // rollback
+        setWorkoutComments(prev => prev.filter(c => c.id !== tempId));
         toast('You must be logged in to comment.');
         setCommentLoading(false);
         return;
@@ -476,61 +564,48 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
       const { data, error } = await supabase.from('comments').insert({
         workout_id: Number(workoutId),
         user_id: user.id,
-        comment_text: newWorkoutComment.trim(),
+        comment_text: sentText,
       })
-      .select(`
-        *,
-        user:users(id, name, role)
-      `)
-      .single();
+      .select(`*, user:users(id, name, role)`).single();
 
       if (error) throw error;
 
-      setWorkoutComments(prev => [...prev, data as Comment]);
-      setNewWorkoutComment('');
+      // Replace temp with real
+      setWorkoutComments(prev => prev.map(c => c.id === tempId ? (data as Comment) : c));
 
-      // Send notifications based on user role
+      // Send notifications in background with comment id
       if (workout && profile) {
-        try {
-          if (profile.role === 'user') {
-            // Notify coach when user comments
-            console.log('🔔 User commenting, notifying coach:', {
-              workoutId: Number(workoutId),
-              userId: userId,
-              coachId: workout.program?.coach_id
-            });
-            if (workout.program?.coach_id) {
-              await notificationService.notifyCoachWorkoutComment(
+        (async () => {
+          try {
+            if (profile.role === 'user') {
+              if (workout.program?.coach_id) {
+                await notificationService.notifyCoachWorkoutComment(
+                  Number(workoutId),
+                  userId,
+                  workout.program.coach_id,
+                  sentText,
+                  (data as any)?.id
+                );
+              }
+            } else if (profile.role === 'coach') {
+              await notificationService.notifyUserWorkoutComment(
                 Number(workoutId),
-                userId,
-                workout.program.coach_id,
-                newWorkoutComment.trim()
+                profile.id,
+                workout.user_id,
+                sentText,
+                (data as any)?.id
               );
-              console.log('✅ Coach notification sent successfully');
             }
-          } else if (profile.role === 'coach') {
-            // Notify user when coach comments
-            console.log('🔔 Coach commenting, notifying user:', {
-              workoutId: Number(workoutId),
-              coachId: profile.id,
-              userId: workout.user_id
-            });
-            await notificationService.notifyUserWorkoutComment(
-              Number(workoutId),
-              profile.id, // Coach's ID
-              workout.user_id, // Client's ID
-              newWorkoutComment.trim()
-            );
-            console.log('✅ User notification sent successfully');
+          } catch (notificationError) {
+            console.error('❌ Error sending notification:', notificationError);
           }
-        } catch (notificationError) {
-          console.error('❌ Error sending notification:', notificationError);
-          // Don't show error to user, just log it
-        }
+        })();
       }
 
       toast('Comment added successfully!');
     } catch (err: any) {
+      // rollback
+      setWorkoutComments(prev => prev.filter(c => c.id !== tempId));
       console.error('Error adding comment:', err);
       setError(err.message || 'Failed to add comment.');
       toast('Failed to add comment');
@@ -1155,7 +1230,7 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
       )}
 
       {/* Comments Section */}
-      <Card className="mt-5">
+      <Card className="mt-5" id="comments-section">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <MessageSquare className="h-5 w-5" />
@@ -1168,7 +1243,7 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
               <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">No comments yet. Be the first to leave one!</p>
             ) : (
               workoutComments.map((comment) => (
-                <div key={comment.id} className="flex items-start gap-3">
+                <div id={`comment-${comment.id}`} key={comment.id} className="flex items-start gap-3">
                   <Avatar className="h-8 w-8">
                     <AvatarImage src={`/placeholder-icon.png?height=32&width=32&text=${comment.user?.name?.charAt(0) || 'U'}`} alt={comment.user?.name || "User"} />
                     <AvatarFallback>{comment.user?.name ? comment.user.name.charAt(0) : 'U'}</AvatarFallback>
@@ -1199,7 +1274,7 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
                       <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed flex-1">
                         {comment.comment_text}
                       </p>
-                      {profile?.id === comment.user?.id && (
+                      {/* {profile?.id === comment.user?.id && (
                         <Button
                           variant="ghost"
                           size="sm"
@@ -1208,7 +1283,7 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
                         >
                           <Trash2 className="h-3 w-3" />
                         </Button>
-                      )}
+                      )} */}
                     </div>
                   </div>
                 </div>
@@ -1224,7 +1299,7 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
               className="flex-1"
               disabled={commentLoading}
             />
-            <Button onClick={handleAddWorkoutComment} disabled={commentLoading || !newWorkoutComment.trim()}>
+            <Button className="self-end" onClick={handleAddWorkoutComment} disabled={commentLoading || !newWorkoutComment.trim()}>
               {commentLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               <span className="sr-only">Send Comment</span>
             </Button>

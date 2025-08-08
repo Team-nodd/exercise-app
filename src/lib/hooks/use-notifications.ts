@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from '@/lib/supabase/client';
 import { useState, useEffect, useRef } from 'react';
 
 interface Notification {
@@ -19,10 +19,7 @@ const useNotifications = (userId?: string) => {
   const [unreadCount, setUnreadCount] = useState(0);
   const deletedNotifications = useRef(new Set<string>());
 
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  const supabase = createClient();
 
   const fetchNotifications = async () => {
     if (!userId) return;
@@ -52,10 +49,32 @@ const useNotifications = (userId?: string) => {
   useEffect(() => {
     if (userId) {
       fetchNotifications();
-            
+
       // Poll for new notifications every 30 seconds
       const interval = setInterval(fetchNotifications, 30000);
-      return () => clearInterval(interval);
+
+      // Realtime subscription for immediate updates
+      const channel = supabase
+        .channel(`realtime_notifications_${userId}`)
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
+          (payload) => {
+            const newNotification = payload.new as Notification;
+            if (!deletedNotifications.current.has(newNotification.id)) {
+              setNotifications((prev) => [newNotification, ...prev]);
+              if (!newNotification.read) {
+                setUnreadCount((prev) => prev + 1);
+              }
+            }
+          }
+        )
+        .subscribe();
+
+      return () => {
+        clearInterval(interval);
+        supabase.removeChannel(channel);
+      };
     }
   }, [userId]);
 
@@ -131,11 +150,29 @@ const useNotifications = (userId?: string) => {
     }
   };
 
+  const markAllAsRead = async () => {
+    try {
+      const unreadIds = notifications.filter(n => !n.read).map(n => n.id);
+      if (unreadIds.length === 0) return;
+
+      await supabase
+        .from('notifications')
+        .update({ read: true, updated_at: new Date().toISOString() })
+        .in('id', unreadIds);
+
+      setNotifications((prev) => prev.map(n => ({ ...n, read: true })));
+      setUnreadCount(0);
+    } catch (error) {
+      console.error('❌ Error marking all notifications as read:', error);
+    }
+  };
+
   return {
     notifications,
     unreadCount,
     deleteNotification,
     markNotificationAsRead,
+    markAllAsRead,
   };
 };
 

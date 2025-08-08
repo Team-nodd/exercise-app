@@ -1,14 +1,14 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
-import { Button } from "@/components/ui/button"
+import { useState, useCallback } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { createClient } from "@/lib/supabase/client"
 import { useAuth } from "@/components/providers/auth-provider"
-import { Bell, Mail, CheckCircle, AlertCircle, Loader2 } from "lucide-react"
+import { Bell, CheckCircle, AlertCircle, Loader2 } from "lucide-react"
 import type { User } from "@/types"
+import { H6 } from "../ui/heading"
 
 interface NotificationSettingsProps {
   profile: User
@@ -18,7 +18,6 @@ export function NotificationSettings({ profile }: NotificationSettingsProps) {
   const { user } = useAuth()
   const supabase = createClient()
   
-  const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [pendingUpdates, setPendingUpdates] = useState<Set<string>>(new Set())
   const [updateTimeouts, setUpdateTimeouts] = useState<Map<string, NodeJS.Timeout>>(new Map())
@@ -35,6 +34,15 @@ export function NotificationSettings({ profile }: NotificationSettingsProps) {
 
     console.log(`🔄 SETTINGS: Updating ${setting} to ${value}`)
     
+    const formatSettingLabel = (s: keyof typeof settings) => {
+      const labels: Record<keyof typeof settings, string> = {
+        workout_completed_email: 'Workout Completed emails',
+        program_assigned_email: 'Program Assigned emails',
+        weekly_progress_email: 'Weekly Progress emails',
+      }
+      return labels[s]
+    }
+
     try {
       const { error } = await supabase
         .from("users")
@@ -56,11 +64,11 @@ export function NotificationSettings({ profile }: NotificationSettingsProps) {
       
       setMessage({
         type: 'success',
-        text: `${setting.replace(/_/g, ' ')} updated successfully!`
+        text: `You turned ${value ? 'on' : 'off'} ${formatSettingLabel(setting)}.`
       })
 
-      // Clear success message after 2 seconds
-      setTimeout(() => setMessage(null), 2000)
+      // Keep success message visible for at least 3 seconds
+      setTimeout(() => setMessage(null), 3000)
 
     } catch (error) {
       console.error("❌ SETTINGS: Error updating settings:", error)
@@ -207,6 +215,7 @@ export function NotificationSettings({ profile }: NotificationSettingsProps) {
                 <Loader2 className="h-4 w-4 animate-spin text-primary" />
               )}
               <Switch
+                className="cursor-pointer"
                 checked={settings.program_assigned_email}
                 onCheckedChange={(checked) => handleSettingChange('program_assigned_email', checked)}
                 disabled={isSettingPending('program_assigned_email')}
@@ -238,32 +247,30 @@ export function NotificationSettings({ profile }: NotificationSettingsProps) {
 
       {/* Information Card */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Mail className="h-5 w-5" />
-            About Notifications
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="text-sm text-gray-600 dark:text-gray-400 space-y-2">
-            <p>
-              • <strong>Workout Completed:</strong> Receive an email when a workout is marked as completed
-            </p>
-            <p>
-              • <strong>Program Assigned:</strong> Get notified when a new program is assigned to you or your clients
-            </p>
-            {/* <p>
-              • <strong>Weekly Progress:</strong> Receive a weekly summary of your progress or your clients&apos; progress
-            </p> */}
-          </div>
-          
-          <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
-            <p className="text-sm text-blue-800 dark:text-blue-200">
-              <strong>Note:</strong> Changes are saved automatically. You can continue using the app while settings update in the background.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+      <CardContent className="space-y-4">
+        <H6 >Notification Settings</H6>
+        <div className="text-sm text-gray-600 dark:text-gray-400 space-y-2">
+          <p>
+          {profile.role !== 'user'? <>• <strong>Workout Completed:</strong> {getNotificationDescription(profile.role, 'workout_completed_email')}</> : '' }
+          </p>
+          <p>
+            • <strong>Program Assigned:</strong> {profile.role === 'user' 
+              ? 'Get notified when a new program is assigned to you'
+              : 'Get notified when you assign programs to clients'
+            }
+          </p>
+          <p>
+            {profile.role !== "user" ? <>• <strong>Weekly Progress:</strong> {getNotificationDescription(profile.role, 'weekly_progress_email')}</> : ''}
+          </p>
+        </div>
+        
+        <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
+          <p className="text-sm text-blue-800 dark:text-blue-200">
+            <strong>Note:</strong> Changes are saved automatically. You can continue using the app while settings update in the background.
+          </p>
+        </div>
+      </CardContent>
+    </Card>
     </div>
   )
 } 

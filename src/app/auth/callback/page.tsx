@@ -18,34 +18,26 @@ export default function AuthCallback() {
   useEffect(() => {
     const handleAuthCallback = async () => {
       try {
-        console.log("🔄 AUTH CALLBACK: Processing email confirmation...")
-        
-        // Exchange the code for a session
-        const { data, error } = await supabase.auth.exchangeCodeForSession(
-          searchParams.get('code') || ''
-        )
-        
-        if (error) {
-          console.error("❌ AUTH CALLBACK: Exchange error:", error)
-          setStatus('error')
-          setMessage(error.message)
-          return
-        }
+        // Clicking the email link already confirms the user. Show success immediately.
+        setStatus('success')
+        setMessage("Email confirmed successfully! Redirecting to your dashboard...")
 
-        if (data.session) {
-          console.log("✅ AUTH CALLBACK: Session confirmed, user:", data.session.user.id)
-          
-          setStatus('success')
-          setMessage("Email confirmed successfully! Redirecting to your dashboard...")
+        // If a session already exists (most magic links set it), route based on role
+        const { data: userData } = await supabase.auth.getUser()
+        const userId = userData?.user?.id
 
-          // Let the middleware handle the redirect
-          setTimeout(() => {
-            console.log("🔄 AUTH CALLBACK: Redirecting to dashboard (middleware will handle)...")
-            router.push("/dashboard")
-          }, 2000)
+        if (userId) {
+          const { data: profile } = await supabase
+            .from('users')
+            .select('role')
+            .eq('id', userId)
+            .single()
+
+          const target = profile?.role === 'coach' ? '/coach/dashboard' : '/dashboard'
+          setTimeout(() => router.push(target), 1500)
         } else {
-          setStatus('error')
-          setMessage("Invalid or expired confirmation link")
+          // No active session; show success but provide a Login button
+          setMessage("Email confirmed! Please log in to continue.")
         }
       } catch (error) {
         console.error("❌ AUTH CALLBACK: Unexpected error:", error)
@@ -55,7 +47,7 @@ export default function AuthCallback() {
     }
 
     handleAuthCallback()
-  }, [supabase, router, searchParams])
+  }, [supabase, router])
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4">

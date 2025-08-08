@@ -39,9 +39,10 @@ export class NotificationService {
   async sendWorkoutCompletedNotifications(workoutId: number): Promise<void> {
     try {
       console.log('🔔 NOTIFICATION SERVICE: Processing workout completion notifications for workout:', workoutId)
+
       // Add timeout to prevent hanging requests
-      const timeoutPromise = new Promise<never>((_, reject) =>
-         setTimeout(() => reject(new Error('Request timeout')), 10000)
+      const timeoutPromise = new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error('Request timeout')), 10000)
       )
 
       // Get workout details
@@ -93,10 +94,11 @@ export class NotificationService {
 
       // Send notifications based on preferences
       await this.sendWorkoutCompletedNotificationToUser(workout, user)
-            
+      
       if (coach) {
         await this.sendWorkoutCompletedNotificationToCoach(workout, user, coach)
       }
+
     } catch (error) {
       console.error('❌ NOTIFICATION SERVICE: Error processing notifications:', error)
     }
@@ -122,7 +124,7 @@ export class NotificationService {
     }
 
     const success = await emailService.sendWorkoutCompletedEmail(emailData, user.email)
-        
+    
     if (success) {
       console.log('✅ NOTIFICATION SERVICE: Workout completion email sent to user successfully')
     } else {
@@ -152,7 +154,7 @@ export class NotificationService {
     }
 
     const success = await emailService.sendWorkoutCompletedEmail(emailData, coach.email)
-        
+    
     if (success) {
       console.log('✅ NOTIFICATION SERVICE: Workout completion email sent to coach successfully')
     } else {
@@ -204,10 +206,11 @@ export class NotificationService {
       if (user.program_assigned_email) {
         await this.sendProgramAssignedNotificationToUser(program, user, coach)
       }
-            
+      
       if (coach.program_assigned_email) {
         await this.sendProgramAssignedNotificationToCoach(program, user, coach)
       }
+
     } catch (error) {
       console.error('❌ NOTIFICATION SERVICE: Error processing program assignment notifications:', error)
     }
@@ -228,7 +231,7 @@ export class NotificationService {
     }
 
     const success = await emailService.sendProgramAssignedEmail(emailData, user.email)
-        
+    
     if (success) {
       console.log('✅ NOTIFICATION SERVICE: Program assignment email sent to user successfully')
     } else {
@@ -251,7 +254,7 @@ export class NotificationService {
     }
 
     const success = await emailService.sendProgramAssignedEmail(emailData, coach.email)
-        
+    
     if (success) {
       console.log('✅ NOTIFICATION SERVICE: Program assignment email sent to coach successfully')
     } else {
@@ -260,10 +263,14 @@ export class NotificationService {
   }
 
   // Notify coach when user comments on a workout
-  async notifyCoachWorkoutComment(workoutId: number, userId: string, coachId: string, commentText?: string): Promise<void> {
+  async notifyCoachWorkoutComment(
+    workoutId: number,
+    userId: string,
+    coachId: string,
+    commentText?: string,
+    commentId?: number
+  ): Promise<void> {
     try {
-      console.log('🔔 NOTIFICATION SERVICE: Notifying coach about user comment', { workoutId, userId, coachId })
-      
       // Get workout details with program_id
       const { data: workout, error: workoutError } = await this.supabase
         .from('workouts')
@@ -272,7 +279,7 @@ export class NotificationService {
         .single()
 
       if (workoutError || !workout) {
-        console.error('❌ Error fetching workout details:', workoutError)
+        console.error('Error fetching workout details:', workoutError)
         return
       }
 
@@ -284,58 +291,64 @@ export class NotificationService {
         .single()
 
       if (userError || !user) {
-        console.error('❌ Error fetching user details:', userError)
+        console.error('Error fetching user details:', userError)
         return
       }
 
       const message = commentText 
-        ? `${user.name} commented on workout "${workout.name}": "${commentText}"`
-        : `${user.name} commented on workout "${workout.name}".`
+        ? `${user.name} commented on your workout "${workout.name}": "${commentText}"`
+        : `${user.name} commented on your workout "${workout.name}".`
 
-      // Store both workout_id and program_id in related_id for proper routing
-      const relatedId = `workout:${workoutId}:program:${workout.program_id}`
+      // Store workout_id, program_id and optional comment_id in related_id for deep-linking
+      const relatedId = commentId
+        ? `workout:${workoutId}:program:${workout.program_id}:comment:${commentId}`
+        : `workout:${workoutId}:program:${workout.program_id}`
 
-      console.log('🔔 Creating notification with data:', {
-        recipientId: coachId,
-        title: `New Comment on ${workout.name}`,
-        message: message,
-        type: "coach_comment",
-        relatedId: relatedId,
-      })
-
-      // Use direct Supabase insertion instead of API call to avoid auth issues
-      const { data: notification, error: insertError } = await this.supabase
-        .from('notifications')
-        .insert({
-          user_id: coachId,
+      // Use the API endpoint to create the notification
+      const response = await fetch('/api/notifications/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          recipientId: coachId,
           title: `New Comment on ${workout.name}`,
           message: message,
           type: "coach_comment",
-          related_id: relatedId,
-          read: false,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .select()
-        .single()
+          relatedId: relatedId,
+        }),
+      })
 
-      if (insertError) {
-        console.error("❌ Error creating coach notification:", insertError)
-        throw insertError
+      if (!response.ok) {
+        let details: unknown = null
+        try {
+          details = await response.json()
+        } catch {
+          try {
+            details = await response.text()
+          } catch {
+            details = { error: 'Unknown error' }
+          }
+        }
+        console.error("Error creating coach notification:", details)
       } else {
-        console.log("✅ Coach notification created successfully:", notification)
+        console.log("✅ Coach notification created successfully")
       }
     } catch (error) {
-      console.error("❌ Error notifying coach about comment:", error)
-      throw error
+      console.error("Error notifying coach about comment:", error)
     }
   }
 
   // Notify user when coach comments on a workout
-  async notifyUserWorkoutComment(workoutId: number, coachId: string, userId: string, commentText?: string): Promise<void> {
+  async notifyUserWorkoutComment(
+    workoutId: number,
+    coachId: string,
+    userId: string,
+    commentText?: string,
+    commentId?: number
+  ): Promise<void> {
     try {
-      console.log('🔔 NOTIFICATION SERVICE: Notifying user about coach comment', { workoutId, coachId, userId })
-      
       // Get workout details with program_id
       const { data: workout, error: workoutError } = await this.supabase
         .from('workouts')
@@ -344,7 +357,7 @@ export class NotificationService {
         .single()
 
       if (workoutError || !workout) {
-        console.error('❌ Error fetching workout details:', workoutError)
+        console.error('Error fetching workout details:', workoutError)
         return
       }
 
@@ -356,7 +369,7 @@ export class NotificationService {
         .single()
 
       if (coachError || !coach) {
-        console.error('❌ Error fetching coach details:', coachError)
+        console.error('Error fetching coach details:', coachError)
         return
       }
 
@@ -364,42 +377,44 @@ export class NotificationService {
         ? `${coach.name} commented on your workout "${workout.name}": "${commentText}"`
         : `${coach.name} commented on your workout "${workout.name}".`
 
-      // Store both workout_id and program_id in related_id for proper routing
-      const relatedId = `workout:${workoutId}:program:${workout.program_id}`
+      // Store workout_id, program_id and optional comment_id in related_id for deep-linking
+      const relatedId = commentId
+        ? `workout:${workoutId}:program:${workout.program_id}:comment:${commentId}`
+        : `workout:${workoutId}:program:${workout.program_id}`
 
-      console.log('🔔 Creating notification with data:', {
-        recipientId: userId,
-        title: `New Comment from ${coach.name}`,
-        message: message,
-        type: "user_comment",
-        relatedId: relatedId,
-      })
-
-      // Use direct Supabase insertion instead of API call to avoid auth issues
-      const { data: notification, error: insertError } = await this.supabase
-        .from('notifications')
-        .insert({
-          user_id: userId,
+      // Use the API endpoint to create the notification
+      const response = await fetch('/api/notifications/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          recipientId: userId,
           title: `New Comment from ${coach.name}`,
           message: message,
           type: "user_comment",
-          related_id: relatedId,
-          read: false,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .select()
-        .single()
+          relatedId: relatedId,
+        }),
+      })
 
-      if (insertError) {
-        console.error("❌ Error creating user notification:", insertError)
-        throw insertError
+      if (!response.ok) {
+        let details: unknown = null
+        try {
+          details = await response.json()
+        } catch {
+          try {
+            details = await response.text()
+          } catch {
+            details = { error: 'Unknown error' }
+          }
+        }
+        console.error("Error creating user notification:", details)
       } else {
-        console.log("✅ User notification created successfully:", notification)
+        console.log("✅ User notification created successfully")
       }
     } catch (error) {
-      console.error("❌ Error notifying user about coach comment:", error)
-      throw error
+      console.error("Error notifying user about coach comment:", error)
     }
   }
 
@@ -412,17 +427,16 @@ export class NotificationService {
         .eq("id", notificationId)
 
       if (error) {
-        console.error("❌ Error deleting notification:", error)
+        console.error("Error deleting notification:", error)
         return false
       }
 
-      console.log("✅ Notification deleted successfully")
       return true
     } catch (error) {
-      console.error("❌ Error deleting notification:", error)
+      console.error("Error deleting notification:", error)
       return false
     }
   }
 }
 
-export const notificationService = NotificationService.getInstance()
+export const notificationService = NotificationService.getInstance() 

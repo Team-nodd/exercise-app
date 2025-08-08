@@ -90,8 +90,7 @@ export function NotificationList({ userId, onNotificationClick }: NotificationLi
                 };
                 setNotifications((prev) => [newNotification, ...prev]);
               })
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              // .catch((err: any) => console.error("Error processing new notification payload:", err));
+              .catch((err: any) => console.error("Error processing new notification payload:", err));
           }
         )
         .subscribe()

@@ -12,6 +12,7 @@ import Link from "next/link"
 import { cn } from "@/lib/utils"
 import type { ProgramWithDetails, WorkoutWithDetails } from "@/types"
 import { SharedCalendar } from "../ui/shared-calendar"
+import { AppLink } from "../ui/app-link"
 // import { SharedCalendar } from "@/components/shared-calendar"
 
 interface UserProgramDetailProps {
@@ -285,7 +286,7 @@ export function UserProgramDetail({ program }: UserProgramDetailProps) {
                   <CardContent className="pt-0">
                     <div className="space-y-3">
                       {groupedWorkouts[date].map((workout, index) => (
-                        <Link key={workout.id} href={`/dashboard/workouts/${workout.id}`} className="block">
+                        <AppLink key={workout.id} href={`/dashboard/workouts/${workout.id}`} className="block">
                           <div className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors">
                             <div className="flex-1 min-w-0">
                               <div className="flex items-start justify-between gap-3">
@@ -322,7 +323,7 @@ export function UserProgramDetail({ program }: UserProgramDetailProps) {
                             </div>
                           </div>
                           {index < groupedWorkouts[date].length - 1 && <Separator className="mt-1" />}
-                        </Link>
+                        </AppLink>
                       ))}
                     </div>
                   </CardContent>

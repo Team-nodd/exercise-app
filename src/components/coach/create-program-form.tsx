@@ -16,7 +16,8 @@ import { Loader2, ArrowLeft } from "lucide-react"
 import Link from "next/link"
 import type { User } from "@/types"
 import { AppLink } from "../ui/app-link"
-import { LoadingProvider, useGlobalLoading } from "../providers/loading-provider"
+import { useGlobalLoading } from "../providers/loading-provider"
+import { emailService } from "@/lib/email/email-service"
 
 interface CreateProgramFormProps {
   coachId: string
@@ -96,6 +97,25 @@ export function CreateProgramForm({ coachId }: CreateProgramFormProps) {
         //   variant: "destructive",
         // })
         return
+      }
+
+      // Send email to assigned client in the background (non-blocking), respecting their preferences
+      try {
+        const assignedClient = clients.find((c) => c.id === userId)
+        if (assignedClient?.email && assignedClient?.program_assigned_email) {
+          ;(async () => {
+            await emailService.sendProgramAssignedEmail(
+              {
+                userName: assignedClient.name,
+                programName: name,
+                isCoach: false,
+              },
+              assignedClient.email,
+            )
+          })()
+        }
+      } catch (emailError) {
+        console.error("Error sending assignment email:", emailError)
       }
 
       // toast({

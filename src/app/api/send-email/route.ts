@@ -42,8 +42,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Create transporter
-    const transporter = nodemailer.createTransport({
+    // Create transporter with reasonable timeouts; allow relaxed TLS in dev
+    let transporter = nodemailer.createTransport({
       host: config.host,
       port: config.port,
       secure: config.secure,
@@ -51,16 +51,65 @@ export async function POST(request: NextRequest) {
         user: config.auth.user,
         pass: config.auth.pass,
       },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 15000,
+      tls: process.env.NODE_ENV === 'development' ? { rejectUnauthorized: false } : undefined,
     })
 
-    // Send email
-    const info = await transporter.sendMail({
-      from: `${config.fromName} <${config.from}>`,
-      to,
-      subject,
-      text: text || '',
-      html,
-    })
+    let info
+    try {
+      // Primary attempt
+      info = await transporter.sendMail({
+        from: `${config.fromName} <${config.from}>`,
+        to,
+        subject,
+        text: text || '',
+        html,
+      })
+    } catch (primaryError: any) {
+      console.error('❌ API: Primary SMTP send failed:', primaryError?.message || primaryError)
+      // Fallback: if using SMTPS:465, retry with STARTTLS:587
+      const shouldFallback = config.port === 465 || primaryError?.code === 'ETIMEDOUT' || primaryError?.code === 'ECONNECTION'
+      if (shouldFallback) {
+        try {
+          console.log('🔁 API: Retrying with STARTTLS on port 587...')
+          transporter = nodemailer.createTransport({
+            host: config.host,
+            port: 587,
+            secure: false,
+            auth: {
+              user: config.auth.user,
+              pass: config.auth.pass,
+            },
+            connectionTimeout: 10000,
+            greetingTimeout: 10000,
+            socketTimeout: 15000,
+            tls: process.env.NODE_ENV === 'development' ? { rejectUnauthorized: false } : undefined,
+          })
+          info = await transporter.sendMail({
+            from: `${config.fromName} <${config.from}>`,
+            to,
+            subject,
+            text: text || '',
+            html,
+          })
+        } catch (fallbackError: any) {
+          console.error('❌ API: Fallback SMTP send failed:', fallbackError?.message || fallbackError)
+          const errMsg = fallbackError?.message || primaryError?.message || 'Failed to send email'
+          return NextResponse.json(
+            { error: 'Failed to send email', details: errMsg },
+            { status: 500 }
+          )
+        }
+      } else {
+        const errMsg = primaryError?.message || 'Failed to send email'
+        return NextResponse.json(
+          { error: 'Failed to send email', details: errMsg },
+          { status: 500 }
+        )
+      }
+    }
 
     console.log('✅ API: Email sent successfully:', info.messageId)
 

@@ -26,7 +26,8 @@ export function getEmailConfig(): EmailConfig {
   return {
     host,
     port,
-    secure: port === 465, // true for 465, false for other ports
+    // Prefer STARTTLS (587) in dev; SMTPS (465) in prod only when explicitly set
+    secure: port === 465,
     auth: {
       user,
       pass

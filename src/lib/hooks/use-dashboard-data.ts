@@ -29,6 +29,7 @@ const dashboardCache = new Map<string, {
 const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
 
 export function useDashboardData({ userId, coachId, isCoach = false }: UseDashboardDataOptions): DashboardData {
+  
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [upcomingWorkouts, setUpcomingWorkouts] = useState<WorkoutWithDetails[]>([])
   const [recentClients, setRecentClients] = useState<User[]>([])

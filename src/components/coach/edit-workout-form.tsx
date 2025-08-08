@@ -170,6 +170,77 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
     fetchComments()
   }, [workout.id, supabase, initialExercises])
 
+  // Smooth-scroll to hashed comment id when present and comments change
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const hash = window.location.hash
+    if (!hash) return
+    const el = document.querySelector(hash) as HTMLElement | null
+    if (el) {
+      const scrollParent = (node: HTMLElement | null): HTMLElement | null => {
+        let current: HTMLElement | null = node?.parentElement || null
+        while (current) {
+          const style = window.getComputedStyle(current)
+          const overflowY = style.overflowY
+          const canScroll = (overflowY === 'auto' || overflowY === 'scroll') && current.scrollHeight > current.clientHeight
+          if (canScroll) return current
+          current = current.parentElement
+        }
+        return null
+      }
+
+      setTimeout(() => {
+        const container = scrollParent(el)
+        if (container) {
+          const containerRect = container.getBoundingClientRect()
+          const elRect = el.getBoundingClientRect()
+          const offset = elRect.top - containerRect.top + container.scrollTop - container.clientHeight / 2 + el.clientHeight / 2
+          container.scrollTo({ top: Math.max(0, offset), behavior: 'smooth' })
+        } else {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }
+        el.classList.add('ring-2', 'ring-blue-500', 'ring-offset-2')
+        setTimeout(() => el.classList.remove('ring-2', 'ring-blue-500', 'ring-offset-2'), 2000)
+      }, 150)
+    }
+  }, [workoutComments])
+
+  // If a specific comment id is in the hash but not yet loaded, try to fetch it and append
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const match = window.location.hash.match(/^#comment-(\d+)$/)
+    if (!match) return
+    const commentId = Number.parseInt(match[1])
+    if (!commentId) return
+
+    const exists = workoutComments.some(c => c.id === commentId)
+    if (exists) return
+
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { data, error } = await supabase
+          .from('comments')
+          .select('*, user:users(name, role)')
+          .eq('id', commentId)
+          .single()
+
+        if (!cancelled && !error && data && data.workout_id === workout.id) {
+          setWorkoutComments(prev => {
+            // Avoid duplicates and keep ascending order by created_at
+            const next = [...prev, data]
+            next.sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+            return next
+          })
+        }
+      } catch (e) {
+        // ignore
+      }
+    })()
+
+    return () => { cancelled = true }
+  }, [supabase, workout.id, workoutComments])
+
   const addExercise = () => {
     setWorkoutExercises([
       ...workoutExercises,
@@ -244,10 +315,30 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
   const handleAddCoachWorkoutComment = async () => {
     if (!newCoachWorkoutComment.trim()) return
 
+    // Optimistic add
+    const now = new Date().toISOString()
+    const tempId = -Date.now()
+    const tempComment = {
+      id: tempId,
+      workout_id: workout.id,
+      workout_exercise_id: null,
+      user_id: currentUserId,
+      comment_text: newCoachWorkoutComment.trim(),
+      created_at: now,
+      updated_at: now,
+      user: { name: 'Coach', role: 'coach' },
+    }
+
+    setWorkoutComments(prev => [...prev, tempComment])
+    const sentText = newCoachWorkoutComment.trim()
+    setNewCoachWorkoutComment("")
     setCommentLoading(true)
+
     try {
       const { data: userData, error: userError } = await supabase.auth.getUser()
       if (userError || !userData.user) {
+        // rollback
+        setWorkoutComments(prev => prev.filter(c => c.id !== tempId))
         toast.error("You must be logged in as coach to comment.")
         setCommentLoading(false)
         return
@@ -256,29 +347,34 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
       const { data: commentData, error: commentError } = await supabase.from("comments").insert({
         user_id: userData.user.id,
         workout_id: workout.id,
-        comment_text: newCoachWorkoutComment.trim(),
-      }).select().single()
+        comment_text: sentText,
+      }).select(`*, user:users(name, role)`).single()
 
       if (commentError) throw commentError
 
-      // Use notification service to create notification
-      try {
-        await notificationService.notifyUserWorkoutComment(
-          workout.id,
-          userData.user.id, // Coach's ID
-          program.user.id, // Client's ID
-          newCoachWorkoutComment.trim()
-        )
-        console.log('✅ User notification sent successfully')
-      } catch (notificationError) {
-        console.error('❌ Error sending notification:', notificationError)
-        // Don't show error to user, just log it
-      }
+      // Replace temp with real
+      setWorkoutComments(prev => prev.map(c => c.id === tempId ? commentData : c))
 
-      setNewCoachWorkoutComment("")
-      await fetchComments() // Re-fetch comments to show the new one
+      // Background notification with comment id
+      ;(async () => {
+        try {
+          await notificationService.notifyUserWorkoutComment(
+            workout.id,
+            userData.user.id, // Coach's ID
+            program.user.id, // Client's ID
+            sentText,
+            commentData?.id
+          )
+          console.log('✅ User notification sent successfully')
+        } catch (notificationError) {
+          console.error('❌ Error sending notification:', notificationError)
+        }
+      })()
+
       toast.success("Comment added successfully!")
     } catch (err) {
+      // rollback
+      setWorkoutComments(prev => prev.filter(c => c.id !== tempId))
       console.error("Failed to add comment:", err)
       toast.error("Failed to add comment")
     } finally {
@@ -824,7 +920,7 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
                           </div>
                         )}
 
-                        {/* Exercise Comments */}
+                        {/* Exercise Comments
                         <div className="mt-4 space-y-3">
                           <h5 className="font-semibold text-sm">Comments for this Exercise</h5>
                           <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
@@ -884,7 +980,7 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
                               <Send className="h-4 w-4" />
                             </Button>
                           </div>
-                        </div>
+                        </div> */}
                       </CardContent>
                     </Card>
                   ))}
@@ -895,7 +991,7 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
         )}
 
         {/* Workout Comments Section */}
-        <Card>
+        <Card id="comments-section">
           <CardHeader className="pb-4">
             <CardTitle className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white">
               Workout Comments
@@ -910,7 +1006,7 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
                 <p className="text-gray-500 text-sm italic">No comments yet. Be the first to comment!</p>
               )}
               {workoutComments.map((c: any) => (
-                <div key={c.id} className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg flex gap-3">
+                <div id={`comment-${c.id}`} key={c.id} className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg flex gap-3">
                   <div className="w-8 h-8 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center flex-shrink-0">
                     <User className="h-4 w-4 text-gray-500" />
                   </div>
@@ -929,7 +1025,7 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
                     </div>
                     <div className="flex items-start justify-between">
                       <p className="text-sm text-gray-700 dark:text-gray-300 flex-1">{c.comment_text}</p>
-                      {c.user_id === currentUserId && (
+                      {/* {c.user_id === currentUserId && (
                         <Button
                           variant="ghost"
                           size="sm"
@@ -938,7 +1034,7 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
                         >
                           <Trash2 className="h-3 w-3" />
                         </Button>
-                      )}
+                      )} */}
                     </div>
                   </div>
                 </div>

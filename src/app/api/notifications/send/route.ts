@@ -5,7 +5,6 @@ export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerClient()
     
-    // Check for service role authentication (for testing)
     const serviceRoleKey = request.headers.get('X-Supabase-Auth')
     const testUserId = request.headers.get('X-Test-User-Id')
     

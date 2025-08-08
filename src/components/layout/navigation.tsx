@@ -3,7 +3,6 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { usePathname, useRouter } from "next/navigation"
-import Link from "next/link"
 import { LogOut, Menu, X, Dumbbell, Calendar, Users, Home, User, Bell, Trash2 } from 'lucide-react'
 import { useAuth } from "@/components/providers/auth-provider"
 import { useGlobalLoading } from "@/components/providers/loading-provider"
@@ -24,7 +23,7 @@ const router = useRouter()
 const { setLoading } = useGlobalLoading()
 
 // Add notification hook
-const { notifications, unreadCount, deleteNotification, markNotificationAsRead } = useNotifications(profile?.id)
+  const { notifications, unreadCount, deleteNotification, markNotificationAsRead } = useNotifications(profile?.id)
 const [notifSheetOpen, setNotifSheetOpen] = useState(false) // Use Sheet for notifications
 
 const handleNotificationClick = async (notificationId: string, relatedId?: string) => {
@@ -35,24 +34,24 @@ const handleNotificationClick = async (notificationId: string, relatedId?: strin
   // Navigate to the appropriate page based on user role and notification type
   if (relatedId && profile) {
     try {
+      // Allow optional comment id: workout:<wid>:program:<pid>[:comment:<cid>]
+      const match = relatedId.match(/workout:(\d+):program:(\d+)(?::comment:(\d+))?/)
+      const commentHash = match?.[3] ? `#comment-${match[3]}` : '#comments-section'
+
       if (profile.role === "coach") {
-        // Parse related_id to get workout and program IDs
-        const match = relatedId.match(/workout:(\d+):program:(\d+)/)
         if (match) {
           const [, workoutId, programId] = match
           // For coach, navigate to the edit workout page
-          router.push(`/coach/programs/${programId}/workouts/${workoutId}`)
+          router.push(`/coach/programs/${programId}/workouts/${workoutId}${commentHash}`)
         } else {
           // Fallback for old format or other notification types
           router.push(`/coach/dashboard`)
         }
       } else {
-        // Parse related_id to get workout ID
-        const match = relatedId.match(/workout:(\d+):program:(\d+)/)
         if (match) {
           const [, workoutId] = match
           // For user, navigate to the workout detail page
-          router.push(`/dashboard/workouts/${workoutId}`)
+          router.push(`/dashboard/workouts/${workoutId}${commentHash}`)
         } else {
           // Fallback for old format or other notification types
           router.push(`/dashboard/workouts/${relatedId}`)
@@ -74,6 +73,8 @@ const handleDeleteNotification = async (notificationId: string, e: React.MouseEv
   e.stopPropagation()
   await deleteNotification(notificationId)
 }
+
+  // Keep notifications unread until user clicks on an item; do not auto-mark as read when opening.
 
 const handleSignOut = async () => {
   try {
@@ -232,14 +233,21 @@ return (
                         notifications.map((notif) => (
                           <div
                             key={notif.id}
-                            className={`p-3 border-b last:border-b-0 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 ${
-                              !notif.read ? "bg-blue-50 dark:bg-blue-900/20" : ""
+                            className={`p-3 border-b last:border-b-0 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${
+                              !notif.read
+                                ? "bg-blue-50/60 dark:bg-blue-900/20 border-l-4 border-l-blue-500"
+                                : "border-l-4 border-l-transparent"
                             }`}
                             onClick={() => handleNotificationClick(notif.id, notif.related_id ?? undefined)}
                           >
                             <div className="flex items-start justify-between">
                               <div className="flex-1 min-w-0">
-                                <div className="font-medium text-sm text-gray-900 dark:text-white">{notif.title}</div>
+                                <div className="flex items-center gap-2">
+                                  {!notif.read && (
+                                    <span className="inline-block h-2 w-2 rounded-full bg-blue-500" aria-hidden="true"></span>
+                                  )}
+                                  <div className="font-medium text-sm text-gray-900 dark:text-white">{notif.title}</div>
+                                </div>
                                 <div className="text-sm text-gray-600 dark:text-gray-300 mt-1">{notif.message}</div>
                                 <div className="text-xs text-gray-400 mt-1">
                                   {new Date(notif.created_at).toLocaleString()}
@@ -247,7 +255,7 @@ return (
                               </div>
                               <button
                                 onClick={(e) => handleDeleteNotification(notif.id, e)}
-                                className="ml-2 p-1 text-gray-400 hover:text-red-500 transition-colors"
+                                className="ml-2 p-1 text-gray-400 hover:text-red-500 transition-colors cursor-pointer"
                                 title="Delete notification"
                               >
                                 <Trash2 className="h-3 w-3" />
