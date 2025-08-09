@@ -284,7 +284,7 @@ export function CreateWorkoutForm({ program, redirectOnSuccess = true, onSuccess
               </div>
               <div className="space-y-2">
                 <Label htmlFor="scheduledDate" className="text-sm font-medium">
-                  Scheduled Date
+                  Scheduled Date*
                 </Label>
                 <Input
                   id="scheduledDate"

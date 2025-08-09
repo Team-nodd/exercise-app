@@ -439,6 +439,7 @@ export function BaseWorkoutManager({
             programId={programId}
             userId={userId}
             onEditWorkout={handleEditWorkout}
+            onCreateWorkout={handleCreateWorkout}
           />
         </TabsContent>
 
@@ -455,7 +456,11 @@ export function BaseWorkoutManager({
                   </CardDescription>
                 </div>
                 {showCreateButton && (
-                  <Button onClick={handleCreateWorkout}>
+                  <Button
+                    onClick={handleCreateWorkout}
+                    disabled={!programId}
+                    title={!programId ? "First choose a program please" : undefined}
+                  >
                     <Plus className="h-4 w-4 mr-2" />
                     {createButtonText}
                   </Button>
@@ -478,7 +483,12 @@ export function BaseWorkoutManager({
                         : `No ${activeStatFilter} workouts found. Try changing the filter.`}
                     </p>
                     {showCreateButton && activeStatFilter === "all" && (
-                      <Button onClick={handleCreateWorkout} className="mt-6">
+                      <Button
+                        onClick={handleCreateWorkout}
+                        className="mt-6"
+                        disabled={!programId}
+                        title={!programId ? "First choose a program please" : undefined}
+                      >
                         <Plus className="h-4 w-4 mr-2" />
                         Add First Workout
                       </Button>

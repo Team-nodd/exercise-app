@@ -812,12 +812,21 @@ export function SharedCalendar({
             <Button variant="ghost" size="sm" onClick={() => navigateMonth('next')}>
               <ChevronRight className="h-4 w-4" />
             </Button>
-            {/* {userRole === "coach" && (
-              <Button size="sm" onClick={() => onCreateWorkout?.()}>
+            {userRole === "coach" && (
+              <Button
+                size="sm"
+                onClick={() => {
+                  if (!programId) return
+                  onCreateWorkout?.()
+                }}
+                disabled={!programId}
+                aria-disabled={!programId}
+                title={!programId ? "First choose a program please" : undefined}
+              >
                 <Plus className="h-4 w-4 mr-2" />
                 Add Workout
               </Button>
-            )} */}
+            )}
           </div>
         </div>
       </CardHeader>

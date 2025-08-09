@@ -640,7 +640,7 @@ export function EditWorkoutForm({ program, workout, initialExercises, redirectOn
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="scheduledDate">Scheduled Date</Label>
+              <Label htmlFor="scheduledDate">Scheduled Date*</Label>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
