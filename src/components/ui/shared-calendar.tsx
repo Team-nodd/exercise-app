@@ -122,6 +122,9 @@ export function SharedCalendar({
       }
       return newDate
     })
+    // Close any expanded or dialog views when navigating months
+    setExpandedDate(null)
+    setShowWorkoutDialog(false)
   }
 
   // FIXED: Move workout to new date with proper timezone handling
@@ -288,7 +291,12 @@ export function SharedCalendar({
     
     const workoutsForDay = getWorkoutsForDate(date)
     
-    if (workoutsForDay.length === 0) return
+    // Clicking an empty day closes any open panels
+    if (workoutsForDay.length === 0) {
+      setExpandedDate(null)
+      setShowWorkoutDialog(false)
+      return
+    }
 
     if (isMobile || workoutsForDay.length > 1) {
       setSelectedDate(date)
@@ -498,7 +506,10 @@ export function SharedCalendar({
           </div>
           {/* Expanded view for desktop single workout */}
           {isExpanded && workoutsForDay.length === 1 && !isMobile && (
-            <div className="absolute top-full left-0 right-0 z-10 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 mt-1">
+            <div
+              className="absolute top-full left-0 right-0 z-10 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 mt-1"
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="space-y-2">
                 <h4 className="font-semibold text-sm">{workoutsForDay[0].name}</h4>
                 <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
@@ -608,7 +619,10 @@ export function SharedCalendar({
           </div>
           {/* Expanded view for desktop single workout */}
           {isExpanded && workoutsForDay.length === 1 && !isMobile && (
-            <div className="absolute top-full left-0 right-0 z-10 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 mt-1">
+            <div
+              className="absolute top-full left-0 right-0 z-10 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 mt-1"
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="space-y-2">
                 <h4 className="font-semibold text-sm">{workoutsForDay[0].name}</h4>
                 <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
@@ -722,7 +736,10 @@ export function SharedCalendar({
           </div>
           {/* Expanded view for desktop single workout */}
           {isExpanded && workoutsForDay.length === 1 && !isMobile && (
-            <div className="absolute top-full left-0 right-0 z-10 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 mt-1">
+            <div
+              className="absolute top-full left-0 right-0 z-10 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 mt-1"
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="space-y-2">
                 <h4 className="font-semibold text-sm">{workoutsForDay[0].name}</h4>
                 <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
@@ -830,7 +847,14 @@ export function SharedCalendar({
           </div>
         </div>
       </CardHeader>
-      <CardContent className="relative">
+      <CardContent
+        className="relative"
+        onClick={() => {
+          // Clicking background closes expanded or dialog views
+          setExpandedDate(null)
+          setShowWorkoutDialog(false)
+        }}
+      >
         {/* Edge navigation zones for coaches */}
         {userRole === "coach" && draggedWorkout && (
           <>
