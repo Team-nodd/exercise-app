@@ -159,6 +159,7 @@ export function ClientCalendar({ client, initialProgramId }: ClientCalendarProps
       onCreateDialogClose={() => setDialogProgram(null)}
       onCreateWorkout={openCreateForSelected}
       showCreateButton={!!selectedProgramObj}
+      openCreateWhenProgramProvided={true}
     />
   )
 }

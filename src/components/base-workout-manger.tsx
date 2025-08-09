@@ -39,6 +39,9 @@ interface BaseWorkoutManagerProps {
   // Create Dialog
   createDialogProgram?: ProgramWithDetails | null
   onCreateDialogClose?: () => void
+
+  // Control
+  openCreateWhenProgramProvided?: boolean
 }
 
 export function BaseWorkoutManager({
@@ -54,6 +57,7 @@ export function BaseWorkoutManager({
   onError,
   createDialogProgram,
   onCreateDialogClose,
+  openCreateWhenProgramProvided = false,
 }: BaseWorkoutManagerProps) {
   const [workouts, setWorkouts] = useState<WorkoutWithDetails[]>(initialWorkouts)
   const [loading, setLoading] = useState(true)
@@ -66,9 +70,12 @@ export function BaseWorkoutManager({
 
   const supabase = createClient()
 
+  // Open when parent provides program (e.g., after clicking Add in parent)
   useEffect(() => {
-    setCreateOpen(!!createDialogProgram)
-  }, [createDialogProgram])
+    if (openCreateWhenProgramProvided && createDialogProgram) {
+      setCreateOpen(true)
+    }
+  }, [openCreateWhenProgramProvided, createDialogProgram])
 
   // Fetch workouts
   const fetchWorkouts = async () => {

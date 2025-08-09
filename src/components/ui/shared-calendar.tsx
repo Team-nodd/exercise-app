@@ -949,7 +949,7 @@ export function SharedCalendar({
                           href={`/dashboard/workouts/${workout.id}`}
                           onClick={() => setShowWorkoutDialog(false)}
                         >
-                          Start Workout
+                          Start
                         </Button>
                       ) : (
                         <>

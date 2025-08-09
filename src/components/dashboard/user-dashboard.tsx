@@ -239,7 +239,7 @@ export function UserDashboard({ user }: UserDashboardProps) {
       </div>
 
       {/* Quick Actions and Upcoming Workouts */}
-      <div className="grid lg:grid-cols-3 gap-6">
+      <div className="sm:grid lg:grid-cols-3 gap-6">
         {/* Quick Actions */}
         <Card className="w-full">
           <CardHeader className="pb-4">
@@ -291,7 +291,7 @@ export function UserDashboard({ user }: UserDashboardProps) {
         </Card>
 
         {/* Upcoming Workouts */}
-        <Card className="lg:col-span-2">
+        <Card className="lg:col-span-2 mt-6">
           <CardHeader className="pb-4">
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-2 sm:text-lg">
