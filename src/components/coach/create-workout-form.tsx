@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
@@ -12,14 +11,15 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
-import { Loader2, Plus, Trash2, ArrowLeft } from "lucide-react"
-// import Link from "next/link"
+import { Loader2, Plus, Trash2 } from "lucide-react"
 import type { ProgramWithDetails, Exercise, CardioExercise } from "@/types"
-import { AppLink } from "../ui/app-link"
 import { useGlobalLoading } from "../providers/loading-provider"
 
 interface CreateWorkoutFormProps {
   program: ProgramWithDetails
+  redirectOnSuccess?: boolean
+  onSuccess?: (workoutId: number) => void
+  onCancel?: () => void
 }
 
 interface WorkoutExercise {
@@ -33,42 +33,36 @@ interface WorkoutExercise {
   order_in_workout: number
 }
 
-export function CreateWorkoutForm({ program }: CreateWorkoutFormProps) {
+export function CreateWorkoutForm({ program, redirectOnSuccess = true, onSuccess, onCancel }: CreateWorkoutFormProps) {
   const [name, setName] = useState("")
   const [workoutType, setWorkoutType] = useState<"gym" | "cardio">("gym")
   const [scheduledDate, setScheduledDate] = useState("")
   const [notes, setNotes] = useState("")
-
   // Cardio specific fields
   const [intensityType, setIntensityType] = useState("")
   const [durationMinutes, setDurationMinutes] = useState("")
   const [targetTss, setTargetTss] = useState("")
   const [targetFtp, setTargetFtp] = useState("")
-
   // Exercise management
   const [exercises, setExercises] = useState<Exercise[]>([])
   const [workoutExercises, setWorkoutExercises] = useState<WorkoutExercise[]>([])
-  // const [loading, setLoading] = useState(false)
-  const {loading, setLoading} = useGlobalLoading()
+  const { loading, setLoading } = useGlobalLoading()
   const [loadingExercises, setLoadingExercises] = useState(true)
   const [cardioTemplates, setCardioTemplates] = useState<CardioExercise[]>([])
   const [selectedCardioId, setSelectedCardioId] = useState<string>("")
 
   const router = useRouter()
   const searchParams = useSearchParams()
-  // const { toast } = useToast()
   const supabase = createClient()
 
   useEffect(() => {
     const fetchExercises = async () => {
       try {
         const { data, error } = await supabase.from("exercises").select("*").order("name", { ascending: true })
-
         if (error) {
           console.error("Error fetching exercises:", error)
           return
         }
-
         setExercises(data || [])
       } catch (error) {
         console.error("Error fetching exercises:", error)
@@ -94,6 +88,7 @@ export function CreateWorkoutForm({ program }: CreateWorkoutFormProps) {
         // ignore
       }
     }
+
     fetchCardio()
   }, [program.coach_id, supabase])
 
@@ -141,26 +136,21 @@ export function CreateWorkoutForm({ program }: CreateWorkoutFormProps) {
   const updateExercise = (index: number, field: keyof WorkoutExercise, value: unknown) => {
     const updated = [...workoutExercises]
     updated[index] = { ...updated[index], [field]: value }
-
     // If exercise_id changed, update the exercise reference
     if (field === "exercise_id") {
       const exercise = exercises.find((ex) => ex.id === value)
       updated[index].exercise = exercise
     }
-
     setWorkoutExercises(updated)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-
     try {
       // Validate gym workouts have exercises
       if (workoutType === "gym" && workoutExercises.length === 0) {
-        toast(
-          "Gym workouts must have at least one exercise"
-          )
+        toast("Gym workouts must have at least one exercise")
         setLoading(false)
         return
       }
@@ -169,7 +159,7 @@ export function CreateWorkoutForm({ program }: CreateWorkoutFormProps) {
       if (workoutType === "gym") {
         const invalidExercises = workoutExercises.filter((ex) => ex.exercise_id === 0)
         if (invalidExercises.length > 0) {
-           toast( "Please select exercises for all workout exercises")
+          toast("Please select exercises for all workout exercises")
           setLoading(false)
           return
         }
@@ -220,18 +210,20 @@ export function CreateWorkoutForm({ program }: CreateWorkoutFormProps) {
 
         if (exerciseError) {
           console.error("Error creating workout exercises:", exerciseError)
-          toast( "Workout created but failed to add exercises")
+          toast("Workout created but failed to add exercises")
         }
       }
 
-      toast( "Workout created successfully!",
-      )
+      toast("Workout created successfully!")
 
-      router.push(`/coach/programs/${program.id}`)
+      if (redirectOnSuccess) {
+        router.push(`/coach/programs/${program.id}`)
+      } else {
+        onSuccess?.(workout.id)
+      }
     } catch (error) {
       console.error("Error creating workout:", error)
-      toast("An unexpected error occurred",
-     )
+      toast("An unexpected error occurred")
     } finally {
       setLoading(false)
     }
@@ -239,81 +231,82 @@ export function CreateWorkoutForm({ program }: CreateWorkoutFormProps) {
 
   if (loadingExercises) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin" />
-        </div>
+      <div className="flex items-center justify-center h-32">
+        <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     )
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-6xl">
-      <div className="mb-8">
-        <AppLink
-          href={`/coach/programs/${program.id}`}
-          className="flex items-center text-sm text-muted-foreground hover:text-primary mb-4"
-        >
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to {program.name}
-        </AppLink>
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Create New Workout</h1>
-        <p className="text-gray-600 dark:text-gray-300 mt-2">
+    <div className="w-full max-w-none">
+      <div className="mb-6">
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">Create New Workout</h1>
+        <p className="text-gray-600 dark:text-gray-300 mt-2 text-sm sm:text-base">
           Add a workout to <strong>{program.name}</strong> for {program.user.name}
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-8">
+      <form onSubmit={handleSubmit} className="space-y-6">
         {/* Basic Workout Info */}
         <Card>
           <CardHeader>
-            <CardTitle>Workout Details</CardTitle>
-            <CardDescription>Basic information about the workout</CardDescription>
+            <CardTitle className="text-lg sm:text-xl">Workout Details</CardTitle>
+            <CardDescription className="text-sm">Basic information about the workout</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Workout Name *</Label>
+              <Label htmlFor="name" className="text-sm font-medium">
+                Workout Name *
+              </Label>
               <Input
                 id="name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g., Upper Body Strength"
                 required
+                className="w-full"
               />
             </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="workoutType">Workout Type *</Label>
-              <Select value={workoutType} onValueChange={(value: "gym" | "cardio") => setWorkoutType(value)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="gym">Gym Workout</SelectItem>
-                  <SelectItem value="cardio">Cardio Session</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="workoutType" className="text-sm font-medium">
+                  Workout Type *
+                </Label>
+                <Select value={workoutType} onValueChange={(value: "gym" | "cardio") => setWorkoutType(value)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="gym">Gym Workout</SelectItem>
+                    <SelectItem value="cardio">Cardio Session</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="scheduledDate" className="text-sm font-medium">
+                  Scheduled Date
+                </Label>
+                <Input
+                  id="scheduledDate"
+                  type="date"
+                  value={scheduledDate}
+                  onChange={(e) => setScheduledDate(e.target.value)}
+                  required
+                  className="w-full"
+                />
+              </div>
             </div>
-
             <div className="space-y-2">
-              <Label htmlFor="scheduledDate">Scheduled Date</Label>
-              <Input
-                id="scheduledDate"
-                type="date"
-                value={scheduledDate}
-                onChange={(e) => setScheduledDate(e.target.value)}
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="notes">Notes</Label>
+              <Label htmlFor="notes" className="text-sm font-medium">
+                Notes
+              </Label>
               <Textarea
                 id="notes"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Any special instructions or notes..."
                 rows={3}
+                className="w-full resize-none"
               />
             </div>
           </CardContent>
@@ -323,27 +316,30 @@ export function CreateWorkoutForm({ program }: CreateWorkoutFormProps) {
         {workoutType === "cardio" && (
           <Card>
             <CardHeader>
-              <CardTitle>Cardio Details</CardTitle>
-              <CardDescription>Specific parameters for cardio workouts</CardDescription>
+              <CardTitle className="text-lg sm:text-xl">Cardio Details</CardTitle>
+              <CardDescription className="text-sm">Specific parameters for cardio workouts</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label>Select Cardio Type</Label>
-                <Select value={selectedCardioId} onValueChange={(v) => {
-                  setSelectedCardioId(v)
-                  const t = cardioTemplates.find(ct => String(ct.id) === v)
-                  if (t) {
-                    setIntensityType(t.intensity_type || "")
-                    setDurationMinutes(t.duration_minutes ? String(t.duration_minutes) : "")
-                    setTargetTss(t.target_tss ? String(t.target_tss) : "")
-                    setTargetFtp(t.target_ftp ? String(t.target_ftp) : "")
-                  }
-                }}>
+                <Label className="text-sm font-medium">Select Cardio Type</Label>
+                <Select
+                  value={selectedCardioId}
+                  onValueChange={(v) => {
+                    setSelectedCardioId(v)
+                    const t = cardioTemplates.find((ct) => String(ct.id) === v)
+                    if (t) {
+                      setIntensityType(t.intensity_type || "")
+                      setDurationMinutes(t.duration_minutes ? String(t.duration_minutes) : "")
+                      setTargetTss(t.target_tss ? String(t.target_tss) : "")
+                      setTargetFtp(t.target_ftp ? String(t.target_ftp) : "")
+                    }
+                  }}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Choose a cardio type (optional)" />
                   </SelectTrigger>
                   <SelectContent>
-                    {cardioTemplates.map(ct => (
+                    {cardioTemplates.map((ct) => (
                       <SelectItem key={ct.id} value={String(ct.id)}>
                         {ct.name}
                       </SelectItem>
@@ -351,9 +347,11 @@ export function CreateWorkoutForm({ program }: CreateWorkoutFormProps) {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="intensityType">Intensity Type</Label>
+                  <Label htmlFor="intensityType" className="text-sm font-medium">
+                    Intensity Type
+                  </Label>
                   <Input
                     id="intensityType"
                     value={intensityType}
@@ -362,7 +360,9 @@ export function CreateWorkoutForm({ program }: CreateWorkoutFormProps) {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="durationMinutes">Duration (minutes)</Label>
+                  <Label htmlFor="durationMinutes" className="text-sm font-medium">
+                    Duration (minutes)
+                  </Label>
                   <Input
                     id="durationMinutes"
                     type="number"
@@ -372,9 +372,11 @@ export function CreateWorkoutForm({ program }: CreateWorkoutFormProps) {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="targetTss">Target TSS</Label>
+                  <Label htmlFor="targetTss" className="text-sm font-medium">
+                    Target TSS
+                  </Label>
                   <Input
                     id="targetTss"
                     type="number"
@@ -384,7 +386,9 @@ export function CreateWorkoutForm({ program }: CreateWorkoutFormProps) {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="targetFtp">Target FTP (watts)</Label>
+                  <Label htmlFor="targetFtp" className="text-sm font-medium">
+                    Target FTP (watts)
+                  </Label>
                   <Input
                     id="targetFtp"
                     type="number"
@@ -402,12 +406,12 @@ export function CreateWorkoutForm({ program }: CreateWorkoutFormProps) {
         {workoutType === "gym" && (
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                  <CardTitle>Exercises</CardTitle>
-                  <CardDescription>Add exercises to this workout</CardDescription>
+                  <CardTitle className="text-lg sm:text-xl">Exercises</CardTitle>
+                  <CardDescription className="text-sm">Add exercises to this workout</CardDescription>
                 </div>
-                <Button type="button" onClick={addExercise} variant="outline">
+                <Button type="button" onClick={addExercise} variant="outline" size="sm">
                   <Plus className="h-4 w-4 mr-2" />
                   Add Exercise
                 </Button>
@@ -416,26 +420,25 @@ export function CreateWorkoutForm({ program }: CreateWorkoutFormProps) {
             <CardContent>
               {workoutExercises.length === 0 ? (
                 <div className="text-center py-8">
-                  <p className="text-muted-foreground mb-4">No exercises added yet</p>
-                  <Button type="button" onClick={addExercise}>
+                  <p className="text-muted-foreground mb-4 text-sm">No exercises added yet</p>
+                  <Button type="button" onClick={addExercise} size="sm">
                     <Plus className="h-4 w-4 mr-2" />
                     Add First Exercise
                   </Button>
                 </div>
               ) : (
-                <div className="space-y-6">
+                <div className="space-y-4">
                   {workoutExercises.map((workoutExercise, index) => (
                     <div key={index} className="border rounded-lg p-4">
                       <div className="flex items-center justify-between mb-4">
-                        <h4 className="font-semibold">Exercise {index + 1}</h4>
+                        <h4 className="font-semibold text-sm sm:text-base">Exercise {index + 1}</h4>
                         <Button type="button" variant="outline" size="sm" onClick={() => removeExercise(index)}>
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label>Exercise *</Label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2 sm:col-span-2">
+                          <Label className="text-sm font-medium">Exercise *</Label>
                           <Select
                             value={workoutExercise.exercise_id.toString()}
                             onValueChange={(value) => updateExercise(index, "exercise_id", Number.parseInt(value))}
@@ -452,9 +455,8 @@ export function CreateWorkoutForm({ program }: CreateWorkoutFormProps) {
                             </SelectContent>
                           </Select>
                         </div>
-
                         <div className="space-y-2">
-                          <Label>Volume Level</Label>
+                          <Label className="text-sm font-medium">Volume Level</Label>
                           <Select
                             value={workoutExercise.volume_level}
                             onValueChange={(value: "low" | "moderate" | "high") =>
@@ -471,9 +473,8 @@ export function CreateWorkoutForm({ program }: CreateWorkoutFormProps) {
                             </SelectContent>
                           </Select>
                         </div>
-
                         <div className="space-y-2">
-                          <Label>Sets</Label>
+                          <Label className="text-sm font-medium">Sets</Label>
                           <Input
                             type="number"
                             value={workoutExercise.sets}
@@ -481,9 +482,8 @@ export function CreateWorkoutForm({ program }: CreateWorkoutFormProps) {
                             min="1"
                           />
                         </div>
-
                         <div className="space-y-2">
-                          <Label>Reps</Label>
+                          <Label className="text-sm font-medium">Reps</Label>
                           <Input
                             type="number"
                             value={workoutExercise.reps}
@@ -491,18 +491,16 @@ export function CreateWorkoutForm({ program }: CreateWorkoutFormProps) {
                             min="1"
                           />
                         </div>
-
                         <div className="space-y-2">
-                          <Label>Weight</Label>
+                          <Label className="text-sm font-medium">Weight</Label>
                           <Input
                             value={workoutExercise.weight}
                             onChange={(e) => updateExercise(index, "weight", e.target.value)}
                             placeholder="e.g., 80kg, BW"
                           />
                         </div>
-
                         <div className="space-y-2">
-                          <Label>Rest (seconds)</Label>
+                          <Label className="text-sm font-medium">Rest (seconds)</Label>
                           <Input
                             type="number"
                             value={workoutExercise.rest_seconds}
@@ -513,14 +511,13 @@ export function CreateWorkoutForm({ program }: CreateWorkoutFormProps) {
                           />
                         </div>
                       </div>
-
                       {workoutExercise.exercise && (
                         <div className="mt-4 p-3 bg-muted rounded-lg">
-                          <p className="text-sm">
+                          <p className="text-xs sm:text-sm">
                             <strong>Instructions:</strong>{" "}
                             {workoutExercise.exercise.instructions || "No instructions available"}
                           </p>
-                          <p className="text-sm text-muted-foreground mt-1">
+                          <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                             Equipment: {workoutExercise.exercise.equipment || "None specified"}
                           </p>
                         </div>
@@ -534,14 +531,25 @@ export function CreateWorkoutForm({ program }: CreateWorkoutFormProps) {
         )}
 
         {/* Submit Buttons */}
-        <div className="flex gap-4">
-          <Button type="submit" disabled={loading}>
+        <div className="flex flex-col sm:flex-row gap-3 pt-4">
+          <Button type="submit" disabled={loading} className="w-full sm:w-auto">
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Create Workout
           </Button>
-          <Button type="button" variant="outline" asChild>
-            <AppLink href={`/coach/programs/${program.id}`}>Cancel</AppLink>
-          </Button>
+          {onCancel ? (
+            <Button type="button" variant="outline" onClick={onCancel} className="w-full sm:w-auto bg-transparent">
+              Cancel
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => router.push(`/coach/programs/${program.id}`)}
+              className="w-full sm:w-auto"
+            >
+              Cancel
+            </Button>
+          )}
         </div>
       </form>
     </div>

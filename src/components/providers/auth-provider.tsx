@@ -5,6 +5,7 @@ import { createContext, useContext, useState, useEffect, useRef } from "react"
 import { createClient } from "@/lib/supabase/client"
 import type { User, Session } from "@supabase/supabase-js"
 
+
 interface Profile {
   id: string
   name: string
@@ -22,13 +23,51 @@ interface AuthContextType {
 interface AuthProviderProps {
   children: React.ReactNode
   initialSession?: Session | null
+  initialProfile?: Profile | null
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-export function AuthProvider({ children, initialSession }: AuthProviderProps) {
+type DashboardStats = {
+  totalPrograms: number
+  activePrograms: number
+  completedWorkouts: number
+  upcomingWorkouts: number
+  totalClients: number
+}
+
+async function fetchProfile(userId: string): Promise<Profile> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("users")
+    .select("id,name,email,role")
+    .eq("id", userId)
+    .single()
+  if (error || !data) throw error ?? new Error("Profile not found")
+  return data as Profile
+}
+
+async function fetchDashboardStats(userId: string): Promise<DashboardStats> {
+  const supabase = await createClient()
+  // Replace this with your real queries or an RPC
+  const { count: totalPrograms } = await supabase
+    .from("programs")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+
+  // Fill the rest similarly or via RPC to reduce roundtrips
+  return {
+    totalPrograms: totalPrograms ?? 0,
+    activePrograms: 0,
+    completedWorkouts: 0,
+    upcomingWorkouts: 0,
+    totalClients: 0,
+  }
+}
+
+export function AuthProvider({ children, initialSession, initialProfile }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(initialSession?.user ?? null)
-  const [profile, setProfile] = useState<Profile | null>(null)
+  const [profile, setProfile] = useState<Profile | null>(initialProfile ?? null)
   const [loading, setLoading] = useState(true)
   const fetchingProfile = useRef<string | null>(null) // Track which user we're fetching profile for
   const profileCache = useRef<Map<string, Profile>>(new Map()) // Cache profiles
@@ -92,15 +131,14 @@ export function AuthProvider({ children, initialSession }: AuthProviderProps) {
         // If we have an initial session, use it
         if (initialSession?.user) {
           console.log("🔄 AUTH: Using initial session for user:", initialSession.user.id)
-          const profileData = await fetchProfile(initialSession.user.id)
-          if (mounted) {
-            setUser(initialSession.user)
-            if (profileData) {
-              setProfile(profileData)
-            }
-            setLoading(false)
-            console.log("✅ AUTH: Initial session setup complete")
+          setUser(initialSession.user)
+          if (initialProfile) setProfile(initialProfile)
+          else {
+            // Fallback fetch only if profile was not provided from the server
+            const p = await fetchProfile(initialSession.user.id)
+            if (p) setProfile(p)
           }
+          if (mounted) setLoading(false)
           return
         }
 
@@ -112,13 +150,9 @@ export function AuthProvider({ children, initialSession }: AuthProviderProps) {
 
         if (session?.user) {
           console.log("🔄 AUTH: Found session, fetching profile for:", session.user.id)
-          const profileData = await fetchProfile(session.user.id)
-          if (mounted) {
-            setUser(session.user)
-            if (profileData) {
-              setProfile(profileData)
-            }
-          }
+          setUser(session.user)
+          const p = await fetchProfile(session.user.id)
+          if (p) setProfile(p)
         } else {
           console.log("🔄 AUTH: No session found")
         }
@@ -197,7 +231,7 @@ export function AuthProvider({ children, initialSession }: AuthProviderProps) {
       mounted = false
       subscription.unsubscribe()
     }
-  }, [initialSession, supabase])
+  }, [initialSession, initialProfile, supabase])
 
   const signOut = async () => {
     try {

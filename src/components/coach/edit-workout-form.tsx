@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner"
 import { Loader2, Plus, Trash2, ArrowLeft, AlertTriangle, Send, User, Dumbbell, CalendarIcon } from 'lucide-react'
 // import Link from "next/link"
-import type { ProgramWithDetails, Exercise, WorkoutWithDetails, WorkoutExerciseWithDetails, CardioExercise } from "@/types"
+import type { ProgramWithDetails, Exercise, CardioExercise } from "@/types"
 import { Badge } from "@/components/ui/badge"
 import { format } from "date-fns"
 import { Calendar } from "@/components/ui/calendar"
@@ -22,11 +22,17 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils"
 import { notificationService } from "@/lib/notifications/notification-service"
 import { AppLink } from "../ui/app-link"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import type { WorkoutWithDetails, WorkoutExerciseWithDetails } from "@/types"
+// import { EditWorkoutForm } from "./edit-workout-form"
 
 interface EditWorkoutFormProps {
   program: ProgramWithDetails
   workout: WorkoutWithDetails
   initialExercises: WorkoutExerciseWithDetails[]
+  redirectOnSuccess?: boolean
+  onSuccess?: () => void
+  onCancel?: () => void
 }
 
 interface WorkoutExercise {
@@ -48,7 +54,7 @@ interface WorkoutExercise {
   updated_at: string
 }
 
-export function EditWorkoutForm({ program, workout, initialExercises }: EditWorkoutFormProps) {
+export function EditWorkoutForm({ program, workout, initialExercises, redirectOnSuccess, onSuccess, onCancel }: EditWorkoutFormProps) {
   const [name, setName] = useState(workout.name)
   const [workoutType, setWorkoutType] = useState<"gym" | "cardio">(workout.workout_type)
   const [scheduledDate, setScheduledDate] = useState(workout.scheduled_date || "")
@@ -319,7 +325,12 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
       }
 
       toast.success("Workout deleted successfully")
-      router.push(`/coach/programs/${program.id}`)
+      if (redirectOnSuccess) {
+        router.push(`/coach/programs/${program.id}`)
+      } else {
+        onSuccess?.()
+        return
+      }
     } catch (error) {
       console.error("Error deleting workout:", error)
       toast.error("An unexpected error occurred")
@@ -502,7 +513,12 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
       }
 
       toast.success("Workout updated successfully!")
-      router.push(`/coach/programs/${program.id}`)
+      if (redirectOnSuccess) {
+        router.push(`/coach/programs/${program.id}`)
+      } else {
+        onSuccess?.()
+        return
+      }
     } catch (error) {
       console.error("Error updating workout:", error)
       toast.error("An unexpected error occurred")
@@ -544,13 +560,6 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
   return (
     <div className="container mx-auto px-4 py-6 max-w-6xl">
       <div className="mb-8">
-        <AppLink
-          href={`/coach/programs/${program.id}`}
-          className="flex items-center text-sm text-muted-foreground hover:text-primary mb-4 transition-colors"
-        >
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to {program.name}
-        </AppLink>
 
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
@@ -1038,9 +1047,13 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
 
         {/* Submit Buttons */}
         <div className="flex gap-4 justify-end">
-          <Button type="button" variant="outline" asChild>
-            <AppLink href={`/coach/programs/${program.id}`}>Cancel</AppLink>
-          </Button>
+          {onCancel ? (
+            <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
+          ) : (
+            <Button type="button" variant="outline" asChild>
+              <AppLink href={`/coach/programs/${program.id}`}>Cancel</AppLink>
+            </Button>
+          )}
           <Button type="submit" disabled={loading}>
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Update Workout
@@ -1048,5 +1061,82 @@ export function EditWorkoutForm({ program, workout, initialExercises }: EditWork
         </div>
       </form>
     </div>
+  )
+}
+
+export function EditWorkoutDialog({
+  open,
+  onOpenChange,
+  programId,
+  workoutId,
+  onUpdated,
+}: {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  programId: number
+  workoutId: number
+  onUpdated?: () => void
+}) {
+  const supabase = createClient()
+  const [program, setProgram] = useState<ProgramWithDetails | null>(null)
+  const [workout, setWorkout] = useState<WorkoutWithDetails | null>(null)
+  const [initialExercises, setInitialExercises] = useState<WorkoutExerciseWithDetails[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        setLoading(true)
+        const [{ data: programData }, { data: workoutData }, { data: exData }] = await Promise.all([
+          supabase
+            .from("programs")
+            .select(`*, coach:users!programs_coach_id_fkey(*), user:users!programs_user_id_fkey(*)`)
+            .eq("id", programId)
+            .single(),
+          supabase.from("workouts").select("*").eq("id", workoutId).single(),
+          supabase
+            .from("workout_exercises")
+            .select(`*, exercise:exercises(*)`)
+            .eq("workout_id", workoutId),
+        ])
+        if (!cancelled) {
+          setProgram(programData as any)
+          setWorkout(workoutData as any)
+          setInitialExercises((exData || []) as any)
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [open, programId, workoutId, supabase])
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] overflow-y-auto p-0">
+        <DialogHeader className="px-4 py-4 border-b sticky top-0 bg-background z-10">
+          <DialogTitle>Edit Workout</DialogTitle>
+        </DialogHeader>
+        {!loading && program && workout ? (
+          <div className="px-4 pb-4">
+            <EditWorkoutForm
+              program={program}
+              workout={workout}
+              initialExercises={initialExercises}
+              redirectOnSuccess={false}
+              onSuccess={() => {
+                onUpdated?.()
+                onOpenChange(false)
+              }}
+              onCancel={() => onOpenChange(false)}
+            />
+          </div>
+        ) : null}
+      </DialogContent>
+    </Dialog>
   )
 }

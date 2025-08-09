@@ -34,7 +34,6 @@ const CATEGORIES = ["Chest", "Back", "Shoulders", "Arms", "Legs", "Core", "Cardi
     "Stair Climber",
     "Treadmill",
     "Stationary Bike",
-    "Elliptical",
     "None",
     "Other",
   ]
@@ -53,7 +52,6 @@ const MUSCLE_GROUPS = [
   "Calves",
   "Neck",
   "Glutes",
-  "Calves",
   "Abs",
   "Obliques",
   "Lower Back",
@@ -206,8 +204,8 @@ export function CreateExerciseForm() {
                   <SelectValue placeholder="Select equipment" />
                 </SelectTrigger>
                 <SelectContent>
-                  {EQUIPMENT_TYPES.map((eq) => (
-                    <SelectItem key={eq} value={eq}>
+                  {EQUIPMENT_TYPES.map((eq, idx) => (
+                    <SelectItem key={`${eq}-${idx}`} value={eq}>
                       {eq}
                     </SelectItem>
                   ))}
@@ -218,8 +216,8 @@ export function CreateExerciseForm() {
             <div className="space-y-2">
               <Label>Muscle Groups</Label>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                {MUSCLE_GROUPS.map((muscle) => (
-                  <label key={muscle} className="flex items-center space-x-2 cursor-pointer">
+                {MUSCLE_GROUPS.map((muscle, idx) => (
+                  <label key={`${muscle}-${idx}`} className="flex items-center space-x-2 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={muscleGroups.includes(muscle)}

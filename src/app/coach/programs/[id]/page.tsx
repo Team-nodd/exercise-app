@@ -1,6 +1,7 @@
+import { ProgramDetail } from "@/components/coach/program-detail"
 import { createServerClient } from "@/lib/supabase/server"
 import { redirect, notFound } from "next/navigation"
-import { ProgramDetail } from "@/components/coach/program-detail"
+// import { ProgramDetail } from "@/components/coach/program-detail"
 
 interface ProgramPageProps {
   params: Promise<{

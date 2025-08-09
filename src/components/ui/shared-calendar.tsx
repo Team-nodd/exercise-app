@@ -12,10 +12,12 @@ import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { toast } from "sonner"
-import { Calendar, ChevronLeft, ChevronRight, Edit, Save, X, Copy, Loader2, ExternalLink, Clock, Dumbbell } from 'lucide-react'
+import { Calendar, ChevronLeft, ChevronRight, Edit, Save, X, Copy, Loader2, ExternalLink, Clock, Dumbbell, Plus } from 'lucide-react'
 import { cn } from "@/lib/utils"
 import { useMediaQuery } from "@/lib/hooks/use-media-query"
 import type { WorkoutWithDetails } from "@/types"
+import { EditWorkoutDialog } from "@/components/coach/edit-workout-dialog"
+// import { EditWorkoutDialog } from "./edit-workout-dialog"
 
 interface SharedCalendarProps {
   workouts: WorkoutWithDetails[]
@@ -24,6 +26,8 @@ interface SharedCalendarProps {
   programId?: number
   userId?: string
   isReadOnly?: boolean
+  onEditWorkout?: (workout: WorkoutWithDetails) => void
+  onCreateWorkout?: () => void // NEW
 }
 
 // Helper function to format date consistently (avoiding timezone issues)
@@ -57,7 +61,9 @@ export function SharedCalendar({
   userRole, 
   programId, 
   userId,
-  isReadOnly = false 
+  isReadOnly = false,
+  onEditWorkout,
+  onCreateWorkout
 }: SharedCalendarProps) {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
@@ -525,7 +531,7 @@ export function SharedCalendar({
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => setEditingWorkout(workoutsForDay[0])}
+                        onClick={() => onEditWorkout?.(workoutsForDay[0])}
                         className="text-xs h-7"
                       >
                         <Edit className="h-3 w-3 mr-1" />
@@ -635,7 +641,7 @@ export function SharedCalendar({
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => setEditingWorkout(workoutsForDay[0])}
+                        onClick={() => onEditWorkout?.(workoutsForDay[0])}
                         className="text-xs h-7"
                       >
                         <Edit className="h-3 w-3 mr-1" />
@@ -749,7 +755,7 @@ export function SharedCalendar({
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => setEditingWorkout(workoutsForDay[0])}
+                        onClick={() => onEditWorkout?.(workoutsForDay[0])}
                         className="text-xs h-7"
                       >
                         <Edit className="h-3 w-3 mr-1" />
@@ -806,6 +812,12 @@ export function SharedCalendar({
             <Button variant="ghost" size="sm" onClick={() => navigateMonth('next')}>
               <ChevronRight className="h-4 w-4" />
             </Button>
+            {/* {userRole === "coach" && (
+              <Button size="sm" onClick={() => onCreateWorkout?.()}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Workout
+              </Button>
+            )} */}
           </div>
         </div>
       </CardHeader>
@@ -946,11 +958,11 @@ export function SharedCalendar({
                             size="sm"
                             onClick={() => {
                               setShowWorkoutDialog(false)
-                              setEditingWorkout({ ...workout })
+                              onEditWorkout?.(workout)
                             }}
                           >
                             <Edit className="h-3 w-3 mr-1" />
-                            Quick Edit
+                            Edit
                           </Button>
                           <Button
                             variant="outline"
@@ -964,15 +976,6 @@ export function SharedCalendar({
                               <Copy className="h-3 w-3 mr-1" />
                             )}
                             {duplicatingWorkout === workout.id ? "Duplicating..." : "Duplicate"}
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            href={`/coach/programs/${programId}/workouts/${workout.id}`}
-                            onClick={() => setShowWorkoutDialog(false)}
-                          >
-                            <ExternalLink className="h-3 w-3 mr-1" />
-                            Full Edit
                           </Button>
                         </>
                       )}
@@ -993,58 +996,16 @@ export function SharedCalendar({
       </Dialog>
 
       {/* Edit Workout Dialog */}
-      <Dialog open={!!editingWorkout} onOpenChange={(open) => !open && setEditingWorkout(null)}>
-        <DialogContent className="w-full max-w-md mx-auto max-h-[90vh] overflow-hidden">
-          <DialogHeader>
-            <DialogTitle>Edit Workout</DialogTitle>
-          </DialogHeader>
-          {editingWorkout && (
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="workout-name">Workout Name</Label>
-                <Input
-                  id="workout-name"
-                  value={editingWorkout.name}
-                  onChange={(e) => setEditingWorkout({ ...editingWorkout, name: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label htmlFor="scheduled-date">Scheduled Date</Label>
-                <Input
-                  id="scheduled-date"
-                  type="date"
-                  value={formatDateForInput(editingWorkout.scheduled_date)}
-                  onChange={(e) =>
-                    setEditingWorkout({
-                      ...editingWorkout,
-                      scheduled_date: e.target.value ? createDateStringForDB(new Date(e.target.value)) : null,
-                    })
-                  }
-                />
-              </div>
-              <div>
-                <Label htmlFor="notes">Notes</Label>
-                <Textarea
-                  id="notes"
-                  value={editingWorkout.notes || ""}
-                  onChange={(e) => setEditingWorkout({ ...editingWorkout, notes: e.target.value })}
-                  rows={3}
-                />
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingWorkout(null)}>
-              <X className="h-4 w-4 mr-2" />
-              Cancel
-            </Button>
-            <Button onClick={saveWorkout} disabled={saving}>
-              {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-              {saving ? "Saving..." : "Save"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <EditWorkoutDialog
+        open={!!editingWorkout}
+        onOpenChange={(open) => !open && setEditingWorkout(null)}
+        programId={programId || 0}
+        workoutId={editingWorkout?.id || 0}
+        onUpdated={() => {
+          // No direct state update needed here, as the dialog handles re-fetching
+          // The parent's workouts prop will update via onWorkoutUpdate
+        }}
+      />
     </Card>
   )
 }
