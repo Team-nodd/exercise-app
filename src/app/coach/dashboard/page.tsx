@@ -34,6 +34,29 @@ export default async function CoachDashboardPage() {
     redirect("/dashboard")
   }
 
+  // Prefetch workouts once, compute stats here
+  const { data: programs } = await supabase
+    .from("programs")
+    .select(`id, status, user_id, workouts(id, completed, scheduled_date)`)
+    .eq("coach_id", user.id)
+
+  const totalPrograms = programs?.length ?? 0
+  const activePrograms = (programs ?? []).filter(p => p.status === "active").length
+  const totalClients = new Set((programs ?? []).map(p => p.user_id)).size
+  const allWorkouts = (programs ?? []).flatMap(p => p.workouts || [])
+  const completedWorkouts = allWorkouts.filter(w => w.completed).length
+  const today = new Date()
+  const upcomingWorkouts = allWorkouts.filter(w => !w.completed && w.scheduled_date && new Date(w.scheduled_date) >= today).length
+  const initialStats = { totalPrograms, activePrograms, completedWorkouts, upcomingWorkouts, totalClients }
+
+  // Optionally fetch recent clients
+  let initialRecentClients = []
+  const clientIds = [...new Set((programs ?? []).map(p => p.user_id))].slice(0, 5)
+  if (clientIds.length) {
+    const { data } = await supabase.from("users").select("*").in("id", clientIds).limit(5)
+    initialRecentClients = data ?? []
+  }
+
   console.log("✅ COACH DASHBOARD PAGE: Rendering coach dashboard")
-  return <CoachDashboard coach={profile} />
+  return <CoachDashboard coach={profile} initialStats={initialStats} initialRecentClients={initialRecentClients} />
 }

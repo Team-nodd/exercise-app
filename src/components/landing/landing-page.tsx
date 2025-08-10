@@ -36,25 +36,25 @@ export default function LandingPage() {
           {/* Right side - Authentication Forms */}
           <div className="flex items-center justify-center">
             <div className="w-full max-w-md">
-              <Card className="shadow-2xl border-0 bg-white/95 backdrop-blur-sm">
+              <Card className="shadow-2xl border-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm">
                 <CardHeader className="text-center pb-4">
-                  <div className="flex mb-4 bg-gray-100 rounded-lg p-1">
+                  <div className="flex mb-4 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
                     <button
                       onClick={() => setIsLogin(true)}
-                      className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                      className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors cursor-pointer ${
                         isLogin
                           ? "bg-white text-gray-900 shadow-sm"
-                          : "text-gray-600 hover:text-gray-900"
+                          : "text-gray-600 dark:text-gray-100 hover:text-gray-900"
                       }`}
                     >
                       Sign In
                     </button>
                     <button
                       onClick={() => setIsLogin(false)}
-                      className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                      className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors cursor-pointer ${
                         !isLogin
                           ? "bg-white text-gray-900 shadow-sm"
-                          : "text-gray-600 hover:text-gray-900"
+                          : "text-gray-600 dark:text-gray-100 hover:text-gray-900"
                       }`}
                     >
                       Sign Up
@@ -85,7 +85,7 @@ export default function LandingPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <Dumbbell className="h-6 w-6" />
-              <span className="text-xl font-bold">FitTracker Pro</span>
+              <span className=" font-bold">FitTracker Pro</span>
             </div>
             <p className="text-gray-400">© All rights reserved.</p>
           </div>

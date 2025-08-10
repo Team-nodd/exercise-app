@@ -211,7 +211,7 @@ export function SharedCalendar({
       const { data: newWorkout, error: createError } = await supabase
         .from("workouts")
         .insert(duplicateWorkoutData)
-        .select()
+        .select(`*, program:programs(*)`)
         .single()
 
       if (createError) {
@@ -840,6 +840,7 @@ export function SharedCalendar({
             </Button>
             {userRole === "coach" && (
               <Button
+                className="hidden sm:block"
                 size="sm"
                 onClick={() => {
                   if (!programId) return

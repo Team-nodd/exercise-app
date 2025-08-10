@@ -1,11 +1,19 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { User, DashboardStats, WorkoutWithDetails } from '@/types'
+import type { Database } from "@/types/database"
+
+type WorkoutRow = Database["public"]["Tables"]["workouts"]["Row"]
+type ProgramRow = Database["public"]["Tables"]["programs"]["Row"]
+type WorkoutWithProgram = WorkoutRow & { program: ProgramRow | null }
 
 interface UseDashboardDataOptions {
   userId?: string
   coachId?: string
   isCoach?: boolean
+  initialStats?: DashboardStats
+  initialUpcomingWorkouts?: WorkoutWithDetails[]
+  initialRecentClients?: User[]
 }
 
 interface DashboardData {
@@ -27,91 +35,51 @@ const dashboardCache = new Map<string, {
   }; 
   timestamp: number 
 }>()
-const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
+const CACHE_DURATION = 30 * 1000 // 30s
 
-export function useDashboardData({ userId, coachId, isCoach = false }: UseDashboardDataOptions): DashboardData {
+export function useDashboardData({ userId, coachId, isCoach = false, initialStats, initialUpcomingWorkouts, initialRecentClients }: UseDashboardDataOptions): DashboardData {
   
-  const [stats, setStats] = useState<DashboardStats | null>(null)
-  const [upcomingWorkouts, setUpcomingWorkouts] = useState<WorkoutWithDetails[]>([])
-  const [recentClients, setRecentClients] = useState<User[]>([])
-  const [loading, setLoading] = useState(true)
+  const [stats, setStats] = useState<DashboardStats | null>(initialStats ?? null)
+  const [upcomingWorkouts, setUpcomingWorkouts] = useState<WorkoutWithDetails[]>(initialUpcomingWorkouts ?? [])
+  const [recentClients, setRecentClients] = useState<User[]>(initialRecentClients ?? [])
+  const [loading, setLoading] = useState(!initialStats && !initialUpcomingWorkouts)
   const [error, setError] = useState<string | null>(null)
   const supabase = createClient()
 
   const cacheKey = `${isCoach ? 'coach' : 'user'}_${userId || coachId}`
 
   // Define fetch helpers before usage to satisfy linter and avoid use-before-declare
-  const fetchUserDashboardData = useCallback(async (userId: string) => {
-    // Optimized single query for user stats
-    const { data: userStats, error: statsError } = await supabase
-      .from('workouts')
+  const fetchUserDashboardData = useCallback(async (uid: string) => {
+    const { data, error } = await supabase
+      .from("workouts")
       .select(`
-        id,
-        completed,
-        scheduled_date,
-        program:programs!inner(
-          id,
-          status,
-          user_id
-        )
+        *,
+        program:programs!workouts_program_id_fkey(id, name, status, user_id)
       `)
-      .eq('program.user_id', userId)
+      .eq("program.user_id", uid)
+      .order("scheduled_date", { ascending: true, nullsFirst: false })
 
-    if (statsError) {
-      throw new Error(`Failed to fetch user stats: ${statsError.message}`)
+    if (error) throw new Error(`Failed to fetch user data: ${error.message}`)
+
+    const all = (data ?? []) as WorkoutWithProgram[]
+    // Compute stats locally
+    const programMap = new Map<number, { id: number; status?: string }>()
+    for (const w of all) {
+      const p = w.program
+      if (p) programMap.set(p.id, p)
     }
+    const totalPrograms = programMap.size
+    const activePrograms = [...programMap.values()].filter(p => p.status === "active").length
+    const completedWorkouts = all.filter(w => w.completed).length
+    const today = new Date(); today.setHours(0,0,0,0)
+    const upcomingWorkoutsCount = all.filter(w => !w.completed && w.scheduled_date && new Date(w.scheduled_date) >= today).length
 
-    if (userStats) {
-      const programMap = userStats.reduce((acc, workout) => {
-        if (workout.program) {
-          const prog = workout.program as unknown as { id: number; status: string; user_id: string }
-          acc[String(prog.id)] = prog
-        }
-        return acc
-      }, {} as Record<string, { id: number; status: string; user_id: string }>)
+    const nextStats: DashboardStats = { totalPrograms, activePrograms, completedWorkouts, upcomingWorkouts: upcomingWorkoutsCount, totalClients: 0 }
 
-      const totalPrograms = Object.keys(programMap).length
-      const activePrograms = Object.values(programMap).filter((p) => p.status === 'active').length
-      const completedWorkouts = userStats.filter(w => w.completed).length
-      
-      const today = new Date()
-      today.setHours(0, 0, 0, 0)
-      const upcomingWorkoutsCount = userStats.filter(
-        w => !w.completed && w.scheduled_date && new Date(w.scheduled_date) >= today
-      ).length
+    setStats(nextStats)
+    setUpcomingWorkouts(all as WorkoutWithDetails[])
 
-      const stats: DashboardStats = {
-        totalPrograms,
-        activePrograms,
-        completedWorkouts,
-        upcomingWorkouts: upcomingWorkoutsCount,
-        totalClients: 0, // Users don't have clients
-      }
-
-      setStats(stats)
-
-      // Fetch ALL workouts with program details (not just upcoming)
-      const { data: allWorkoutsData, error: workoutsError } = await supabase
-        .from('workouts')
-        .select(`
-          *,
-          program:programs(*)
-        `)
-        .eq('program.user_id', userId)
-        .order('scheduled_date', { ascending: true, nullsFirst: false })
-
-      if (workoutsError) {
-        console.error('Error fetching workouts:', workoutsError)
-      } else if (allWorkoutsData) {
-        setUpcomingWorkouts(allWorkoutsData as WorkoutWithDetails[])
-      }
-
-      // Cache the results
-      dashboardCache.set(cacheKey, {
-        data: { stats, upcomingWorkouts: allWorkoutsData || [] },
-        timestamp: Date.now()
-      })
-    }
+    dashboardCache.set(cacheKey, { data: { stats: nextStats, upcomingWorkouts: all as WorkoutWithDetails[] }, timestamp: Date.now() })
   }, [supabase, cacheKey])
 
   const fetchCoachDashboardData = useCallback(async (coachId: string) => {
@@ -227,6 +195,16 @@ export function useDashboardData({ userId, coachId, isCoach = false }: UseDashbo
           setStats(cached.data.stats)
           setUpcomingWorkouts(cached.data.upcomingWorkouts)
           setRecentClients(cached.data.recentClients || [])
+        } else if (initialStats || initialUpcomingWorkouts || initialRecentClients) {
+          // Seed cache so other consumers get a hit
+          dashboardCache.set(cacheKey, {
+            data: {
+              stats: initialStats ?? null,
+              upcomingWorkouts: initialUpcomingWorkouts ?? [],
+              recentClients: initialRecentClients ?? [],
+            },
+            timestamp: Date.now(),
+          })
         } else if (isCoach && coachId) {
           await fetchCoachDashboardData(coachId)
         } else if (userId) {
@@ -236,7 +214,31 @@ export function useDashboardData({ userId, coachId, isCoach = false }: UseDashbo
         setLoading(false)
       }
     })()
-  }, [cacheKey, isCoach, coachId, userId, fetchCoachDashboardData, fetchUserDashboardData])
+  }, [cacheKey, isCoach, coachId, userId, fetchCoachDashboardData, fetchUserDashboardData, initialStats, initialUpcomingWorkouts, initialRecentClients])
+
+  useEffect(() => {
+    if (!isCoach || !coachId) return
+    const channel = supabase
+      .channel(`coach_programs_${coachId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'programs', filter: `coach_id=eq.${coachId}` },
+        () => {
+          dashboardCache.delete(cacheKey)
+          refetchQuietly()
+        }
+      )
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [isCoach, coachId, supabase, cacheKey, refetchQuietly])
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') refetchQuietly()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [refetchQuietly])
 
   return {
     stats,

@@ -6,7 +6,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Users, Calendar, Eye, Plus, RefreshCw, Target } from "lucide-react"
 import type { User, ProgramWithDetails } from "@/types"
-import { Badge } from "@/components/ui/badge"
 
 interface ClientListProps {
   coachId: string
@@ -195,13 +194,13 @@ export function ClientList({ coachId }: ClientListProps) {
                     <div>
                       <CardTitle className="text-lg sm:text-xl font-semibold">{client.name}</CardTitle>
                       <CardDescription className="text-sm text-gray-600 dark:text-gray-400 text-wrap">
-                        {client.email}
+                        {client.email.slice(0, 10)}...
                       </CardDescription>
                     </div>
                   </div>
                   <Button href={`/coach/clients/${client.id}`} size="sm">
                     <Eye className="h-4 w-4 mr-2" />
-                    View Detail
+                    View <span className="hidden sm:inline">Detail</span>
                   </Button>
                 </div>
               </CardHeader>

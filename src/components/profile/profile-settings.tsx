@@ -8,10 +8,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { createClient } from "@/lib/supabase/client"
 import { useAuth } from "@/components/providers/auth-provider"
 import { Lock, Mail, AlertCircle, LogOut } from "lucide-react"
+import { useTheme } from "next-themes"
 
 export function ProfileSettings() {
   const { profile, user, signOut } = useAuth()
   const supabase = createClient()
+  const { resolvedTheme, setTheme } = useTheme()
   
   const [passwordLoading, setPasswordLoading] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
@@ -268,6 +270,32 @@ export function ProfileSettings() {
               {passwordLoading ? "Updating..." : "Update Password"}
             </Button>
           </form>
+        </CardContent>
+      </Card>
+
+      {/* Appearance */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            Appearance
+          </CardTitle>
+          <CardDescription>Choose your theme</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex gap-2">
+            <Button
+              variant={resolvedTheme === "light" ? "default" : "outline"}
+              onClick={() => setTheme("light")}
+            >
+              Light
+            </Button>
+            <Button
+              variant={resolvedTheme === "dark" ? "default" : "outline"}
+              onClick={() => setTheme("dark")}
+            >
+              Dark
+            </Button>
+          </div>
         </CardContent>
       </Card>
 

@@ -4,17 +4,21 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Users, Calendar, Dumbbell, TrendingUp, Plus, RefreshCw, Target, ArrowRight, Zap, Activity } from 'lucide-react'
-import type { User } from "@/types"
+import type { User, DashboardStats } from "@/types"
 import { useDashboardData } from "@/lib/hooks/use-dashboard-data"
 
 interface CoachDashboardProps {
   coach: User
+  initialStats?: DashboardStats
+  initialRecentClients?: User[]
 }
 
-export function CoachDashboard({ coach }: CoachDashboardProps) {
+export function CoachDashboard({ coach, initialStats, initialRecentClients }: CoachDashboardProps) {
   const { stats, recentClients, loading, error, refetch } = useDashboardData({
     coachId: coach.id,
     isCoach: true,
+    initialStats,
+    initialRecentClients,
   })
 
   const getGreeting = () => {
@@ -125,7 +129,7 @@ export function CoachDashboard({ coach }: CoachDashboardProps) {
       </Card>
 
       {/* Main Content Grid */}
-      <div className="grid lg:grid-cols-3 gap-6">
+      <div className="sm:grid lg:grid-cols-3 gap-6">
         {/* Quick Actions */}
         <Card>
           <CardHeader className="pb-4">
@@ -151,7 +155,7 @@ export function CoachDashboard({ coach }: CoachDashboardProps) {
         </Card>
 
         {/* Recent Clients */}
-        <Card className="lg:col-span-2">
+        <Card className="lg:col-span-2 mt-10">
           <CardHeader className="pb-4">
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-2 text-lg">
@@ -171,7 +175,7 @@ export function CoachDashboard({ coach }: CoachDashboardProps) {
               <div className="space-y-3">
                 {recentClients.slice(0, 5).map((client, index) => (
                   <div key={client.id}>
-                    <div className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-colors">
+                    <div className="flex items-center justify-between p-2 sm:3  rounded-lg hover:bg-muted/50 transition-colors">
                       <div className="flex items-center space-x-3">
                         <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 text-white flex items-center justify-center text-sm font-medium flex-shrink-0">
                           {client.name
@@ -187,7 +191,7 @@ export function CoachDashboard({ coach }: CoachDashboardProps) {
                         </div>
                       </div>
                       <Button href={`/coach/clients/${client.id}`} size="sm" variant="outline">
-                        View Profile
+                        View <span className="hidden sm:inline">Profile</span>
                       </Button>
                     </div>
                     {index < recentClients.slice(0, 5).length - 1 && (

@@ -8,18 +8,22 @@ import { Separator } from "@/components/ui/separator"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Calendar, Dumbbell, TrendingUp, Clock, RefreshCw, Target, Activity, Play, ArrowRight, CheckCircle, Zap, Filter } from 'lucide-react'
 import { useDashboardData } from "@/lib/hooks/use-dashboard-data"
-import { User, WorkoutWithDetails, Program } from "@/types"
+import { User, WorkoutWithDetails, DashboardStats, Program } from "@/types"
 import { SharedCalendar } from "../ui/shared-calendar"
 import { AppLink } from "../ui/app-link"
 
 interface UserDashboardProps {
   user: User
+  initialStats?: DashboardStats
+  initialWorkouts?: WorkoutWithDetails[]
 }
 
-export function UserDashboard({ user }: UserDashboardProps) {
+export function UserDashboard({ user, initialStats, initialWorkouts }: UserDashboardProps) {
   const { stats, upcomingWorkouts, loading, error, refetch, refetchQuietly } = useDashboardData({
     userId: user.id,
     isCoach: false,
+    initialStats,
+    initialUpcomingWorkouts: initialWorkouts,
   })
 
   const [todaysWorkouts, setTodaysWorkouts] = useState<WorkoutWithDetails[]>([])
