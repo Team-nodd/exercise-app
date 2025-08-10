@@ -168,6 +168,39 @@ export class NotificationService {
         await this.sendWorkoutCompletedNotificationToCoach(workout, user, coach)
       }
 
+      // After emails were handled
+      const relatedId = `workout:${workout.id}:program:${workout.program.id}`
+
+      // In-app notification for the user
+      await fetch('/api/notifications/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          recipientId: user.id,
+          title: 'Workout Completed',
+          message: `You completed "${workout.name}".`,
+          type: 'workout_completed',
+          relatedId,
+        }),
+      })
+
+      // In-app notification for coach (if present)
+      if (coach) {
+        await fetch('/api/notifications/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({
+            recipientId: coach.id,
+            title: 'Client Completed Workout',
+            message: `${user.name} completed "${workout.name}".`,
+            type: 'client_workout_completed',
+            relatedId,
+          }),
+        })
+      }
+
     } catch (error) {
       console.error('❌ NOTIFICATION SERVICE: Error processing notifications:', error)
     }

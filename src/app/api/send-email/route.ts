@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server'
 import { getEmailConfig } from '@/lib/email/email-config'
 import nodemailer from 'nodemailer'
@@ -8,6 +9,8 @@ interface EmailRequest {
   html: string
   text?: string
 }
+
+export const runtime = 'nodejs'
 
 export async function POST(request: NextRequest) {
   try {

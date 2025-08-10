@@ -51,6 +51,8 @@ function getEmailConfig() {
   };
 }
 
+export const runtime = 'nodejs'
+
 export async function POST(request: NextRequest) {
   try {
     console.log('📧 EMAIL API: Starting email send process...');
@@ -114,15 +116,19 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate email content
-    const subject = `Workout Completed: ${workoutName}`;
-    const html = generateWorkoutEmailHTML({
-      userName,
-      workoutName,
-      programName,
-      completedAt,
-      note,
-      workoutType
-    });
+    const subject = `Workout Summary: ${workoutName}`
+
+    const html = `
+      <!DOCTYPE html><html><body style="font-family:Arial,sans-serif">
+      <h2>Workout Summary</h2>
+      <p>Sent by: <strong>${userName}</strong></p>
+      <p><strong>Workout:</strong> ${workoutName}</p>
+      ${programName ? `<p><strong>Program:</strong> ${programName}</p>` : ''}
+      <p><strong>Completed:</strong> ${completedAt ? new Date(completedAt).toLocaleString() : '—'}</p>
+      ${note ? `<p><em>${note}</em></p>` : ''}
+      <p style="color:#64748b;font-size:12px">This summary was sent from FitTracker Pro.</p>
+      </body></html>
+    `
     const text = generateWorkoutEmailText({
       userName,
       workoutName,
