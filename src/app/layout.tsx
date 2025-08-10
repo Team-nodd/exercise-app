@@ -3,31 +3,18 @@ import "./globals.css"
 import type { Metadata } from "next"
 import { ThemeProvider } from "@/components/theme-provider"
 import { AuthProvider } from "@/components/providers/auth-provider"
-// import { Navigation } from "@/components/layout/navigation"
 import { Toaster } from "@/components/ui/sonner"
-import { createServerClient } from "@/lib/supabase/server"
 import { LoadingProvider } from "@/components/providers/loading-provider"
 import { GlobalLoadingIndicator } from "@/components/ui/global-loading-indicator"
 import { LoadingResetOnRouteChange } from "@/lib/loading/loading-reset-change"
 import { Navigation } from "@/components/layout/navigation"
-// import Navigation from "@/components/layout/navigation"
 
 export const metadata: Metadata = {
   title: "FitTracker Pro - Exercise Program Management",
   description: "Professional exercise program management system for coaches and athletes",
 }
 
-export default async function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
-  // Get initial session on the server
-  const supabase = await createServerClient()
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
-
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -41,9 +28,8 @@ export default async function RootLayout({
       <body className="font-poppins antialiased" suppressHydrationWarning>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           <LoadingProvider>
-            <AuthProvider initialSession={session}>
+            <AuthProvider>
               <div className="min-h-screen bg-background">
-                {/* <Navigation /> */}
                 <Navigation />
                 <GlobalLoadingIndicator />
                 <LoadingResetOnRouteChange />

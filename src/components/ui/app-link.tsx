@@ -11,17 +11,13 @@ type AppLinkProps = React.PropsWithChildren<LinkProps> & {
 }
 
 export function AppLink({ href, children, className, onClick, ...props }: AppLinkProps) {
-  const router = useRouter()
   const { setLoading } = useGlobalLoading()
-
   const handleClick: React.MouseEventHandler<HTMLAnchorElement> = (e) => {
     setLoading(true)
     onClick?.(e)
-    // Let Next.js handle the navigation
   }
-
   return (
-    <Link href={href} className={className} onClick={handleClick} {...props}>
+    <Link prefetch={true} href={href} className={className} onClick={handleClick} {...props}>
       {children}
     </Link>
   )

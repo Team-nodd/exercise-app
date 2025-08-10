@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { createContext, useContext, useState, useEffect, useRef } from "react"
+import { createContext, useContext, useState, useEffect, useRef, useMemo } from "react"
 import { createClient } from "@/lib/supabase/client"
 import type { User, Session } from "@supabase/supabase-js"
 
@@ -72,7 +72,7 @@ export function AuthProvider({ children, initialSession, initialProfile }: AuthP
   const fetchingProfile = useRef<string | null>(null) // Track which user we're fetching profile for
   const profileCache = useRef<Map<string, Profile>>(new Map()) // Cache profiles
 
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
 
   const fetchProfile = async (userId: string): Promise<Profile | null> => {
     // Check cache first
