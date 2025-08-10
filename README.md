@@ -41,18 +41,32 @@ npm install
 
 ### 3. Environment
 
-Create `.env.local`:
+Create `.env.local` with the following keys (fill with your values):
 
 ```bash
+# Supabase (required)
 NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=YOUR_ANON_KEY
+
+# Service role (required for server-created notifications)
+# Used by API route: /api/notifications/create
+SUPABASE_SERVICE_ROLE_KEY=YOUR_SERVICE_ROLE_KEY
+
+# SMTP (required for all email features)
+# Common ports: 587 (STARTTLS), 465 (SMTPS)
+SMTP_HOST=smtp.yourprovider.com
+SMTP_PORT=587
+SMTP_USER=your_inbox_username
+SMTP_PASS=your_inbox_password_or_app_password
+SMTP_FROM=no-reply@yourdomain.com
+SMTP_FROM_NAME=FitTracker Pro
 ```
 
-Find values in Supabase → Settings → API.
+You can find Supabase values in Supabase → Settings → API. If `SUPABASE_SERVICE_ROLE_KEY` is missing, creating notifications from the server route will fail with a 500 (server misconfiguration).
 
 ### 4. Database
 
-Migrations live in `supabase/migrations/` and are idempotent.
+Migrations live in `supabase/migrations/` and are idempotent. Core schema is defined in `20241202030000_core_schema.sql` and includes: tables, FKs, indexes, `updated_at` triggers, and RLS policies matching `src/types/database.ts`.
 
 ```bash
 # Link once
@@ -61,7 +75,7 @@ npx supabase link --project-ref YOUR_PROJECT_REF
 # Push migrations
 npx supabase db push
 
-# Generate local TS types from live schema
+# Generate local TS types from live schema (keep types in sync)
 npx supabase gen types typescript --project-id YOUR_PROJECT_REF > src/types/database.ts
 ```
 
@@ -121,6 +135,7 @@ src/
 
 - Supabase RLS on all user data
 - Notifications and cardio templates have scoped policies
+- Server route uses `SUPABASE_SERVICE_ROLE_KEY` to insert notifications after authenticating the caller
 
 ## 🧩 Supabase Client
 
@@ -132,6 +147,8 @@ src/
 - Ensure `.env.local` Supabase vars are set and correct
 - Run `npx supabase db push` if DB schema changes
 - Re-generate `src/types/database.ts` after schema changes
+- If notification creation fails: verify `SUPABASE_SERVICE_ROLE_KEY` exists and is correct
+- If SMTP send fails: verify `SMTP_*` envs, try `SMTP_PORT=587` (STARTTLS), and check provider/app password settings
 
 ## 🤝 Contributing
 
@@ -139,13 +156,3 @@ src/
 2. Create a feature branch
 3. Make your changes
 4. Submit a pull request
-
-## 📄 License
-
-MIT
-
-## 🆘 Support
-
-- Check troubleshooting above
-- Supabase docs
-- Open an issue

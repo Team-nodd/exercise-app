@@ -28,42 +28,6 @@ interface AuthProviderProps {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-type DashboardStats = {
-  totalPrograms: number
-  activePrograms: number
-  completedWorkouts: number
-  upcomingWorkouts: number
-  totalClients: number
-}
-
-async function fetchProfile(userId: string): Promise<Profile> {
-  const supabase = await createClient()
-  const { data, error } = await supabase
-    .from("users")
-    .select("id,name,email,role")
-    .eq("id", userId)
-    .single()
-  if (error || !data) throw error ?? new Error("Profile not found")
-  return data as Profile
-}
-
-async function fetchDashboardStats(userId: string): Promise<DashboardStats> {
-  const supabase = await createClient()
-  // Replace this with your real queries or an RPC
-  const { count: totalPrograms } = await supabase
-    .from("programs")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", userId)
-
-  // Fill the rest similarly or via RPC to reduce roundtrips
-  return {
-    totalPrograms: totalPrograms ?? 0,
-    activePrograms: 0,
-    completedWorkouts: 0,
-    upcomingWorkouts: 0,
-    totalClients: 0,
-  }
-}
 
 export function AuthProvider({ children, initialSession, initialProfile }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(initialSession?.user ?? null)

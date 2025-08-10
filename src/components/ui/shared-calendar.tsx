@@ -8,17 +8,15 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { toast } from "sonner"
-import { Calendar, ChevronLeft, ChevronRight, Edit, Save, X, Copy, Loader2, ExternalLink, Clock, Dumbbell, Plus } from 'lucide-react'
+import { Calendar, ChevronLeft, ChevronRight, Edit, Copy, Loader2, Clock, Dumbbell, Plus } from 'lucide-react'
 import { cn } from "@/lib/utils"
 import { useMediaQuery } from "@/lib/hooks/use-media-query"
 import type { WorkoutWithDetails } from "@/types"
 import { EditWorkoutDialog } from "@/components/coach/edit-workout-dialog"
 // import { EditWorkoutDialog } from "./edit-workout-dialog"
-import { Workout } from '../../types/index';
 
 interface SharedCalendarProps {
   workouts: WorkoutWithDetails[]

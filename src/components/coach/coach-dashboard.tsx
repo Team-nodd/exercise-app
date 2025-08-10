@@ -155,7 +155,7 @@ export function CoachDashboard({ coach, initialStats, initialRecentClients }: Co
         </Card>
 
         {/* Recent Clients */}
-        <Card className="lg:col-span-2 mt-10">
+        <Card className="lg:col-span-2 mt-10 sm:mt-0">
           <CardHeader className="pb-4">
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-2 text-lg">

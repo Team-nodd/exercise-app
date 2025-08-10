@@ -206,8 +206,8 @@ export function ExerciseLibrary() {
 
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v === "cardio" ? "cardio" : "gym")}> 
             <TabsList className="grid grid-cols-2 w-full max-w-xs">
-              <TabsTrigger value="gym">Gym</TabsTrigger>
-              <TabsTrigger value="cardio">Cardio</TabsTrigger>
+              <TabsTrigger value="gym" className="cursor-pointer">Gym</TabsTrigger>
+              <TabsTrigger value="cardio" className="cursor-pointer">Cardio</TabsTrigger>
             </TabsList>
           </Tabs>
 
