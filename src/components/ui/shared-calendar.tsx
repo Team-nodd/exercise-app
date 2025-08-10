@@ -543,7 +543,7 @@ export function SharedCalendar({
                       href={`/dashboard/workouts/${workoutsForDay[0].id}`}
                       className="text-xs h-7"
                     >
-                      Start Workout
+                      Start 
                     </Button>
                   )}
                   {userRole === "coach" && (
@@ -656,7 +656,7 @@ export function SharedCalendar({
                       href={`/dashboard/workouts/${workoutsForDay[0].id}`}
                       className="text-xs h-7"
                     >
-                      Start Workout
+                      Start 
                     </Button>
                   )}
                   {userRole === "coach" && (
@@ -773,7 +773,7 @@ export function SharedCalendar({
                       href={`/dashboard/workouts/${workoutsForDay[0].id}`}
                       className="text-xs h-7"
                     >
-                      Start Workout
+                      Start 
                     </Button>
                   )}
                   {userRole === "coach" && (
@@ -819,6 +819,19 @@ export function SharedCalendar({
       }
     }
   }, [autoNavigateTimeout])
+
+  const refetchScope = async () => {
+    let q = supabase
+      .from("workouts")
+      .select(`*, program:programs(*)`)
+      .order("scheduled_date", { ascending: true, nullsFirst: false })
+
+    if (programId) q = q.eq("program_id", programId)
+    if (userId) q = q.eq("user_id", userId)
+
+    const { data } = await q
+    if (data) onWorkoutUpdate?.(data as WorkoutWithDetails[])
+  }
 
   return (
     <Card>
@@ -1055,7 +1068,7 @@ export function SharedCalendar({
                             onClick={() => setShowWorkoutDialog(false)}
                             className="mt-5"
                           >
-                            Start Workout
+                            Start 
                           </Button>
                         </>
                       ) : (
@@ -1108,9 +1121,8 @@ export function SharedCalendar({
         onOpenChange={(open) => !open && setEditingWorkout(null)}
         programId={programId || 0}
         workoutId={editingWorkout?.id || 0}
-        onUpdated={() => {
-          // No direct state update needed here, as the dialog handles re-fetching
-          // The parent's workouts prop will update via onWorkoutUpdate
+        onUpdated={async () => {
+          await refetchScope()
         }}
       />
     </Card>

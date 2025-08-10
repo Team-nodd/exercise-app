@@ -488,24 +488,40 @@ export function EditWorkoutForm({ program, workout, initialExercises, redirectOn
           if (deleteError) throw deleteError;
         }
 
-        // Prepare data for upsert (insert new or update existing)
-        const upsertData = workoutExercises.map((ex, index) => ({
-          ...ex,
+        const rows = workoutExercises.map((ex, index) => ({
           workout_id: workout.id,
+          exercise_id: ex.exercise_id,
           order_in_workout: index + 1,
-          // Ensure 'id' is undefined for new records so Supabase generates it
-          id: ex.id && ex.id > 0 ? ex.id : undefined,
+          sets: ex.sets,
+          reps: ex.reps,
+          weight: ex.weight ?? null,
+          rest_seconds: ex.rest_seconds ?? 0,
+          volume_level: ex.volume_level,
+          completed: ex.completed ?? false,
+          actual_sets: ex.actual_sets ?? null,
+          actual_reps: ex.actual_reps ?? null,
+          actual_weight: ex.actual_weight ?? null,
+          notes: ex.notes ?? null,
           created_at: ex.created_at || new Date().toISOString(),
           updated_at: new Date().toISOString(),
-        }));
+        }))
 
-        if (upsertData.length > 0) {
-          const { error: upsertError } = await supabase.from("workout_exercises").upsert(upsertData, { onConflict: 'id' });
+        const toUpdate = workoutExercises
+          .map((ex, i) => (ex.id && ex.id > 0 ? { id: ex.id, ...rows[i] } : null))
+          .filter(Boolean) as Array<{ id: number } & typeof rows[number]>
 
-          if (upsertError) {
-            console.error("Error upserting workout exercises:", upsertError);
-            toast.error("Workout updated but failed to update exercises.");
-          }
+        const toInsert = workoutExercises
+          .map((ex, i) => (!ex.id || ex.id <= 0 ? rows[i] : null))
+          .filter(Boolean) as typeof rows
+
+        if (toInsert.length) {
+          const { error: insertErr } = await supabase.from("workout_exercises").insert(toInsert).select("id")
+          if (insertErr) { toast.error("Failed to add exercises"); setLoading(false); return }
+        }
+
+        if (toUpdate.length) {
+          const { error: updateErr } = await supabase.from("workout_exercises").upsert(toUpdate, { onConflict: "id" }).select("id")
+          if (updateErr) { toast.error("Failed to update exercises"); setLoading(false); return }
         }
       } else {
         // For cardio workouts, remove any existing exercises
