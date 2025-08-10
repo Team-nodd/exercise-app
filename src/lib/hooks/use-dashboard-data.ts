@@ -42,7 +42,8 @@ export function useDashboardData({ userId, coachId, isCoach = false, initialStat
   const [stats, setStats] = useState<DashboardStats | null>(initialStats ?? null)
   const [upcomingWorkouts, setUpcomingWorkouts] = useState<WorkoutWithDetails[]>(initialUpcomingWorkouts ?? [])
   const [recentClients, setRecentClients] = useState<User[]>(initialRecentClients ?? [])
-  const [loading, setLoading] = useState(!initialStats && !initialUpcomingWorkouts)
+  // If any initial data is provided, start as not loading to avoid layout shift
+  const [loading, setLoading] = useState(!(initialStats || initialUpcomingWorkouts || initialRecentClients))
   const [error, setError] = useState<string | null>(null)
   const supabase = createClient()
 
@@ -188,13 +189,18 @@ export function useDashboardData({ userId, coachId, isCoach = false, initialStat
     // Initial load (non-silent)
     ;(async () => {
       try {
-        setLoading(true)
-        setError(null)
+        // Don't force loading if we already have initial data or cache
         const cached = dashboardCache.get(cacheKey)
-        if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-          setStats(cached.data.stats)
-          setUpcomingWorkouts(cached.data.upcomingWorkouts)
-          setRecentClients(cached.data.recentClients || [])
+        if (!(cached || initialStats || initialUpcomingWorkouts || initialRecentClients)) {
+          setLoading(true)
+        }
+        setError(null)
+        // refresh cached reference after possible setLoading
+        const cachedNow = dashboardCache.get(cacheKey)
+        if (cachedNow && Date.now() - cachedNow.timestamp < CACHE_DURATION) {
+          setStats(cachedNow.data.stats)
+          setUpcomingWorkouts(cachedNow.data.upcomingWorkouts)
+          setRecentClients(cachedNow.data.recentClients || [])
         } else if (initialStats || initialUpcomingWorkouts || initialRecentClients) {
           // Seed cache so other consumers get a hit
           dashboardCache.set(cacheKey, {

@@ -9,7 +9,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Calendar, Dumbbell, TrendingUp, Clock, RefreshCw, Target, Activity, Play, ArrowRight, CheckCircle, Zap, Filter } from 'lucide-react'
 import { useDashboardData } from "@/lib/hooks/use-dashboard-data"
 import { User, WorkoutWithDetails, DashboardStats, Program } from "@/types"
-import { SharedCalendar } from "../ui/shared-calendar"
+import dynamic from "next/dynamic"
+const SharedCalendar = dynamic(() => import("../ui/shared-calendar").then(m => m.SharedCalendar), {
+  ssr: false,
+  loading: () => <div className="h-64 w-full rounded-md border flex items-center justify-center text-sm text-muted-foreground">Loading calendar…</div>
+})
 import { AppLink } from "../ui/app-link"
 
 interface UserDashboardProps {

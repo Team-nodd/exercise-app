@@ -238,6 +238,9 @@ CREATE INDEX IF NOT EXISTS idx_programs_coach_id ON public.programs (coach_id);
 CREATE INDEX IF NOT EXISTS idx_workouts_program_id     ON public.workouts (program_id);
 CREATE INDEX IF NOT EXISTS idx_workouts_user_id        ON public.workouts (user_id);
 CREATE INDEX IF NOT EXISTS idx_workouts_scheduled_date ON public.workouts (scheduled_date);
+-- Composite indexes to accelerate dashboard queries
+CREATE INDEX IF NOT EXISTS idx_workouts_user_date_completed ON public.workouts (user_id, scheduled_date, completed);
+CREATE INDEX IF NOT EXISTS idx_workouts_program_date_completed ON public.workouts (program_id, scheduled_date, completed);
 
 -- Workout exercises
 CREATE INDEX IF NOT EXISTS idx_we_workout_id ON public.workout_exercises (workout_id);
