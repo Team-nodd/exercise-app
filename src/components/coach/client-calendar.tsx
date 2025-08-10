@@ -18,7 +18,7 @@ interface WorkoutWithProgram extends WorkoutWithDetails {
   program: Program
 }
 
-export function ClientCalendar({ client, initialProgramId }: ClientCalendarProps) {
+export function ClientDetails({ client, initialProgramId }: ClientCalendarProps) {
   const [workouts, setWorkouts] = useState<WorkoutWithProgram[]>([])
   const [programs, setPrograms] = useState<Program[]>([])
   const [selectedProgram, setSelectedProgram] = useState<string>(initialProgramId ? String(initialProgramId) : "all")

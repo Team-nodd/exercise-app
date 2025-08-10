@@ -1,6 +1,6 @@
 import { createServerClient } from "@/lib/supabase/server"
 import { redirect, notFound } from "next/navigation"
-import { ClientCalendar } from "@/components/coach/client-calendar"
+import { ClientDetails } from "@/components/coach/client-calendar"
 
 interface ClientPageProps {
   params: Promise<{
@@ -46,5 +46,5 @@ export default async function ClientPage({ params }: ClientPageProps) {
     notFound()
   }
 
-  return <ClientCalendar client={client} />
+  return <ClientDetails client={client} />
 }
