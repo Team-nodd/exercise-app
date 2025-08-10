@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { usePathname, useRouter } from "next/navigation"
-import { LogOut, Menu, X, Dumbbell, Calendar, Users, Home, User, Bell, Trash2 } from 'lucide-react'
+import { LogOut, Menu, X, Dumbbell, Calendar, Users, Home, User, Bell, Trash2, Mail } from 'lucide-react'
 import { useAuth } from "@/components/providers/auth-provider"
 import { useGlobalLoading } from "@/components/providers/loading-provider"
 // import { useNotifications } from "@/lib/hooks/use-notifications"
@@ -189,7 +189,7 @@ return (
                 </>
               )}
               <AppLink href="/dashboard/configuration" className={getLinkClasses("/dashboard/configuration")}>
-                <Bell className="h-4 w-4 mr-2" />
+                <Mail className="h-4 w-4 mr-2" />
                 Configuration
               </AppLink>
             </div>

@@ -68,6 +68,7 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
   const [emailAddress, setEmailAddress] = useState('');
   const [emailNote, setEmailNote] = useState('');
   const [coachEmail, setCoachEmail] = useState<string>('');
+  const [coachNotifyEnabled, setCoachNotifyEnabled] = useState(false)
 
   // State for exercise expansion and editing
   const [expandedExercises, setExpandedExercises] = useState<Record<string, boolean>>({});
@@ -103,19 +104,15 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
       if (workout?.program?.coach_id) {
         const { data: coachData } = await supabase
           .from('users')
-          .select('email')
+          .select('email, workout_completed_email')
           .eq('id', workout.program.coach_id)
           .single();
-        
-        if (coachData?.email) {
-          setCoachEmail(coachData.email);
-        }
+
+        if (coachData?.email) setCoachEmail(coachData.email);
+        setCoachNotifyEnabled(!!coachData?.workout_completed_email);
       }
     }
-    
-    if (workout) {
-      fetchCoachEmail();
-    }
+    if (workout) fetchCoachEmail();
   }, [workout, supabase]);
 
 
@@ -469,6 +466,22 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
 
       // Send notifications
       await notificationService.sendWorkoutCompletedNotifications(Number(workoutId));
+      // Auto email coach if they opted in
+      if (coachNotifyEnabled && coachEmail) {
+        fetch('/api/send-workout-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: coachEmail,
+            workoutName: workout?.name,
+            programName: workout?.program?.name,
+            completedAt: new Date().toISOString(),
+            userName: profile?.name || 'User',
+            note: undefined,
+            workoutType: workout?.workout_type,
+          }),
+        }).catch(() => {});
+      }
       toast('Workout completed! Notifications sent.');
     } catch (error) {
       console.error('Error marking workout as completed:', error);
@@ -1274,6 +1287,12 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
           )}
         </CardContent>
       </Card>
+
+      {/* Info about automatic coach email */}
+      <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">
+        Note: If your coach enabled email notifications, they’ll be emailed automatically when you complete this workout.
+        Sending a manual email below is optional.
+      </p>
 
       {/* Send Email Button */}
       <Card className="mt-5">

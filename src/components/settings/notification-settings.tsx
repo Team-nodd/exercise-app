@@ -144,7 +144,7 @@ export function NotificationSettings({ profile }: NotificationSettingsProps) {
     <div className="max-w-2xl mx-auto space-y-6">
       <div className="text-center mb-8 mt-10">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-          Notification Settings
+          Email Notification Settings
         </h1>
         <p className="text-gray-600 dark:text-gray-400">
           Configure your email notification preferences
@@ -223,6 +223,29 @@ export function NotificationSettings({ profile }: NotificationSettingsProps) {
             </div>
           </div>
 
+          {/* Client Workout Completed (coach only) */}
+          {profile.role === "coach" && (
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <Label className="text-base font-medium">Client Workout Completed</Label>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Automatic emails when your clients mark workouts as completed.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                {isSettingPending('workout_completed_email') && (
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                )}
+                <Switch
+                  className="cursor-pointer"
+                  checked={settings.workout_completed_email}
+                  onCheckedChange={(v) => handleSettingChange('workout_completed_email', v)}
+                  disabled={isSettingPending('workout_completed_email')}
+                />
+              </div>
+            </div>
+          )}
+
           {/* Weekly Progress Notifications */}
           {/* <div className="flex items-center justify-between">
             <div className="space-y-1">
@@ -248,11 +271,18 @@ export function NotificationSettings({ profile }: NotificationSettingsProps) {
       {/* Information Card */}
       <Card>
       <CardContent className="space-y-4">
-        <H6 >Notification Settings</H6>
+        <H6 >Email Notification Settings</H6>
         <div className="text-sm text-gray-600 dark:text-gray-400 space-y-2">
           <p>
             • <strong>Program Assigned:</strong> {getNotificationDescription(profile.role, 'program_assigned_email')}
           </p>
+
+          {profile.role === "coach" && (
+            <p>
+              • <strong>Client Workout Completed:</strong> Automatic emails when your clients mark workouts as completed.
+            </p>
+          )}
+          
         </div>
         
         <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
