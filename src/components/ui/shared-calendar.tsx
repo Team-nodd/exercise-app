@@ -840,7 +840,7 @@ export function SharedCalendar({
             </Button>
             {userRole === "coach" && (
               <Button
-                className="hidden sm:block"
+                className="hidden sm:flex"
                 size="sm"
                 onClick={() => {
                   if (!programId) return
