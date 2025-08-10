@@ -18,6 +18,7 @@ import { useMediaQuery } from "@/lib/hooks/use-media-query"
 import type { WorkoutWithDetails } from "@/types"
 import { EditWorkoutDialog } from "@/components/coach/edit-workout-dialog"
 // import { EditWorkoutDialog } from "./edit-workout-dialog"
+import { Workout } from '../../types/index';
 
 interface SharedCalendarProps {
   workouts: WorkoutWithDetails[]
@@ -73,6 +74,9 @@ export function SharedCalendar({
   const [editingWorkout, setEditingWorkout] = useState<WorkoutWithDetails | null>(null)
   const [saving, setSaving] = useState(false)
   const [duplicatingWorkout, setDuplicatingWorkout] = useState<number | null>(null)
+  // New: per-workout date state for dialog reschedule on mobile (user role)
+  const [rescheduleDateById, setRescheduleDateById] = useState<Record<number, string>>({})
+  const [reschedulingWorkoutId, setReschedulingWorkoutId] = useState<number | null>(null)
   
   // Drag and drop states
   const [draggedWorkout, setDraggedWorkout] = useState<WorkoutWithDetails | null>(null)
@@ -443,6 +447,11 @@ export function SharedCalendar({
     if (!dateString) return ""
     const date = parseWorkoutDate(dateString)
     return formatDateForComparison(date)
+  }
+  // New: parse YYYY-MM-DD from date input
+  const parseInputDate = (dateStr: string) => {
+    const [y, m, d] = dateStr.split('-').map(Number)
+    return new Date(y, (m ?? 1) - 1, d ?? 1)
   }
 
   const renderCalendar = () => {
@@ -817,13 +826,13 @@ export function SharedCalendar({
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2 sm:text-lg">
             <Calendar className="h-5 w-5" />
-            Workout Schedule
+            <span className="hidden sm:inline">Workout</span> Schedule
           </CardTitle>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={() => navigateMonth('prev')}>
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <span className="text-sm font-medium min-w-[120px] text-center">
+            <span className="text-sm font-medium min-w-[100px] text-center">
               {currentDate.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
             </span>
             <Button variant="ghost" size="sm" onClick={() => navigateMonth('next')}>
@@ -976,14 +985,78 @@ export function SharedCalendar({
                     )}
                     <div className="flex flex-wrap gap-2">
                       {userRole === "user" ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          href={`/dashboard/workouts/${workout.id}`}
-                          onClick={() => setShowWorkoutDialog(false)}
-                        >
-                          Start
-                        </Button>
+                        <>
+                          <div className="flex flex-col gap-2 w-full sm:w-auto">
+                            {/* Only show on mobile and when not read-only */}
+                            {isMobile && !isReadOnly && (
+                              <div className="flex flex-row sm:flex-row items-stretch sm:items-end gap-2">
+                                <div className="flex-1">
+                                  <Label className="mb-2 text-xs text-gray-600 dark:text-gray-400">
+                                    Change date
+                                  </Label>
+
+                                  <div className="flex flex-row gap-2">
+                                    <Input
+                                      type="date"
+                                      className={'w-fit'}
+                                      value={
+                                        rescheduleDateById[workout.id] ??
+                                        formatDateForInput(workout.scheduled_date)
+                                      }
+                                      onChange={(e) =>
+                                        setRescheduleDateById((prev) => ({
+                                          ...prev,
+                                          [workout.id]: e.target.value,
+                                        }))
+                                      }
+                                    />
+                                    <Button
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={
+                                      reschedulingWorkoutId === workout.id ||
+                                      !(rescheduleDateById[workout.id] ?? formatDateForInput(workout.scheduled_date))
+                                    }
+                                    onClick={async () => {
+                                      const raw = rescheduleDateById[workout.id] ?? formatDateForInput(workout.scheduled_date)
+                                      if (!raw) return
+                                      try {
+                                        setReschedulingWorkoutId(workout.id)
+                                        const newDate = parseInputDate(raw)
+                                        const ok = await moveWorkout(workout.id, newDate)
+                                        if (ok) {
+                                          // If the workout moved to another day, close dialog for a clean refresh
+                                          setShowWorkoutDialog(false)
+                                          toast.success("Workout date updated")
+                                        }
+                                      } finally {
+                                        setReschedulingWorkoutId(null)
+                                      }
+                                    }}
+                                    className="sm:self-end w-fit"
+                                  >
+                                    {reschedulingWorkoutId === workout.id ? (
+                                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                    ) : null}
+                                    Change 
+                                    </Button>
+                                  </div>
+
+                                </div>
+                               
+                              </div>
+                            )}
+                          </div>
+                          <Button
+                            
+                            size="sm"
+                            href={`/dashboard/workouts/${workout.id}`}
+                            onClick={() => setShowWorkoutDialog(false)}
+                            className="mt-5"
+                          >
+                            Start Workout
+                          </Button>
+                        </>
                       ) : (
                         <>
                           <Button

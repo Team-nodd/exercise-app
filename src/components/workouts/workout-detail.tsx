@@ -62,7 +62,6 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
   const [commentLoading, setCommentLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<any>(null); // State to store current user profile
-  const [programs, setPrograms] = useState<Array<{ id: number; name: string }>>([]);
 
   // Email dialog states
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
@@ -81,7 +80,6 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
   }>>({});
 
   const supabase = createClient();
-  const router = useRouter();
 
   // Get current user profile
   useEffect(() => {
@@ -120,29 +118,6 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
     }
   }, [workout, supabase]);
 
-  // Fetch all programs for this workout's client to populate program selector
-  useEffect(() => {
-    async function fetchPrograms() {
-      try {
-        if (!workout) return;
-        const clientUserId = workout.program?.user_id || workout.user_id;
-        if (!clientUserId) return;
-        const { data, error } = await supabase
-          .from('programs')
-          .select('id, name')
-          .eq('user_id', clientUserId)
-          .order('created_at', { ascending: false });
-        if (!error && data) {
-          setPrograms(data as Array<{ id: number; name: string }>);
-        }
-      } catch {
-        // ignore
-      }
-    }
-    if (workout) {
-      fetchPrograms();
-    }
-  }, [workout, supabase]);
 
   // Debounce pending updates
   const debouncedUpdates = useDebounce(pendingUpdates, 1000);
@@ -738,7 +713,7 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
     return (
       <div
         className={cn(
-          'flex items-center justify-center w-12 h-12 rounded-full',
+          'hidden sm:flex items-center justify-center w-12 h-12 rounded-full',
           completed
             ? 'bg-green-100 text-green-600 dark:bg-green-900/20 dark:text-green-400'
             : 'bg-blue-100 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400',
@@ -845,46 +820,6 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
                 <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white truncate">
                   {workout.name}
                 </h1>
-                <div className="text-sm text-gray-600 dark:text-gray-400 mt-1 flex items-center gap-2">
-                  <span className="whitespace-nowrap">Program:</span>
-                  {programs.length > 0 ? (
-                    <div className="min-w-[180px]">
-                      <Select
-                        value={workout.program?.id ? String(workout.program.id) : 'all'}
-                        onValueChange={(value) => {
-                          if (value === 'all') {
-                            if (profile?.role === 'coach') {
-                              router.push('/coach/programs');
-                            } else {
-                              router.push('/dashboard/programs');
-                            }
-                            return;
-                          }
-                          const target = String(value);
-                          if (profile?.role === 'coach') {
-                            router.push(`/coach/programs/${target}`);
-                          } else {
-                            router.push(`/dashboard/programs/${target}`);
-                          }
-                        }}
-                      >
-                        <SelectTrigger className="h-8">
-                          <SelectValue placeholder="Select program" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All Programs</SelectItem>
-                          {programs.map((p) => (
-                            <SelectItem key={p.id} value={String(p.id)}>
-                              {p.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  ) : (
-                    <span>{workout.program?.name || 'N/A'}</span>
-                  )}
-                </div>
                 <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400 mt-2">
                   <div className="flex items-center gap-1.5">
                     <Calendar className="h-4 w-4" />
@@ -1195,7 +1130,7 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-2">
                 <Activity className="h-5 w-5" />
-                Cardio Workout Details
+                Workout Details
               </CardTitle>
               <Button
                 onClick={() => toggleCardioWorkoutCompletion(!workout.completed)}
@@ -1210,21 +1145,21 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
                 ) : (
                   <>
                     <Circle className="h-4 w-4 mr-2" />
-                    Mark Complete
+                    <span className="hidden sm:inline">Mark</span> Complete
                   </>
                 )}
               </Button>
             </div>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="grid sm:grid-cols-2 gap-6">
+            <div className="grid sm:grid-cols-2 grid-cols-2 gap-6">
               {workout.duration_minutes && (
                 <div className="space-y-2">
                   <Label className="flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-400">
                     <Timer className="h-4 w-4" />
                     Duration
                   </Label>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{workout.duration_minutes} min</p>
+                  <p className="text-xl font-bold text-gray-900 dark:text-white">{workout.duration_minutes} min</p>
                 </div>
               )}
               {workout.intensity_type && (
@@ -1233,7 +1168,7 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
                     <Zap className="h-4 w-4" />
                     Intensity
                   </Label>
-                  <Badge variant="outline" className="text-sm capitalize">
+                  <Badge variant="outline" className="sm:text-sm text-xs  capitalize">
                     {workout.intensity_type}
                   </Badge>
                 </div>
@@ -1241,7 +1176,7 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
               {workout.target_tss && (
                 <div className="space-y-2">
                   <Label className="text-sm font-medium text-gray-600 dark:text-gray-400">Training Stress Score</Label>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{workout.target_tss}</p>
+                  <p className="text-xl font-bold text-gray-900 dark:text-white">{workout.target_tss}</p>
                 </div>
               )}
               {workout.target_ftp && (
@@ -1249,7 +1184,7 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
                   <Label className="text-sm font-medium text-gray-600 dark:text-gray-400">
                     Functional Threshold Power
                   </Label>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{workout.target_ftp}W</p>
+                  <p className="text-xl font-bold text-gray-900 dark:text-white">{workout.target_ftp}W</p>
                 </div>
               )}
             </div>
@@ -1346,7 +1281,7 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className={cn(
-                'w-10 h-10 rounded-full flex items-center justify-center transition-colors',
+                'w-10 h-10 rounded-full flex items-center justify-center transition-colors self-start',
                 isWorkoutCompleted() 
                   ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400'
                   : 'bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-500'
@@ -1357,7 +1292,7 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
                 <h3 className="font-medium text-gray-900 dark:text-white">
                   Send Workout Summary
                 </h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
+                <p className="text-sm pr-10 text-gray-600 dark:text-gray-400">
                   {isWorkoutCompleted() 
                     ? 'Share your completed workout via email'
                     : 'Complete your workout to send a summary'
@@ -1369,12 +1304,12 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
               onClick={handleOpenEmailDialog}
               disabled={!isWorkoutCompleted()}
               className={cn(
-                'transition-all duration-200',
+                'transition-all duration-200 self-start',
                 !isWorkoutCompleted() && 'opacity-50 cursor-not-allowed'
               )}
             >
               <Mail className="h-4 w-4 mr-2" />
-              Send Email
+              <span className="hidden sm:inline">Send</span> Email
             </Button>
           </div>
         </CardContent>
@@ -1388,7 +1323,7 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
               <Mail className="h-5 w-5" />
               Send Workout Summary
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="mr-10 text-left"  >
               Send a summary of your completed workout via email.
             </DialogDescription>
           </DialogHeader>

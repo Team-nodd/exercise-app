@@ -137,6 +137,13 @@ export function UserProgramDetail({ program }: UserProgramDetailProps) {
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
                   <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-2">{program.name}</h1>
+
+                  <Badge className={cn(" items-center gap-1  sm:hidden flex mb-2 w-fit", getStatusColor(program.status))}>
+                  {program.status === "active" && <Activity className="h-3 w-3" />}
+                  {program.status === "completed" && <CheckCircle className="h-3 w-3" />}
+                  {program.status.charAt(0).toUpperCase() + program.status.slice(1)}
+                </Badge>
+
                   <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300 mb-3">
                     {program.description || "No description provided"}
                   </p>
@@ -145,7 +152,7 @@ export function UserProgramDetail({ program }: UserProgramDetailProps) {
                     <span>Coach: {program.coach.name}</span>
                   </div>
                 </div>
-                <Badge className={cn("flex items-center gap-1", getStatusColor(program.status))}>
+                <Badge className={cn(" items-center gap-1 hidden sm:flex", getStatusColor(program.status))}>
                   {program.status === "active" && <Activity className="h-3 w-3" />}
                   {program.status === "completed" && <CheckCircle className="h-3 w-3" />}
                   {program.status.charAt(0).toUpperCase() + program.status.slice(1)}
