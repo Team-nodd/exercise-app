@@ -10,11 +10,11 @@ import { Bell, CheckCircle, AlertCircle, Loader2 } from "lucide-react"
 import type { User } from "@/types"
 import { H6 } from "../ui/heading"
 
-interface NotificationSettingsProps {
+interface ConfigurationNotificationSettingsProps {
   profile: User
 }
 
-export function NotificationSettings({ profile }: NotificationSettingsProps) {
+export function ConfigurationNotificationSettings({ profile }: ConfigurationNotificationSettingsProps) {
   const { user } = useAuth()
   const supabase = createClient()
   

@@ -1,6 +1,6 @@
 import { createServerClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
-import { NotificationSettings } from "@/components/settings/notification-settings"
+import { ConfigurationNotificationSettings } from "@/components/configurations/configuration-notification-settings"  
 
 export default async function ConfigurationPage() {
   const supabase = await createServerClient()
@@ -26,5 +26,5 @@ export default async function ConfigurationPage() {
     redirect("/auth/login")
   }
 
-  return <NotificationSettings profile={profile} />
+  return <ConfigurationNotificationSettings profile={profile} />
 } 

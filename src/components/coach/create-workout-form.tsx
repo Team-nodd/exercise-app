@@ -321,7 +321,7 @@ export function CreateWorkoutForm({ program, redirectOnSuccess = true, onSuccess
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label className="text-sm font-medium">Select Cardio Type</Label>
+                <Label className="text-sm font-medium">Select Cardio Exercise</Label>
                 <Select
                   value={selectedCardioId}
                   onValueChange={(v) => {

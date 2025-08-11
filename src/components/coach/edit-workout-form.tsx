@@ -707,7 +707,7 @@ export function EditWorkoutForm({ program, workout, initialExercises, redirectOn
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label>Select Cardio Type</Label>
+                <Label>Select Cardio Exercise</Label>
                 <Select value={selectedCardioId} onValueChange={(v) => {
                   setSelectedCardioId(v)
                   const t = cardioTemplates.find(ct => String(ct.id) === v)
