@@ -202,7 +202,8 @@ export function NotificationSettings({ profile }: NotificationSettingsProps) {
             </div>
           </div> */}
 
-          {/* Program Assigned Notifications */}
+          {/* Program Assigned Notifications (user only) */}
+          {profile.role === "user" && (
           <div className="flex items-center justify-between">
             <div className="space-y-1">
               <Label className="text-base font-medium">Program Assigned</Label>
@@ -222,6 +223,7 @@ export function NotificationSettings({ profile }: NotificationSettingsProps) {
               />
             </div>
           </div>
+          )}
 
           {/* Client Workout Completed (coach only) */}
           {profile.role === "coach" && (
@@ -273,9 +275,11 @@ export function NotificationSettings({ profile }: NotificationSettingsProps) {
       <CardContent className="space-y-4">
         <H6 >Email Notification Settings</H6>
         <div className="text-sm text-gray-600 dark:text-gray-400 space-y-2">
-          <p>
-            • <strong>Program Assigned:</strong> {getNotificationDescription(profile.role, 'program_assigned_email')}
-          </p>
+          {profile.role === "user" && (
+            <p>
+              • <strong>Program Assigned:</strong> {getNotificationDescription(profile.role, 'program_assigned_email')}
+            </p>
+          )}
 
           {profile.role === "coach" && (
             <p>
