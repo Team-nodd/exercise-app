@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { toast } from "sonner"
-import { Calendar, ChevronLeft, ChevronRight, Edit, Copy, Loader2, Clock, Dumbbell, Plus, Play } from "lucide-react"
+import { Calendar, ChevronLeft, ChevronRight, Edit, Copy, Loader2, Clock, Dumbbell, Plus } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useMediaQuery } from "@/lib/hooks/use-media-query"
 import type { WorkoutWithDetails } from "@/types"
@@ -71,9 +71,7 @@ export function SharedCalendar({
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const [selectedDayWorkouts, setSelectedDayWorkouts] = useState<WorkoutWithDetails[]>([])
   const [showWorkoutDialog, setShowWorkoutDialog] = useState(false)
-  const [expandedDate, setExpandedDate] = useState<Date | null>(null)
   const [editingWorkout, setEditingWorkout] = useState<WorkoutWithDetails | null>(null)
-  const [saving, setSaving] = useState(false)
   const [duplicatingWorkout, setDuplicatingWorkout] = useState<number | null>(null)
 
   // New: per-workout date state for dialog reschedule on mobile (user role)
@@ -129,8 +127,7 @@ export function SharedCalendar({
       }
       return newDate
     })
-    // Close any expanded or dialog views when navigating months
-    setExpandedDate(null)
+    // Close dialog when navigating months
     setShowWorkoutDialog(false)
   }
 
@@ -249,69 +246,21 @@ export function SharedCalendar({
     }
   }
 
-  // Save workout changes
-  const saveWorkout = async () => {
-    if (!editingWorkout || isReadOnly) return
-
-    setSaving(true)
-    try {
-      const { error } = await supabase
-        .from("workouts")
-        .update({
-          name: editingWorkout.name,
-          scheduled_date: editingWorkout.scheduled_date,
-          notes: editingWorkout.notes,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", editingWorkout.id)
-
-      if (error) {
-        toast("Failed to update workout")
-        return
-      }
-
-      // Update local state
-      const updatedWorkouts = workouts.map((w) => (w.id === editingWorkout.id ? { ...w, ...editingWorkout } : w))
-
-      onWorkoutUpdate?.(updatedWorkouts)
-      setEditingWorkout(null)
-      toast("Workout updated successfully!")
-    } catch (error) {
-      console.error("Error saving workout:", error)
-      toast("An unexpected error occurred")
-    } finally {
-      setSaving(false)
-    }
-  }
+  // Inline save function removed; editing handled via EditWorkoutDialog
 
   // Handle day click
   const handleDayClick = (date: Date, e?: React.MouseEvent) => {
-    if (e) {
-      e.stopPropagation()
-    }
-
+    if (e) e.stopPropagation()
     const workoutsForDay = getWorkoutsForDate(date)
-
-    // Clicking an empty day closes any open panels
+  
     if (workoutsForDay.length === 0) {
-      setExpandedDate(null)
       setShowWorkoutDialog(false)
       return
     }
-
-    if (isMobile || workoutsForDay.length > 1) {
-      setSelectedDate(date)
-      setSelectedDayWorkouts(workoutsForDay)
-      setShowWorkoutDialog(true)
-      setExpandedDate(null)
-    } else {
-      if (expandedDate?.toDateString() === date.toDateString()) {
-        setExpandedDate(null)
-      } else {
-        setExpandedDate(date)
-        setShowWorkoutDialog(false)
-      }
-    }
+  
+    setSelectedDate(date)
+    setSelectedDayWorkouts(workoutsForDay)
+    setShowWorkoutDialog(true)
   }
 
   // Drag and drop handlers
@@ -472,7 +421,6 @@ export function SharedCalendar({
       const workoutsForDay = getWorkoutsForDate(date)
       const isToday = formatDateForComparison(date) === formatDateForComparison(today)
       const isDragOver = dragOverDate && formatDateForComparison(dragOverDate) === formatDateForComparison(date)
-      const isExpanded = expandedDate && formatDateForComparison(expandedDate) === formatDateForComparison(date)
 
       days.push(
         <div key={`prev-${day}`} className="relative">
@@ -481,7 +429,7 @@ export function SharedCalendar({
               "h-20 sm:h-24 p-1 border border-gray-100 dark:border-gray-800 relative cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors flex flex-col opacity-40",
               isToday && "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800",
               isDragOver && "bg-green-100 dark:bg-green-900/20 border-green-300 dark:border-green-700 opacity-100",
-              isExpanded && "bg-blue-100 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700 opacity-100",
+              
               workoutsForDay.length === 0 && !isDragOver && "cursor-default",
             )}
             onClick={(e) => handleDayClick(date, e)}
@@ -511,73 +459,7 @@ export function SharedCalendar({
               ))}
             </div>
           </div>
-          {/* Expanded view for desktop single workout */}
-          {isExpanded && workoutsForDay.length === 1 && !isMobile && (
-            <div
-              className="absolute top-full left-0 right-0 z-10 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 mt-1"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="space-y-2">
-                <h4 className="font-semibold text-sm">{workoutsForDay[0].name}</h4>
-                <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                  {workoutsForDay[0].workout_type === "gym" ? (
-                    <Dumbbell className="h-3 w-3" />
-                  ) : (
-                    <Clock className="h-3 w-3" />
-                  )}
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="capitalize">{workoutsForDay[0].workout_type}</span>
-                      {workoutsForDay[0].duration_minutes && <span>• {workoutsForDay[0].duration_minutes}min</span>}
-                    </div>
-                    <Badge variant={workoutsForDay[0].completed ? "default" : "secondary"} className="text-xs">
-                      {workoutsForDay[0].completed ? "Completed" : "Pending"}
-                    </Badge>
-                  </div>
-                </div>
-                {workoutsForDay[0].notes && (
-                  <p className="text-xs text-gray-600 dark:text-gray-400">{workoutsForDay[0].notes}</p>
-                )}
-                <div className="flex gap-2 pt-2">
-                  {userRole === "user" && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      href={`/dashboard/workouts/${workoutsForDay[0].id}`}
-                      className="text-xs h-7 bg-transparent"
-                    >
-                      Start
-                    </Button>
-                  )}
-                  {userRole === "coach" && (
-                    <>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => onEditWorkout?.(workoutsForDay[0])}
-                        className="text-xs h-7"
-                      >
-                        <Edit className="h-3 w-3 mr-1" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => duplicateWorkout(workoutsForDay[0].id, date)}
-                        disabled={duplicatingWorkout === workoutsForDay[0].id}
-                        className="text-xs h-7"
-                      >
-                        {duplicatingWorkout === workoutsForDay[0].id ? (
-                          <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                        ) : (
-                          <Copy className="h-3 w-3 mr-1" />
-                        )}
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
+          
         </div>,
       )
     }
@@ -589,7 +471,6 @@ export function SharedCalendar({
       const isToday = formatDateForComparison(date) === formatDateForComparison(today)
       const isPast = date < today && !isToday
       const isDragOver = dragOverDate && formatDateForComparison(dragOverDate) === formatDateForComparison(date)
-      const isExpanded = expandedDate && formatDateForComparison(expandedDate) === formatDateForComparison(date)
 
       days.push(
         <div key={day} className="relative">
@@ -599,7 +480,7 @@ export function SharedCalendar({
               isToday && "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800",
               isPast && "text-gray-400 dark:text-gray-600",
               isDragOver && "bg-green-100 dark:bg-green-900/20 border-green-300 dark:border-green-700",
-              isExpanded && "bg-blue-100 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700",
+              
               workoutsForDay.length === 0 && !isDragOver && "cursor-default",
             )}
             onClick={(e) => handleDayClick(date, e)}
@@ -629,76 +510,7 @@ export function SharedCalendar({
               ))}
             </div>
           </div>
-          {/* Expanded view for desktop single workout */}
-          {isExpanded && workoutsForDay.length === 1 && !isMobile && (
-            <div
-              className={cn("absolute top-full left-0 right-0 z-10 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 mt-1 border-l-3 ", workoutsForDay[0].completed  ? "border-l-green-500 "
-                : "border-l-blue-500 ")}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="space-y-2">
-                <h4 className="font-semibold text-sm">{workoutsForDay[0].name}</h4>
-                <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-
-                  <div className="flex  gap-2 flex-col items-start">
-                    <div className="flex items-center gap-2">
-                    {workoutsForDay[0].workout_type === "gym" ? (
-                        <Dumbbell className="h-3 w-3" />
-                      ) : (
-                        <Clock className="h-3 w-3" />
-                      )}
-                      <span className="capitalize">{workoutsForDay[0].workout_type}</span>
-                      {workoutsForDay[0].duration_minutes && <span>• {workoutsForDay[0].duration_minutes}min</span>}
-                    </div>
-                    <Badge variant={workoutsForDay[0].completed ? "default" : "secondary"} className="text-xs w-fit">
-                    {workoutsForDay[0].completed ? "Completed" : "Pending"}
-                    </Badge>
-                  </div>
-
-                </div>
-                {workoutsForDay[0].notes && (
-                  <p className="text-xs text-gray-600 dark:text-gray-400">{workoutsForDay[0].notes}</p>
-                )}
-                <div className="flex gap-2 pt-2">
-                  {userRole === "user" && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      href={`/dashboard/workouts/${workoutsForDay[0].id}`}
-                      className="text-xs h-7 bg-transparent"
-                    >
-                      Start
-                    </Button>
-                  )}
-                  {userRole === "coach" && (
-                    <>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => onEditWorkout?.(workoutsForDay[0])}
-                        className="text-xs h-7"
-                      >
-                        <Edit className="h-3 w-3 mr-1" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => duplicateWorkout(workoutsForDay[0].id, date)}
-                        disabled={duplicatingWorkout === workoutsForDay[0].id}
-                        className="text-xs h-7"
-                      >
-                        {duplicatingWorkout === workoutsForDay[0].id ? (
-                          <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                        ) : (
-                          <Copy className="h-3 w-3 mr-1" />
-                        )}
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
+          
         </div>,
       )
     }
@@ -715,7 +527,6 @@ export function SharedCalendar({
       const workoutsForDay = getWorkoutsForDate(date)
       const isToday = formatDateForComparison(date) === formatDateForComparison(today)
       const isDragOver = dragOverDate && formatDateForComparison(dragOverDate) === formatDateForComparison(date)
-      const isExpanded = expandedDate && formatDateForComparison(expandedDate) === formatDateForComparison(date)
 
       days.push(
         <div key={`next-${day}`} className="relative">
@@ -724,7 +535,7 @@ export function SharedCalendar({
               "h-20 sm:h-24 p-1 border border-gray-100 dark:border-gray-800 relative cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors flex flex-col opacity-40",
               isToday && "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800",
               isDragOver && "bg-green-100 dark:bg-green-900/20 border-green-300 dark:border-green-700 opacity-100",
-              isExpanded && "bg-blue-100 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700 opacity-100",
+              
               workoutsForDay.length === 0 && !isDragOver && "cursor-default",
             )}
             onClick={(e) => handleDayClick(date, e)}
@@ -754,75 +565,7 @@ export function SharedCalendar({
               ))}
             </div>
           </div>
-          {/* Expanded view for desktop single workout */}
-          {isExpanded && workoutsForDay.length === 1 && !isMobile && (
-            <div
-              className="absolute top-full left-0 right-0 z-10 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 mt-1"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="space-y-2">
-                <h4 className="font-semibold text-sm">{workoutsForDay[0].name}</h4>
-                <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-2">
-                      {workoutsForDay[0].workout_type === "gym" ? (
-                      <Dumbbell className="h-3 w-3" />
-                        ) : (
-                          <Clock className="h-3 w-3" />
-                        )}
-                      <span className="capitalize">{workoutsForDay[0].workout_type}</span>
-                      {workoutsForDay[0].duration_minutes && <span>• {workoutsForDay[0].duration_minutes}min</span>}
-                    </div>
-                    <Badge variant={workoutsForDay[0].completed ? "default" : "secondary"} className="text-xs">
-                      {workoutsForDay[0].completed ? "Completed" : "Pending"}
-                    </Badge>
-                  </div>
-
-                </div>
-                {workoutsForDay[0].notes && (
-                  <p className="text-xs text-gray-600 dark:text-gray-400">{workoutsForDay[0].notes}</p>
-                )}
-                <div className="flex gap-2 pt-2">
-                  {userRole === "user" && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      href={`/dashboard/workouts/${workoutsForDay[0].id}`}
-                      className="text-xs h-7 bg-transparent"
-                    >
-                      Start
-                    </Button>
-                  )}
-                  {userRole === "coach" && (
-                    <>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => onEditWorkout?.(workoutsForDay[0])}
-                        className="text-xs h-7"
-                      >
-                        <Edit className="h-3 w-3 mr-1" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => duplicateWorkout(workoutsForDay[0].id, date)}
-                        disabled={duplicatingWorkout === workoutsForDay[0].id}
-                        className="text-xs h-7"
-                      >
-                        {duplicatingWorkout === workoutsForDay[0].id ? (
-                          <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                        ) : (
-                          <Copy className="h-3 w-3 mr-1" />
-                        )}
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
+          
         </div>,
       )
     }
@@ -891,8 +634,7 @@ export function SharedCalendar({
       <CardContent
         className="relative"
         onClick={() => {
-          // Clicking background closes expanded or dialog views
-          setExpandedDate(null)
+          // Clicking background closes the dialog if open
           setShowWorkoutDialog(false)
         }}
       >
