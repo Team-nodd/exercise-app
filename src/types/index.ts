@@ -26,6 +26,7 @@ export interface ProgramWithDetails extends Program {
 export interface WorkoutWithDetails extends Workout {
   program: Program
   exercises?: WorkoutExerciseWithDetails[]
+  cardio_exercise?: CardioExercise
 }
 
 export interface WorkoutExerciseWithDetails extends WorkoutExercise {

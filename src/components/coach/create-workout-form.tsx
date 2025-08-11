@@ -178,7 +178,9 @@ export function CreateWorkoutForm({ program, redirectOnSuccess = true, onSuccess
           duration_minutes: durationMinutes ? Number.parseInt(durationMinutes) : null,
           target_tss: targetTss ? Number.parseInt(targetTss) : null,
           target_ftp: targetFtp ? Number.parseInt(targetFtp) : null,
+          cardio_exercise_id: selectedCardioId ? Number.parseInt(selectedCardioId) : null,
         }),
+        ...(workoutType === "gym" && { cardio_exercise_id: null }),
       }
 
       const { data: workout, error: workoutError } = await supabase
@@ -534,7 +536,11 @@ export function CreateWorkoutForm({ program, redirectOnSuccess = true, onSuccess
         <div className="flex flex-col sm:flex-row gap-3 pt-4">
           <Button type="submit" disabled={loading} className="w-full sm:w-auto">
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Create Workout
+            {workoutType === "cardio"
+              ? `Create Workout — Cardio: ${
+                  cardioTemplates.find((ct) => String(ct.id) === selectedCardioId)?.name || intensityType || "Type"
+                }`
+              : "Create Workout"}
           </Button>
           {onCancel ? (
             <Button type="button" variant="outline" onClick={onCancel} className="w-full sm:w-auto bg-transparent">

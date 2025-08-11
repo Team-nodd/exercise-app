@@ -72,7 +72,7 @@ export function EditWorkoutForm({ program, workout, initialExercises, redirectOn
   const [loading, setLoading] = useState(false)
   const [loadingExercises, setLoadingExercises] = useState(true)
   const [cardioTemplates, setCardioTemplates] = useState<CardioExercise[]>([])
-  const [selectedCardioId, setSelectedCardioId] = useState<string>("")
+  const [selectedCardioId, setSelectedCardioId] = useState<string>(workout.cardio_exercise_id ? String(workout.cardio_exercise_id) : "")
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
@@ -445,12 +445,14 @@ export function EditWorkoutForm({ program, workout, initialExercises, redirectOn
           duration_minutes: durationMinutes ? Number.parseInt(durationMinutes) : null,
           target_tss: targetTss ? Number.parseInt(targetTss) : null,
           target_ftp: targetFtp ? Number.parseInt(targetFtp) : null,
+          cardio_exercise_id: selectedCardioId ? Number.parseInt(selectedCardioId) : null,
         }),
         ...(workoutType === "gym" && {
           intensity_type: null,
           duration_minutes: null,
           target_tss: null,
           target_ftp: null,
+          cardio_exercise_id: null,
         }),
         updated_at: new Date().toISOString(),
       }

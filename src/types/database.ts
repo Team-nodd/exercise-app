@@ -159,6 +159,7 @@ export interface Database {
           target_tss: number | null
           target_ftp: number | null
           notes: string | null
+          cardio_exercise_id: number | null
           completed: boolean
           completed_at: string | null
           created_at: string
@@ -177,6 +178,7 @@ export interface Database {
           target_tss?: number | null
           target_ftp?: number | null
           notes?: string | null
+          cardio_exercise_id?: number | null
           completed?: boolean
           completed_at?: string | null
           created_at?: string
@@ -195,6 +197,7 @@ export interface Database {
           target_tss?: number | null
           target_ftp?: number | null
           notes?: string | null
+          cardio_exercise_id?: number | null
           completed?: boolean
           completed_at?: string | null
           created_at?: string

@@ -16,8 +16,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { AppLink } from '../ui/app-link';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useRouter } from 'next/navigation';
+// import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+// import { useRouter } from 'next/navigation';
 import {
   Dialog,
   DialogContent,
@@ -138,12 +138,13 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
         setTimeout(() => reject(new Error('Request timeout')), 10000)
       );
 
-      // Fetch workout details with program (including coach_id)
+      // Fetch workout details with program (including coach_id) and selected cardio exercise
       const workoutPromise = supabase
         .from('workouts')
         .select(`
           *,
-          program:programs(id, name, coach_id, user_id)
+          program:programs(id, name, coach_id, user_id),
+          cardio_exercise:cardio_exercises(*)
         `)
         .eq('id', workoutId)
         .single();
@@ -310,7 +311,7 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
             return next;
           });
         }
-      } catch (e) {
+      } catch {
         // ignore
       }
     })();
@@ -544,9 +545,9 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
               userId,
               workout.program.coach_id
             );
-          } catch (e) {
+          } catch {
             // Log only; don’t block UX
-            console.error('Error notifying coach about email:', e);
+            // console.error('Error notifying coach about email:', e);
           }
         }
       })
@@ -705,7 +706,7 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
       }));
 
       toast('Exercise updated successfully');
-    } catch (error) {
+    } catch {
       toast('Failed to save changes');
     }
   };
@@ -1143,7 +1144,7 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-2">
                 <Activity className="h-5 w-5" />
-                Workout Details
+                {workout.cardio_exercise?.name ? `Cardio: ${workout.cardio_exercise.name}` : `Cardio: ${workout.intensity_type || 'Session'}`}
               </CardTitle>
               <Button
                 onClick={() => toggleCardioWorkoutCompletion(!workout.completed)}

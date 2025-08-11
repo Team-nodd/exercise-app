@@ -199,6 +199,7 @@ export function SharedCalendar({
         duration_minutes: originalWorkout.duration_minutes,
         target_tss: originalWorkout.target_tss,
         target_ftp: originalWorkout.target_ftp,
+        cardio_exercise_id: originalWorkout.workout_type === "cardio" ? (originalWorkout as any).cardio_exercise_id ?? null : null,
         completed: false,
         completed_at: null,
         order_in_program: workouts.length + 1,
