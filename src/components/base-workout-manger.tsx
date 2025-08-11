@@ -155,12 +155,12 @@ export function BaseWorkoutManager({
         .select(`*, workout_exercises(*)`)
         .eq("id", workoutId)
         .single()
-
+  
       if (workoutError || !originalWorkout) {
         toast("Failed to fetch workout data")
         return
       }
-
+  
       const duplicateWorkoutData = {
         program_id: originalWorkout.program_id,
         user_id: originalWorkout.user_id,
@@ -176,18 +176,18 @@ export function BaseWorkoutManager({
         completed_at: null,
         order_in_program: workouts.length + 1,
       }
-
+  
       const { data: newWorkout, error: createError } = await supabase
         .from("workouts")
         .insert(duplicateWorkoutData)
         .select()
         .single()
-
+  
       if (createError || !newWorkout) {
         toast("Failed to create duplicate workout")
         return
       }
-
+  
       if (originalWorkout.workout_type === "gym" && originalWorkout.workout_exercises?.length > 0) {
         const duplicateExercises = originalWorkout.workout_exercises.map((exercise: any) => ({
           workout_id: newWorkout.id,
@@ -199,15 +199,14 @@ export function BaseWorkoutManager({
           rest_seconds: exercise.rest_seconds,
           volume_level: exercise.volume_level,
           completed: false,
-          completed_at: null,
         }))
-
+  
         const { error: exercisesError } = await supabase.from("workout_exercises").insert(duplicateExercises)
         if (exercisesError) {
           toast("Workout duplicated but failed to copy exercises")
         }
       }
-
+  
       await fetchWorkouts()
       toast(
         `Workout duplicated successfully${targetDate ? ` and scheduled for ${targetDate.toLocaleDateString()}` : ""}!`,

@@ -218,7 +218,7 @@ export function SharedCalendar({
         return
       }
 
-      // Duplicate exercises if it's a gym workout
+      // FIX: do not include completed_at (column doesn’t exist on workout_exercises)
       if (originalWorkout.workout_type === "gym" && workoutWithExercises.workout_exercises?.length > 0) {
         const duplicateExercises = workoutWithExercises.workout_exercises.map((exercise: any) => ({
           workout_id: newWorkout.id,
@@ -230,13 +230,11 @@ export function SharedCalendar({
           rest_seconds: exercise.rest_seconds,
           volume_level: exercise.volume_level,
           completed: false,
-          completed_at: null,
         }))
 
         await supabase.from("workout_exercises").insert(duplicateExercises)
       }
 
-      // Update local state
       const updatedWorkouts = [...workouts, newWorkout as WorkoutWithDetails]
       onWorkoutUpdate?.(updatedWorkouts)
 

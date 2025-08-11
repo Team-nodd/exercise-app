@@ -194,7 +194,7 @@ export function ClientList({ coachId }: ClientListProps) {
                     <div>
                       <CardTitle className="text-lg sm:text-xl font-semibold">{client.name}</CardTitle>
                       <CardDescription className="text-sm text-gray-600 dark:text-gray-400 text-wrap">
-                        {client.email.slice(0, 10)}...
+                        {client.email.slice(0, 20)}...
                       </CardDescription>
                     </div>
                   </div>
