@@ -12,6 +12,12 @@ import { Navigation } from "@/components/layout/navigation"
 export const metadata: Metadata = {
   title: "FitTracker Pro - Exercise Program Management",
   description: "Professional exercise program management system for coaches and athletes",
+  manifest: "/manifest.webmanifest",
+  themeColor: "#0ea5e9",
+  icons: {
+    icon: [{ url: "/icons/pwa-192.png", sizes: "192x192", type: "image/png" }],
+    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -24,6 +30,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           href="https://fonts.googleapis.com/css2?family=Poppins:wght@100;200;300;400;500;600;700;800;900&display=swap"
           rel="stylesheet"
         />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
       </head>
       <body className="font-poppins antialiased" suppressHydrationWarning>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
