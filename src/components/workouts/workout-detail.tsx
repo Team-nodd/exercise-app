@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { CheckCircle, Circle, Dumbbell,  AlertCircle, ArrowLeft, MessageSquare, Send,  Calendar, Zap,  Activity, ChevronDown, Loader2, RefreshCw, CheckCircle2, Clock,  Mail, Save, Timer} from 'lucide-react';
+import { CheckCircle, Circle, Dumbbell,  AlertCircle, ArrowLeft, MessageSquare, Send,  Calendar, Zap,  Activity, ChevronDown, Loader2, RefreshCw, CheckCircle2, Clock,  Mail, Save, Timer, Share } from 'lucide-react';
 import type { WorkoutWithDetails, WorkoutExerciseWithDetails, Comment } from '@/types';
 import { notificationService } from '@/lib/notifications/notification-service';
 import { Textarea } from '@/components/ui/textarea';
@@ -62,6 +62,7 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
   const [commentLoading, setCommentLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<any>(null); // State to store current user profile
+  const [sharing, setSharing] = useState(false);
 
   // Email dialog states
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
@@ -667,6 +668,231 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
 
   const manualSave = () => {
     saveUpdates();
+  };
+
+  // Generate shareable image
+  const generateShareImage = async (): Promise<Blob | null> => {
+    try {
+      const canvas = document.createElement('canvas');
+      const width = 1080;
+      const height = 1350;
+      const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+      canvas.width = width * dpr;
+      canvas.height = height * dpr;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return null;
+      ctx.scale(dpr, dpr);
+
+      // Helpers
+      const setFont = (spec: string) => { ctx.font = spec; };
+      const wrapText = (text: string, maxWidth: number) => {
+        const words = text.split(/\s+/);
+        const lines: string[] = [];
+        let line = '';
+        for (const w of words) {
+          const test = line ? line + ' ' + w : w;
+          if (ctx.measureText(test).width <= maxWidth) {
+            line = test;
+          } else {
+            if (line) lines.push(line);
+            // single long word fallback
+            if (ctx.measureText(w).width > maxWidth) {
+              let part = '';
+              for (const ch of w) {
+                const t = part + ch;
+                if (ctx.measureText(t).width <= maxWidth) part = t; else { lines.push(part); part = ch; }
+              }
+              line = part;
+            } else {
+              line = w;
+            }
+          }
+        }
+        if (line) lines.push(line);
+        return lines;
+      };
+
+      // Background gradient
+      const grad = ctx.createLinearGradient(0, 0, 0, height);
+      grad.addColorStop(0, '#0ea5e9');
+      grad.addColorStop(1, '#111827');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, width, height);
+
+      // Header
+      ctx.fillStyle = '#ffffff';
+      setFont('bold 56px Poppins, Arial, sans-serif');
+      ctx.fillText('Workout Completed', 60, 120);
+
+      // Title (wrapped)
+      const title = workout?.name || 'Workout';
+      setFont('bold 44px Poppins, Arial, sans-serif');
+      const titleLines = wrapText(title, width - 120);
+      let currentY = 180;
+      for (const tl of titleLines) { ctx.fillText(tl, 60, currentY); currentY += 48; }
+
+      // Date
+      setFont('400 28px Poppins, Arial, sans-serif');
+      const when = workout?.scheduled_date
+        ? new Date(workout.scheduled_date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
+        : new Date().toLocaleDateString();
+      ctx.fillText(when, 60, currentY + 8);
+
+      // Content card
+      const cardX = 40;
+      const cardY = currentY + 56;
+      const cardW = width - 80;
+      const cardH = 980;
+      ctx.fillStyle = 'rgba(255,255,255,0.1)';
+      // Rounded rect (with fallback)
+      if ((ctx as any).roundRect) {
+        (ctx as any).roundRect(cardX, cardY, cardW, cardH, 24);
+        ctx.fill();
+      } else {
+        ctx.beginPath();
+        const r = 24;
+        ctx.moveTo(cardX + r, cardY);
+        ctx.lineTo(cardX + cardW - r, cardY);
+        ctx.quadraticCurveTo(cardX + cardW, cardY, cardX + cardW, cardY + r);
+        ctx.lineTo(cardX + cardW, cardY + cardH - r);
+        ctx.quadraticCurveTo(cardX + cardW, cardY + cardH, cardX + cardW - r, cardY + cardH);
+        ctx.lineTo(cardX + r, cardY + cardH);
+        ctx.quadraticCurveTo(cardX, cardY + cardH, cardX, cardY + cardH - r);
+        ctx.lineTo(cardX, cardY + r);
+        ctx.quadraticCurveTo(cardX, cardY, cardX + r, cardY);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      ctx.fillStyle = '#ffffff';
+      setFont('600 34px Poppins, Arial, sans-serif');
+      const headerText = workout?.workout_type === 'cardio' ? 'Cardio Summary' : 'Exercises Performed';
+      ctx.fillText(headerText, cardX + 28, cardY + 60);
+
+      // Dynamic list rendering with columns & wrapping
+      let fontSize = 26;
+      let lineGap = 42;
+      const maxColumns = 3;
+      const colGap = 36;
+      const leftPadding = 28;
+      const topStart = cardY + 110;
+      const availableHeight = cardH - 140; // from topStart to bottom padding
+
+      const buildLines = () => {
+        setFont(`400 ${fontSize}px Poppins, Arial, sans-serif`);
+        const lines: string[] = [];
+        if (workout?.workout_type === 'cardio') {
+          const items: string[] = [];
+          const t = workout?.cardio_exercise?.name || (workout?.intensity_type ? `Type: ${workout.intensity_type}` : 'Cardio');
+          items.push(t);
+          if (workout?.duration_minutes) items.push(`Duration: ${workout.duration_minutes} min`);
+          if (workout?.target_tss) items.push(`TSS: ${workout.target_tss}`);
+          if (workout?.target_ftp) items.push(`FTP: ${workout.target_ftp}`);
+          const colWidth = (cardW - (leftPadding * 2) - (colGap * (1))) / 2; // assume at least 2 columns for wrap width calc
+          for (const s of items) lines.push(...wrapText(s, colWidth));
+        } else {
+          // Full exercises without truncation
+          // Build strings like "Name — 3×10 • 80"
+          const colWidth = (cardW - (leftPadding * 2) - (colGap * (maxColumns - 1))) / maxColumns;
+          for (const ex of exercises) {
+            const name = ex.exercise?.name || 'Exercise';
+            const meta: string[] = [];
+            if (ex.sets && ex.reps) meta.push(`${ex.sets}×${ex.reps}`);
+            if (ex.weight) meta.push(String(ex.weight));
+            const line = meta.length ? `${name} — ${meta.join(' • ')}` : name;
+            lines.push(...wrapText(line, colWidth));
+          }
+        }
+        return lines;
+      };
+
+      // Fit content by adjusting columns and font size until it fits
+      let lines = buildLines();
+      let columns = 2;
+      const fits = () => {
+        const maxLinesPerCol = Math.floor(availableHeight / lineGap);
+        return lines.length <= maxLinesPerCol * columns;
+      };
+      while (!fits()) {
+        if (columns < maxColumns) {
+          columns += 1;
+        } else if (fontSize > 20) {
+          fontSize -= 2;
+          lineGap = Math.max(34, lineGap - 2);
+          lines = buildLines();
+        } else {
+          // As a last resort, allow more height within card (reduce footer space)
+          break;
+        }
+      }
+
+      // Draw lines in columns
+      setFont(`400 ${fontSize}px Poppins, Arial, sans-serif`);
+      const colWidth = (cardW - (leftPadding * 2) - (colGap * (columns - 1))) / columns;
+      const maxLinesPerCol = Math.floor(availableHeight / lineGap);
+      for (let i = 0; i < lines.length; i++) {
+        const col = Math.floor(i / maxLinesPerCol);
+        const row = i % maxLinesPerCol;
+        const x = cardX + leftPadding + col * (colWidth + colGap);
+        const y = topStart + row * lineGap;
+        ctx.fillText(lines[i], x, y);
+      }
+
+      // Footer branding
+      setFont('500 24px Poppins, Arial, sans-serif');
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      ctx.fillText('Shared via FitTracker Pro', 40, height - 60);
+
+      return await new Promise<Blob | null>((resolve) => canvas.toBlob((b) => resolve(b), 'image/png', 0.92));
+    } catch (e) {
+      console.error('Error generating share image:', e);
+      return null;
+    }
+  };
+
+  const handleShare = async () => {
+    if (!isWorkoutCompleted()) return;
+    setSharing(true);
+    try {
+      const blob = await generateShareImage();
+      if (!blob) {
+        toast('Failed to create share image');
+        return;
+      }
+      const file = new File([blob], `workout-${workoutId}.png`, { type: 'image/png' });
+      const shareData: ShareData = {
+        title: workout?.name || 'Workout',
+        text: 'My workout from Exercise App',
+        files: [file],
+      } as any;
+      if ((navigator as any).canShare && (navigator as any).canShare({ files: [file] })) {
+        await (navigator as any).share(shareData);
+      } else if (navigator.share) {
+        // Some browsers support share without files
+        await navigator.share({ title: shareData.title, text: shareData.text });
+        // Fallback download for image
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = file.name;
+        a.click();
+        URL.revokeObjectURL(url);
+      } else {
+        // Download fallback
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = file.name;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast('Image ready to save/share');
+      }
+    } catch (e) {
+      console.error('Error sharing:', e);
+      toast('Unable to open share sheet on this device');
+    } finally {
+      setSharing(false);
+    }
   };
 
   // Handle opening email dialog
@@ -1597,7 +1823,7 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
         Sending a manual email below is optional.
       </p>
 
-      {/* Send Email Button */}
+      {/* Share + Send Email */}
       <Card className="mt-5">
         <CardContent className="p-4">
           <div className="flex items-center justify-between">
@@ -1622,17 +1848,31 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
                 </p>
               </div>
             </div>
-            <Button
-              onClick={handleOpenEmailDialog}
-              disabled={!isWorkoutCompleted()}
-              className={cn(
-                'transition-all duration-200 self-start',
-                !isWorkoutCompleted() && 'opacity-50 cursor-not-allowed'
-              )}
-            >
-              <Mail className="h-4 w-4 mr-2" />
-              <span className="hidden sm:inline">Send</span> Email
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                onClick={handleShare}
+                disabled={!isWorkoutCompleted() || sharing}
+                variant="outline"
+                className={cn(
+                  'transition-all duration-200 self-start',
+                  !isWorkoutCompleted() && 'opacity-50 cursor-not-allowed'
+                )}
+              >
+                {sharing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Share className="h-4 w-4 mr-2" />}
+                Share
+              </Button>
+              <Button
+                onClick={handleOpenEmailDialog}
+                disabled={!isWorkoutCompleted()}
+                className={cn(
+                  'transition-all duration-200 self-start',
+                  !isWorkoutCompleted() && 'opacity-50 cursor-not-allowed'
+                )}
+              >
+                <Mail className="h-4 w-4 mr-2" />
+                <span className="hidden sm:inline">Send</span> Email
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
