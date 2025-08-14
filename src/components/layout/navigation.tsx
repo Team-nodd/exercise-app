@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { usePathname, useRouter } from "next/navigation"
 import { LogOut, Menu, X, Dumbbell, Calendar, Users, Home, User, Bell, Trash2, Mail } from 'lucide-react'
@@ -82,12 +82,21 @@ const handleSignOut = async () => {
     setDropdownOpen(false)
     setLoading(true) // Show global loading indicator
     await signOut()
+    // signOut in provider performs router.push('/')
   } catch (error) {
     console.error("Navigation signout error:", error)
     setSigningOut(false)
     setLoading(false) // Hide loading on error
+  } finally {
+    // Ensure local state is reset even if component persists in layout
+    setSigningOut(false)
   }
 }
+
+// Reset any transient sign-out label when auth state changes
+useEffect(() => {
+  setSigningOut(false)
+}, [user, profile])
 
 const getInitials = (name: string) => {
   return name

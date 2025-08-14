@@ -2,6 +2,7 @@
 
 import type React from "react"
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -15,6 +16,7 @@ export function LoginForm() {
   const [error, setError] = useState("")
   const supabase = createClient()
   const { loading, setLoading } = useGlobalLoading()
+  const router = useRouter()
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -59,13 +61,13 @@ export function LoginForm() {
           return
         }
 
-        window.location.href = "/dashboard"
+        router.push("/dashboard")
         return
       }
 
       // Redirect based on role
       const redirectUrl = profile.role === "coach" ? "/coach/dashboard" : "/dashboard"
-      window.location.href = redirectUrl
+      router.push(redirectUrl)
     } catch (error) {
       setError("An unexpected error occurred")
       setLoading(false)

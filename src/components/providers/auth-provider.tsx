@@ -2,6 +2,7 @@
 
 import type React from "react"
 import { createContext, useContext, useState, useEffect, useRef, useMemo } from "react"
+import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import type { User, Session } from "@supabase/supabase-js"
 
@@ -35,6 +36,7 @@ export function AuthProvider({ children, initialSession, initialProfile }: AuthP
   const [loading, setLoading] = useState(true)
   const fetchingProfile = useRef<string | null>(null) // Track which user we're fetching profile for
   const profileCache = useRef<Map<string, Profile>>(new Map()) // Cache profiles
+  const router = useRouter()
 
   const supabase = useMemo(() => createClient(), [])
 
@@ -209,8 +211,8 @@ export function AuthProvider({ children, initialSession, initialProfile }: AuthP
       setUser(null)
       setProfile(null)
 
-      // Redirect to home
-      window.location.href = "/"
+      // SPA redirect to home
+      router.push("/")
     } catch (error) {
       console.error("Sign out error:", error)
       setLoading(false)
