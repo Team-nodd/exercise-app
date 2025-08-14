@@ -74,10 +74,10 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
   const [expandedExercises, setExpandedExercises] = useState<Record<string, boolean>>({});
   const [editingExercises, setEditingExercises] = useState<Record<string, boolean>>({});
   const [editValues, setEditValues] = useState<Record<string, {
-    sets: number;
-    reps: number;
+    sets: number | "";
+    reps: number | "";
     weight: string;
-    rest_seconds: number;
+    rest_seconds: number | "";
   }>>({});
 
   const supabase = createClient();
@@ -465,6 +465,83 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
       // Update local workout state
       setWorkout((prev) => (prev ? { ...prev, completed: true, completed_at: new Date().toISOString() } : null));
 
+      // After completing a gym workout, propagate these exercise values to future workouts containing the same exercises
+      if ((workout?.workout_type === 'gym') && exercises.length > 0) {
+        (async () => {
+          try {
+            const scheduledDate = workout?.scheduled_date;
+            const programId = (workout as any)?.program_id ?? workout?.program?.id;
+            if (!scheduledDate || !programId) return;
+
+            // Build latest values per exercise in this workout
+            const latestByExercise: Record<number, { sets: number; reps: number; weight: string | null; rest_seconds: number }> = {};
+            for (const ex of exercises) {
+              latestByExercise[ex.exercise_id] = {
+                sets: ex.sets,
+                reps: ex.reps,
+                weight: ex.weight ?? null,
+                rest_seconds: ex.rest_seconds,
+              };
+            }
+
+            const exerciseIds = Object.keys(latestByExercise).map((k) => Number(k));
+            if (exerciseIds.length === 0) return;
+
+            // Find future workouts in the same program
+            const { data: futureWorkouts, error: futureWErr } = await supabase
+              .from('workouts')
+              .select('id')
+              .eq('program_id', programId)
+              .eq('workout_type', 'gym')
+              .gt('scheduled_date', scheduledDate)
+              .order('scheduled_date', { ascending: true })
+              .limit(200);
+
+            if (futureWErr || !futureWorkouts || futureWorkouts.length === 0) return;
+            const futureIds = futureWorkouts.map((w: any) => w.id as number);
+
+            // Load workout_exercises rows for those workouts that match our exercise ids
+            const { data: futureRows, error: futureRowsErr } = await supabase
+              .from('workout_exercises')
+              .select('id, workout_id, exercise_id, completed')
+              .in('workout_id', futureIds)
+              .in('exercise_id', exerciseIds);
+
+            if (futureRowsErr || !futureRows || futureRows.length === 0) return;
+
+            // Prepare updates, skipping already-completed entries
+            const updates = futureRows
+              .filter((row: any) => !row.completed)
+              .map((row: any) => {
+                const vals = latestByExercise[row.exercise_id as number];
+                return {
+                  id: row.id as number,
+                  sets: vals.sets,
+                  reps: vals.reps,
+                  weight: vals.weight,
+                  rest_seconds: vals.rest_seconds,
+                  updated_at: new Date().toISOString(),
+                };
+              });
+
+            if (updates.length > 0) {
+              // Batch updates in chunks to avoid payload limits
+              const chunkSize = 100;
+              for (let i = 0; i < updates.length; i += chunkSize) {
+                const chunk = updates.slice(i, i + chunkSize);
+                const { error: updErr } = await supabase
+                  .from('workout_exercises')
+                  .upsert(chunk, { onConflict: 'id' });
+                if (updErr) break;
+              }
+            }
+          } catch (e) {
+            // Non-blocking; log only
+            console.error('❌ Error propagating future workout defaults:', e);
+          }
+        })();
+      }
+
       // Send notifications
       await notificationService.sendWorkoutCompletedNotifications(Number(workoutId));
       // Auto email coach if they opted in
@@ -678,13 +755,19 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
   const handleSaveEdit = async (exerciseId: string) => {
     try {
       const values = editValues[exerciseId];
+      // Require numeric fields to be present to save, but allow empty while typing
+      if (values.sets === '' || values.reps === '' || values.rest_seconds === '') {
+        toast('Please fill in sets, reps and rest before saving');
+        return;
+      }
+
       const { error } = await supabase
         .from('workout_exercises')
         .update({
-          sets: values.sets,
-          reps: values.reps,
+          sets: Number(values.sets),
+          reps: Number(values.reps),
           weight: values.weight || null,
-          rest_seconds: values.rest_seconds
+          rest_seconds: Number(values.rest_seconds)
         })
         .eq('id', exerciseId);
 
@@ -696,7 +779,13 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
       // Update local state
       setExercises(prev => prev.map(ex =>
         String(ex.id) === exerciseId
-          ? { ...ex, ...values }
+          ? {
+              ...ex,
+              sets: Number(values.sets),
+              reps: Number(values.reps),
+              weight: values.weight || null,
+              rest_seconds: Number(values.rest_seconds)
+            }
           : ex
       ));
 
@@ -926,7 +1015,8 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
             exercises.map((exercise, index) => {
               const exerciseId = String(exercise.id);
               const isExpanded = expandedExercises[exerciseId] || false;
-              const isEditing = editingExercises[exerciseId] || false;
+              const isUserRole = profile?.role === 'user';
+              const isEditing = isUserRole || editingExercises[exerciseId] || false;
               const currentEditValues = editValues[exerciseId] || {
                 sets: exercise.sets,
                 reps: exercise.reps,
@@ -1039,7 +1129,7 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
                                 <Input
                                   type="number"
                                   value={currentEditValues.sets}
-                                  onChange={(e) => updateEditValue(exerciseId, 'sets', parseInt(e.target.value) || 0)}
+                                  onChange={(e) => updateEditValue(exerciseId, 'sets', e.target.value === '' ? '' : Number.parseInt(e.target.value) || 0)}
                                   className="h-8 text-sm"
                                   min="1"
                                 />
@@ -1049,7 +1139,7 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
                                 <Input
                                   type="number"
                                   value={currentEditValues.reps}
-                                  onChange={(e) => updateEditValue(exerciseId, 'reps', parseInt(e.target.value) || 0)}
+                                  onChange={(e) => updateEditValue(exerciseId, 'reps', e.target.value === '' ? '' : Number.parseInt(e.target.value) || 0)}
                                   className="h-8 text-sm"
                                   min="1"
                                 />
@@ -1070,7 +1160,7 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
                                 <Input
                                   type="number"
                                   value={currentEditValues.rest_seconds}
-                                  onChange={(e) => updateEditValue(exerciseId, 'rest_seconds', parseInt(e.target.value) || 0)}
+                                  onChange={(e) => updateEditValue(exerciseId, 'rest_seconds', e.target.value === '' ? '' : Number.parseInt(e.target.value) || 0)}
                                   className="h-8 text-sm"
                                   min="0"
                                 />
@@ -1118,15 +1208,17 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
                                 <strong>Instructions:</strong> {exercise.exercise.instructions}
                               </div>
                             )}
-                            {/* Edit Button */}
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => startEditing(exerciseId)}
-                              className="h-8 text-xs"
-                            >
-                              Edit Exercise
-                            </Button>
+                            {/* Edit Button (hidden for users; they are always editing when expanded) */}
+                            {profile?.role !== 'user' && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => startEditing(exerciseId)}
+                                className="h-8 text-xs"
+                              >
+                                Edit Exercise
+                              </Button>
+                            )}
                           </div>
                         )}
                       </div>
