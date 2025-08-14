@@ -1893,7 +1893,7 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
                 </p>
               </div>
             </div>
-            <div className="flex gap-2 sm:items-center sm:flex-row flex-col sm:space-y-0 space-y-2">
+            <div className="flex gap-2 sm:items-center sm:flex-row flex-row flex-col sm:space-y-0 space-y-2">
               <Button
                 onClick={handleOpenEmailDialog}
                 disabled={!isWorkoutCompleted()}
@@ -1903,7 +1903,7 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
                 )}
               >
                 <Mail className="h-4 w-4 mr-2" />
-                <span className="hidden sm:inline">Send</span> Email
+                <span className="hidden sm:inline">Send Email</span> 
               </Button>
               <Button
                 onClick={handleShare}
