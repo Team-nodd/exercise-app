@@ -1,4 +1,4 @@
-import withPWA from '@ducanh2912/next-pwa'
+import withPWAInit from '@ducanh2912/next-pwa'
 
 const isProd = process.env.NODE_ENV === 'production'
 
@@ -26,9 +26,7 @@ const baseConfig = {
   },
 }
 
-const nextConfig = withPWA({
-  ...baseConfig,
-  pwa: {
+const withPWA = withPWAInit({
     dest: 'public',
     register: true,
     skipWaiting: true,
@@ -54,7 +52,10 @@ const nextConfig = withPWA({
         }
       ]
     }
-  }
+})
+
+const nextConfig = withPWA({
+  ...baseConfig,
 })
 
 export default nextConfig

@@ -148,8 +148,8 @@ export function UseExerciseForm({ exercise, coachId }: UseExerciseFormProps) {
 
         if (prevWError || !previousWorkouts || previousWorkouts.length === 0) return
 
-        const idToDate = new Map<number, string>(previousWorkouts.map((w: any) => [w.id as number, w.scheduled_date as string]))
-        const workoutIds = previousWorkouts.map((w: any) => w.id as number)
+        const idToDate = new Map<number, string>(previousWorkouts.map((w: { id: number; scheduled_date: string }) => [w.id, w.scheduled_date]))
+        const workoutIds = previousWorkouts.map((w: { id: number }) => w.id)
 
         // Find occurrences of this exercise in those workouts
         const { data: previousExerciseRows, error: prevExError } = await supabase
@@ -162,7 +162,7 @@ export function UseExerciseForm({ exercise, coachId }: UseExerciseFormProps) {
 
         // Pick the most recent by workout scheduled_date
         const best = previousExerciseRows
-          .map((row: any) => ({
+          .map((row: { workout_id: number; sets: number | null; reps: number | null; weight: string | null; rest_seconds: number | null }) => ({
             ...row,
             date: idToDate.get(row.workout_id) || "",
           }))

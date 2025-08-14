@@ -987,7 +987,7 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
 
   const updateEditValue = (exerciseId: string, field: string, value: any) => {
     const current = editValues[exerciseId] || { sets: '', reps: '', weight: '', rest_seconds: '' } as any;
-    let nextValues = { ...current } as any;
+    const nextValues: any = { ...current };
     if (field === 'sets' || field === 'reps' || field === 'rest_seconds') {
       nextValues[field] = value === '' ? '' : Number.parseInt(String(value)) || 0;
     } else if (field === 'weight') {
