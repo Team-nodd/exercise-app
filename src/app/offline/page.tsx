@@ -1,3 +1,5 @@
+"use client"
+
 export default function OfflinePage() {
   return (
     <div className="container mx-auto px-4 py-10 max-w-2xl text-center">

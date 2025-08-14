@@ -1,6 +1,6 @@
 import type React from "react"
 import "./globals.css"
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
 import { ThemeProvider } from "@/components/theme-provider"
 import { AuthProvider } from "@/components/providers/auth-provider"
 import { Toaster } from "@/components/ui/sonner"
@@ -13,11 +13,14 @@ export const metadata: Metadata = {
   title: "FitTracker Pro - Exercise Program Management",
   description: "Professional exercise program management system for coaches and athletes",
   manifest: "/manifest.webmanifest",
-  themeColor: "#0ea5e9",
   icons: {
     icon: [{ url: "/icons/pwa-192.png", sizes: "192x192", type: "image/png" }],
     apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
   },
+}
+
+export const viewport: Viewport = {
+  themeColor: "#0ea5e9",
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
