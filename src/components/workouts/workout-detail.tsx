@@ -670,81 +670,180 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
     saveUpdates();
   };
 
-  // Generate shareable image
+  // Generate shareable image with responsive height and stable word wrapping
   const generateShareImage = async (): Promise<Blob | null> => {
     try {
-      const canvas = document.createElement('canvas');
       const width = 1080;
-      const height = 1350;
       const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
-      canvas.width = width * dpr;
-      canvas.height = height * dpr;
+
+      // Measurement context (no scaling side-effects)
+      const measureCanvas = document.createElement('canvas');
+      const mctx = measureCanvas.getContext('2d');
+      if (!mctx) return null;
+
+      const setMeasureFont = (spec: string) => { mctx.font = spec; };
+      const tokenize = (text: string) => text.split(/(\s+|[\/\-\u2013\u2014:×•,]+)/).filter(Boolean);
+      const wrapStable = (text: string, maxWidth: number, fontSpec: string) => {
+        setMeasureFont(fontSpec);
+        const tokens = tokenize(text);
+        const lines: string[] = [];
+        let line = '';
+        for (const tok of tokens) {
+          const test = line + tok;
+          if (mctx.measureText(test).width <= maxWidth || line === '') {
+            line = test;
+          } else {
+            if (line) lines.push(line.trimEnd());
+            line = tok.trimStart();
+          }
+        }
+        if (line) lines.push(line.trimEnd());
+        return lines;
+      };
+
+      // Pre-calculate title wrapping
+      const title = workout?.name || 'Workout';
+      const titleFont = 'bold 44px Poppins, Arial, sans-serif';
+      const titleLines = wrapStable(title, width - 120, titleFont);
+      const titleLineHeight = 48;
+      const titleHeight = titleLines.length * titleLineHeight;
+
+      // Build exercise/cardio content lines, adjusting columns and font size so tokens fit without mid-word breaks
+      const leftPadding = 28;
+      const colGap = 36;
+      const maxColumns = 3;
+      const isCardio = workout?.workout_type === 'cardio';
+      const baseFont = isCardio ? 24 : 22; // reduced sizes
+      const minFont = 16;
+      const lineGapBase = isCardio ? 36 : 34;
+
+      let columns = 1; // keep single column for gym to keep each exercise on one row
+      let fontSize = baseFont;
+      let contentLines: string[] = [];
+      let colWidth = 0;
+
+      const buildContentLineStrings = (): string[] => {
+        if (workout?.workout_type === 'cardio') {
+          const items: string[] = [];
+          const t = workout?.cardio_exercise?.name || (workout?.intensity_type ? `Type: ${workout.intensity_type}` : 'Cardio');
+          items.push(t);
+          if (workout?.duration_minutes) items.push(`Duration: ${workout.duration_minutes} min`);
+          if (workout?.target_tss) items.push(`TSS: ${workout.target_tss}`);
+          if (workout?.target_ftp) items.push(`FTP: ${workout.target_ftp}`);
+          return items;
+        }
+        const lines: string[] = [];
+        for (const ex of exercises) {
+          const name = ex.exercise?.name || 'Exercise';
+          const parts: string[] = [];
+          if (ex.sets && ex.reps) parts.push(`${ex.sets} set${ex.sets > 1 ? 's' : ''} × ${ex.reps} rep${ex.reps > 1 ? 's' : ''}`);
+          if (ex.weight) parts.push(`${ex.weight}`);
+          const meta = parts.join(' • ');
+          const line = meta ? `${name} — ${meta}` : name;
+          lines.push(line);
+        }
+        return lines;
+      };
+
+      const baseStrings = buildContentLineStrings();
+
+      // Iterate to ensure no token exceeds column width; increase columns up to 3, then reduce font if needed
+      const calcColWidth = (cols: number) => (width - 80 - (leftPadding * 2) - (colGap * (cols - 1))) / cols;
+      const contentFontSpec = (fs: number) => `400 ${fs}px Poppins, Arial, sans-serif`;
+
+      const tokensFit = (fs: number, cols: number): boolean => {
+        setMeasureFont(contentFontSpec(fs));
+        const cWidth = calcColWidth(cols);
+        if (!isCardio) {
+          // gym: keep entire exercise line on one row
+          return baseStrings.every((s) => mctx.measureText(s).width <= cWidth);
+        }
+        // cardio: ensure tokens fit so wrapping happens at token boundaries
+        for (const s of baseStrings) {
+          for (const tok of tokenize(s)) {
+            if (mctx.measureText(tok).width > cWidth) return false;
+          }
+        }
+        return true;
+      };
+
+      // First make sure content fits width by tweaking font (gym) or font+columns (cardio)
+      while (!tokensFit(fontSize, columns)) {
+        if (fontSize > minFont) {
+          fontSize -= 2;
+        } else if (isCardio && columns < maxColumns) {
+          columns += 1;
+        } else {
+          break;
+        }
+      }
+      colWidth = calcColWidth(columns);
+
+      // Now perform wrapping with the agreed font/columns
+      if (isCardio) {
+        contentLines = baseStrings.flatMap((s) => wrapStable(s, colWidth, contentFontSpec(fontSize)));
+      } else {
+        contentLines = [...baseStrings]; // gym: keep each exercise on one line
+      }
+
+      const lineGap = Math.max(34, lineGapBase - (baseFont - fontSize));
+      const rows = Math.ceil(contentLines.length / columns);
+
+      // Remove decorative sparkline
+      const hasSeries = false;
+
+      // Compute dynamic layout sizes
+      const headerTop = 120; // "Workout Completed" baseline
+      const dateBlock = 36;  // space for date
+      const cardHeader = 60; // "Exercises Performed" / "Cardio Summary"
+      const cardPaddingTop = 50; // extra padding before list
+      const cardPaddingBottom = 60;
+
+      const currentYStart = 60 + headerTop + titleHeight + dateBlock; // initial top for card
+      const contentHeight = rows * lineGap;
+      const cardX = 40;
+      const cardY = currentYStart;
+      const cardW = width - 80;
+      const chartHeight = 0;
+      const cardH = cardHeader + cardPaddingTop + contentHeight + cardPaddingBottom;
+
+      const footerHeight = 70;
+      const dynamicHeight = cardY + cardH + footerHeight + 20;
+
+      // Now draw on the real canvas with DPR
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.floor(width * dpr);
+      canvas.height = Math.floor(dynamicHeight * dpr);
       const ctx = canvas.getContext('2d');
       if (!ctx) return null;
       ctx.scale(dpr, dpr);
 
-      // Helpers
-      const setFont = (spec: string) => { ctx.font = spec; };
-      const wrapText = (text: string, maxWidth: number) => {
-        const words = text.split(/\s+/);
-        const lines: string[] = [];
-        let line = '';
-        for (const w of words) {
-          const test = line ? line + ' ' + w : w;
-          if (ctx.measureText(test).width <= maxWidth) {
-            line = test;
-          } else {
-            if (line) lines.push(line);
-            // single long word fallback
-            if (ctx.measureText(w).width > maxWidth) {
-              let part = '';
-              for (const ch of w) {
-                const t = part + ch;
-                if (ctx.measureText(t).width <= maxWidth) part = t; else { lines.push(part); part = ch; }
-              }
-              line = part;
-            } else {
-              line = w;
-            }
-          }
-        }
-        if (line) lines.push(line);
-        return lines;
-      };
-
       // Background gradient
-      const grad = ctx.createLinearGradient(0, 0, 0, height);
+      const grad = ctx.createLinearGradient(0, 0, 0, dynamicHeight);
       grad.addColorStop(0, '#0ea5e9');
       grad.addColorStop(1, '#111827');
       ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, width, height);
+      ctx.fillRect(0, 0, width, dynamicHeight);
 
       // Header
       ctx.fillStyle = '#ffffff';
-      setFont('bold 56px Poppins, Arial, sans-serif');
+      ctx.font = 'bold 48px Poppins, Arial, sans-serif';
       ctx.fillText('Workout Completed', 60, 120);
 
-      // Title (wrapped)
-      const title = workout?.name || 'Workout';
-      setFont('bold 44px Poppins, Arial, sans-serif');
-      const titleLines = wrapText(title, width - 120);
-      let currentY = 180;
-      for (const tl of titleLines) { ctx.fillText(tl, 60, currentY); currentY += 48; }
+      // Title
+      ctx.font = titleFont;
+      let ty = 180;
+      for (const tl of titleLines) { ctx.fillText(tl, 60, ty); ty += titleLineHeight; }
 
       // Date
-      setFont('400 28px Poppins, Arial, sans-serif');
+      ctx.font = '400 28px Poppins, Arial, sans-serif';
       const when = workout?.scheduled_date
         ? new Date(workout.scheduled_date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
         : new Date().toLocaleDateString();
-      ctx.fillText(when, 60, currentY + 8);
+      ctx.fillText(when, 60, ty + 8);
 
-      // Content card
-      const cardX = 40;
-      const cardY = currentY + 56;
-      const cardW = width - 80;
-      const cardH = 980;
+      // Card container
       ctx.fillStyle = 'rgba(255,255,255,0.1)';
-      // Rounded rect (with fallback)
       if ((ctx as any).roundRect) {
         (ctx as any).roundRect(cardX, cardY, cardW, cardH, 24);
         ctx.fill();
@@ -764,84 +863,30 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
         ctx.fill();
       }
 
+      // Card header
       ctx.fillStyle = '#ffffff';
-      setFont('600 34px Poppins, Arial, sans-serif');
+      ctx.font = '600 34px Poppins, Arial, sans-serif';
       const headerText = workout?.workout_type === 'cardio' ? 'Cardio Summary' : 'Exercises Performed';
-      ctx.fillText(headerText, cardX + 28, cardY + 60);
+      ctx.fillText(headerText, cardX + 28, cardY + 48);
 
-      // Dynamic list rendering with columns & wrapping
-      let fontSize = 26;
-      let lineGap = 42;
-      const maxColumns = 3;
-      const colGap = 36;
-      const leftPadding = 28;
-      const topStart = cardY + 110;
-      const availableHeight = cardH - 140; // from topStart to bottom padding
-
-      const buildLines = () => {
-        setFont(`400 ${fontSize}px Poppins, Arial, sans-serif`);
-        const lines: string[] = [];
-        if (workout?.workout_type === 'cardio') {
-          const items: string[] = [];
-          const t = workout?.cardio_exercise?.name || (workout?.intensity_type ? `Type: ${workout.intensity_type}` : 'Cardio');
-          items.push(t);
-          if (workout?.duration_minutes) items.push(`Duration: ${workout.duration_minutes} min`);
-          if (workout?.target_tss) items.push(`TSS: ${workout.target_tss}`);
-          if (workout?.target_ftp) items.push(`FTP: ${workout.target_ftp}`);
-          const colWidth = (cardW - (leftPadding * 2) - (colGap * (1))) / 2; // assume at least 2 columns for wrap width calc
-          for (const s of items) lines.push(...wrapText(s, colWidth));
-        } else {
-          // Full exercises without truncation
-          // Build strings like "Name — 3×10 • 80"
-          const colWidth = (cardW - (leftPadding * 2) - (colGap * (maxColumns - 1))) / maxColumns;
-          for (const ex of exercises) {
-            const name = ex.exercise?.name || 'Exercise';
-            const meta: string[] = [];
-            if (ex.sets && ex.reps) meta.push(`${ex.sets}×${ex.reps}`);
-            if (ex.weight) meta.push(String(ex.weight));
-            const line = meta.length ? `${name} — ${meta.join(' • ')}` : name;
-            lines.push(...wrapText(line, colWidth));
-          }
-        }
-        return lines;
-      };
-
-      // Fit content by adjusting columns and font size until it fits
-      let lines = buildLines();
-      let columns = 2;
-      const fits = () => {
-        const maxLinesPerCol = Math.floor(availableHeight / lineGap);
-        return lines.length <= maxLinesPerCol * columns;
-      };
-      while (!fits()) {
-        if (columns < maxColumns) {
-          columns += 1;
-        } else if (fontSize > 20) {
-          fontSize -= 2;
-          lineGap = Math.max(34, lineGap - 2);
-          lines = buildLines();
-        } else {
-          // As a last resort, allow more height within card (reduce footer space)
-          break;
-        }
-      }
-
-      // Draw lines in columns
-      setFont(`400 ${fontSize}px Poppins, Arial, sans-serif`);
-      const colWidth = (cardW - (leftPadding * 2) - (colGap * (columns - 1))) / columns;
-      const maxLinesPerCol = Math.floor(availableHeight / lineGap);
-      for (let i = 0; i < lines.length; i++) {
+      // Content lines
+      ctx.font = contentFontSpec(fontSize);
+      const topStart = cardY + cardHeader + (cardPaddingTop - 10);
+      const maxLinesPerCol = Math.ceil(contentLines.length / columns);
+      for (let i = 0; i < contentLines.length; i++) {
         const col = Math.floor(i / maxLinesPerCol);
         const row = i % maxLinesPerCol;
         const x = cardX + leftPadding + col * (colWidth + colGap);
         const y = topStart + row * lineGap;
-        ctx.fillText(lines[i], x, y);
+        ctx.fillText(contentLines[i], x, y);
       }
 
+      // (Chart removed)
+
       // Footer branding
-      setFont('500 24px Poppins, Arial, sans-serif');
+      ctx.font = '500 24px Poppins, Arial, sans-serif';
       ctx.fillStyle = 'rgba(255,255,255,0.9)';
-      ctx.fillText('Shared via FitTracker Pro', 40, height - 60);
+      ctx.fillText('Shared via FitTracker Pro', 40, dynamicHeight - 40);
 
       return await new Promise<Blob | null>((resolve) => canvas.toBlob((b) => resolve(b), 'image/png', 0.92));
     } catch (e) {
@@ -1848,29 +1893,30 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
                 </p>
               </div>
             </div>
-            <div className="flex gap-2">
-              <Button
-                onClick={handleShare}
-                disabled={!isWorkoutCompleted() || sharing}
-                variant="outline"
-                className={cn(
-                  'transition-all duration-200 self-start',
-                  !isWorkoutCompleted() && 'opacity-50 cursor-not-allowed'
-                )}
-              >
-                {sharing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Share className="h-4 w-4 mr-2" />}
-                Share
-              </Button>
+            <div className="flex gap-2 sm:items-center sm:flex-row flex-col sm:space-y-0 space-y-2">
               <Button
                 onClick={handleOpenEmailDialog}
                 disabled={!isWorkoutCompleted()}
                 className={cn(
-                  'transition-all duration-200 self-start',
+                  'transition-all duration-200',
                   !isWorkoutCompleted() && 'opacity-50 cursor-not-allowed'
                 )}
               >
                 <Mail className="h-4 w-4 mr-2" />
                 <span className="hidden sm:inline">Send</span> Email
+              </Button>
+              <Button
+                onClick={handleShare}
+                disabled={!isWorkoutCompleted() || sharing}
+                variant="outline"
+                className={cn(
+                  'transition-all duration-200 h-9 w-9 p-0 inline-flex items-center justify-center',
+                  !isWorkoutCompleted() && 'opacity-50 cursor-not-allowed'
+                )}
+                aria-label="Share workout"
+                title="Share"
+              >
+                {sharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Share className="h-4 w-4" />}
               </Button>
             </div>
           </div>
