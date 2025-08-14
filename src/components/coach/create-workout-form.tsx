@@ -494,11 +494,14 @@ export function CreateWorkoutForm({ program, redirectOnSuccess = true, onSuccess
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label className="text-sm font-medium">Weight</Label>
+                          <Label className="text-sm font-medium">Resistance</Label>
                           <Input
+                            type="number"
                             value={workoutExercise.weight}
                             onChange={(e) => updateExercise(index, "weight", e.target.value)}
-                            placeholder="e.g., 80kg, BW"
+                            placeholder="e.g., 80"
+                            step="any"
+                            min="0"
                           />
                         </div>
                         <div className="space-y-2">

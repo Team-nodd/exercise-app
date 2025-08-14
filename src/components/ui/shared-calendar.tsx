@@ -771,7 +771,7 @@ export function SharedCalendar({
                       {userRole === "user" ? (
                         <>
                           <div className="flex flex-row gap-2 w-full sm:w-auto">
-`                            <Button
+                            <Button
                               size="sm"
                               variant="outline"
                               href={`/dashboard/workouts/${workout.id}`}
@@ -779,7 +779,7 @@ export function SharedCalendar({
                               className="text-xs h-7"
                             >
                               Start
-                            </Button>`
+                            </Button>
                             {/* Only show on mobile and when not read-only */}
                             {isMobile && !isReadOnly && (
                               <div className="flex flex-col gap-2">

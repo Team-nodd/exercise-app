@@ -33,6 +33,7 @@ export function UseExerciseForm({ exercise, coachId }: UseExerciseFormProps) {
   const [volumeLevel, setVolumeLevel] = useState<"low" | "moderate" | "high">("moderate")
   const [loading, setLoading] = useState(false)
   const [loadingData, setLoadingData] = useState(true)
+  const [prefillApplied, setPrefillApplied] = useState(false)
 
   const router = useRouter()
   // const { toast } = useToast()
@@ -119,6 +120,71 @@ export function UseExerciseForm({ exercise, coachId }: UseExerciseFormProps) {
 
     fetchWorkouts()
   }, [selectedProgram, supabase])
+
+  // Prefill sets/reps/weight/rest from the most recent prior occurrence of this exercise
+  useEffect(() => {
+    const prefillFromPrevious = async () => {
+      try {
+        if (!selectedWorkout || !exercise?.id) return
+        // Do not override if user already changed values or we've already prefilled
+        if (prefillApplied) return
+
+        // Find selected workout to get scheduled date and program scope
+        const targetWorkout = workouts.find((w) => String(w.id) === selectedWorkout)
+        if (!targetWorkout) return
+
+        const baselineDate = targetWorkout.scheduled_date
+        if (!baselineDate) return
+
+        // Look back within the same program for past workouts before this date
+        const { data: previousWorkouts, error: prevWError } = await supabase
+          .from("workouts")
+          .select("id, scheduled_date")
+          .eq("program_id", targetWorkout.program_id)
+          .eq("workout_type", "gym")
+          .lt("scheduled_date", baselineDate)
+          .order("scheduled_date", { ascending: false })
+          .limit(20)
+
+        if (prevWError || !previousWorkouts || previousWorkouts.length === 0) return
+
+        const idToDate = new Map<number, string>(previousWorkouts.map((w: any) => [w.id as number, w.scheduled_date as string]))
+        const workoutIds = previousWorkouts.map((w: any) => w.id as number)
+
+        // Find occurrences of this exercise in those workouts
+        const { data: previousExerciseRows, error: prevExError } = await supabase
+          .from("workout_exercises")
+          .select("workout_id, sets, reps, weight, rest_seconds")
+          .in("workout_id", workoutIds)
+          .eq("exercise_id", exercise.id)
+
+        if (prevExError || !previousExerciseRows || previousExerciseRows.length === 0) return
+
+        // Pick the most recent by workout scheduled_date
+        const best = previousExerciseRows
+          .map((row: any) => ({
+            ...row,
+            date: idToDate.get(row.workout_id) || "",
+          }))
+          .filter((r) => r.date)
+          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
+
+        if (!best) return
+
+        // Apply prefill values
+        if (typeof best.sets === "number") setSets(best.sets)
+        if (typeof best.reps === "number") setReps(best.reps)
+        if (typeof best.rest_seconds === "number") setRestSeconds(best.rest_seconds)
+        if (typeof best.weight === "string" && best.weight) setWeight(best.weight)
+
+        setPrefillApplied(true)
+      } catch (e) {
+        // fail silently; prefill is best-effort
+      }
+    }
+
+    prefillFromPrevious()
+  }, [selectedWorkout, exercise?.id, workouts, supabase, prefillApplied])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

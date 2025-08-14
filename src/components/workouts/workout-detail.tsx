@@ -76,7 +76,13 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
   const [editValues, setEditValues] = useState<Record<string, {
     sets: number | "";
     reps: number | "";
-    weight: string;
+    weight: number | "";
+    rest_seconds: number | "";
+  }>>({});
+  const [initialEditValues, setInitialEditValues] = useState<Record<string, {
+    sets: number | "";
+    reps: number | "";
+    weight: number | "";
     rest_seconds: number | "";
   }>>({});
 
@@ -198,16 +204,25 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
         setExercises(exercisesList);
 
         // Initialize edit values for all exercises
-        const initialEditValues: Record<string, any> = {};
-        exercisesList.forEach(exercise => {
-          initialEditValues[exercise.id] = {
-            sets: exercise.sets,
-            reps: exercise.reps,
-            weight: exercise.weight || '',
-            rest_seconds: exercise.rest_seconds
+        const makeParsedWeight = (w: string | null): number | '' => {
+          if (!w) return '';
+          const match = String(w).match(/[+-]?\d*\.?\d+/);
+          if (!match) return '';
+          const num = Number.parseFloat(match[0]);
+          return Number.isFinite(num) ? num : '';
+        };
+
+        const initialMap: Record<string, any> = {};
+        exercisesList.forEach(ex => {
+          initialMap[ex.id] = {
+            sets: ex.sets,
+            reps: ex.reps,
+            weight: makeParsedWeight(ex.weight ?? null),
+            rest_seconds: ex.rest_seconds,
           };
         });
-        setEditValues(initialEditValues);
+        setEditValues(initialMap);
+        setInitialEditValues(initialMap);
       }
     } catch (err: any) {
       console.error('Error fetching workout data:', err);
@@ -323,7 +338,7 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
     fetchWorkoutData();
   }, [fetchWorkoutData]);
 
-  // Auto-save when debounced updates change
+  // Auto-save when debounced updates change (only for non-inline flows)
   useEffect(() => {
     if (Object.keys(debouncedUpdates).length > 0) {
       saveUpdates();
@@ -350,6 +365,89 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
           return;
         }
       }
+
+      // After saving, propagate updated defaults to future workouts for the same exercises (non-blocking)
+      (async () => {
+        try {
+          if (!workout || workout.workout_type !== 'gym') return;
+          const scheduledDate = workout?.scheduled_date;
+          const programId = (workout as any)?.program_id ?? workout?.program?.id;
+          if (!scheduledDate || !programId) return;
+
+          // Build map of base exercise_id -> latest values to apply
+          const latestByExercise: Record<number, { sets: number; reps: number; weight: string | null; rest_seconds: number }> = {};
+          for (const { id: rowId } of updates as any[]) {
+            const matching = exercises.find((ex) => String(ex.id) === String(rowId));
+            if (!matching) continue;
+            const vals = editValues[String(rowId)] ?? {
+              sets: matching.sets,
+              reps: matching.reps,
+              weight: matching.weight ?? null,
+              rest_seconds: matching.rest_seconds,
+            };
+            latestByExercise[matching.exercise_id] = {
+              sets: Number(vals.sets),
+              reps: Number(vals.reps),
+              weight: (vals as any).weight === '' ? null : String((vals as any).weight),
+              rest_seconds: Number(vals.rest_seconds),
+            };
+          }
+
+          const exerciseIds = Object.keys(latestByExercise).map((k) => Number(k));
+          if (exerciseIds.length === 0) return;
+
+          const { data: futureWorkouts, error: futureWErr } = await supabase
+            .from('workouts')
+            .select('id, scheduled_date, order_in_program, program_id, user_id')
+            .eq('user_id', workout.user_id)
+            .eq('workout_type', 'gym')
+            .order('scheduled_date', { ascending: true })
+            .limit(500);
+          if (futureWErr || !futureWorkouts || futureWorkouts.length === 0) return;
+          const currentDate = scheduledDate ? new Date(scheduledDate) : null;
+          const currentOrder = (workout as any)?.order_in_program as number | undefined;
+          const currentIdNum = Number(workoutId);
+          const futureIds = (futureWorkouts as any[])
+            .filter((w: any) => {
+              const wDate = w.scheduled_date ? new Date(w.scheduled_date) : null;
+              if (currentDate && wDate) return wDate.getTime() > currentDate.getTime();
+              if (currentOrder != null && w.order_in_program != null) return w.order_in_program > currentOrder;
+              return Number(w.id) > currentIdNum;
+            })
+            .map((w: any) => w.id as number);
+          if (futureIds.length === 0) return;
+
+          const { data: futureRows, error: futureRowsErr } = await supabase
+            .from('workout_exercises')
+            .select('id, workout_id, exercise_id, completed')
+            .in('workout_id', futureIds)
+            .in('exercise_id', exerciseIds);
+          if (futureRowsErr || !futureRows || futureRows.length === 0) return;
+
+          // Perform targeted updates per exercise across future workouts (skip completed entries)
+          for (const exIdStr of Object.keys(latestByExercise)) {
+            const exId = Number(exIdStr);
+            const vals = latestByExercise[exId];
+            const { error: updErr } = await supabase
+              .from('workout_exercises')
+               .update({
+                 sets: vals.sets,
+                 reps: vals.reps,
+                 weight: vals.weight,
+                 rest_seconds: vals.rest_seconds,
+                updated_at: new Date().toISOString(),
+              })
+              .in('workout_id', futureIds)
+              .eq('exercise_id', exId)
+              .eq('completed', false);
+            if (updErr) {
+              console.error('❌ Error updating future workout_exercises for exercise', exId, updErr);
+            }
+          }
+        } catch (e) {
+          console.error('❌ Error propagating defaults after save:', e);
+        }
+      })();
 
       setPendingUpdates({});
       setHasPendingChanges(false);
@@ -462,7 +560,7 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
         return;
       }
 
-      // Update local workout state
+      // Update local workout statet
       setWorkout((prev) => (prev ? { ...prev, completed: true, completed_at: new Date().toISOString() } : null));
 
       // After completing a gym workout, propagate these exercise values to future workouts containing the same exercises
@@ -743,11 +841,11 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
     // Reset edit values to original
     setEditValues(prev => ({
       ...prev,
-      [exerciseId]: {
+      [exerciseId]: initialEditValues[exerciseId] ?? {
         sets: exercise.sets,
         reps: exercise.reps,
-        weight: exercise.weight || '',
-        rest_seconds: exercise.rest_seconds
+        weight: '',
+        rest_seconds: exercise.rest_seconds,
       }
     }));
   };
@@ -766,7 +864,7 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
         .update({
           sets: Number(values.sets),
           reps: Number(values.reps),
-          weight: values.weight || null,
+          weight: values.weight === '' ? null : String(values.weight),
           rest_seconds: Number(values.rest_seconds)
         })
         .eq('id', exerciseId);
@@ -783,16 +881,103 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
               ...ex,
               sets: Number(values.sets),
               reps: Number(values.reps),
-              weight: values.weight || null,
+              weight: values.weight === '' ? null : String(values.weight),
               rest_seconds: Number(values.rest_seconds)
             }
           : ex
       ));
 
+      // Update the baseline so buttons hide after successful save
+      setInitialEditValues(prev => ({
+        ...prev,
+        [exerciseId]: {
+          sets: Number(values.sets),
+          reps: Number(values.reps),
+          weight: values.weight,
+          rest_seconds: Number(values.rest_seconds),
+        }
+      }));
+
+      // Propagate this exercise's new defaults to future workouts in the same program (non-blocking)
+      (async () => {
+        try {
+          if (!workout || workout.workout_type !== 'gym') return;
+          const scheduledDate = workout?.scheduled_date;
+          const programId = (workout as any)?.program_id ?? workout?.program?.id;
+          if (!scheduledDate || !programId) return;
+
+          const matching = exercises.find((ex) => String(ex.id) === String(exerciseId));
+          if (!matching) return;
+
+          const latestByExercise: Record<number, { sets: number; reps: number; weight: string | null; rest_seconds: number }> = {
+            [matching.exercise_id]: {
+              sets: Number(values.sets),
+              reps: Number(values.reps),
+              weight: values.weight === '' ? null : String(values.weight),
+              rest_seconds: Number(values.rest_seconds),
+            },
+          };
+
+          const exerciseIds = Object.keys(latestByExercise).map((k) => Number(k));
+          const { data: futureWorkouts, error: futureWErr } = await supabase
+            .from('workouts')
+            .select('id, scheduled_date, order_in_program, program_id, user_id')
+            .eq('user_id', workout.user_id)
+            .eq('workout_type', 'gym')
+            .order('scheduled_date', { ascending: true })
+            .limit(500);
+          if (futureWErr || !futureWorkouts || futureWorkouts.length === 0) return;
+          const currentDate = scheduledDate ? new Date(scheduledDate) : null;
+          const currentOrder = (workout as any)?.order_in_program as number | undefined;
+          const currentIdNum = Number(workoutId);
+          const futureIds = (futureWorkouts as any[])
+            .filter((w: any) => {
+              const wDate = w.scheduled_date ? new Date(w.scheduled_date) : null;
+              if (currentDate && wDate) return wDate.getTime() > currentDate.getTime();
+              if (currentOrder != null && w.order_in_program != null) return w.order_in_program > currentOrder;
+              return Number(w.id) > currentIdNum;
+            })
+            .map((w: any) => w.id as number);
+          if (futureIds.length === 0) return;
+
+          const { data: futureRows, error: futureRowsErr } = await supabase
+            .from('workout_exercises')
+            .select('id, workout_id, exercise_id, completed')
+            .in('workout_id', futureIds)
+            .in('exercise_id', exerciseIds);
+          if (futureRowsErr || !futureRows || futureRows.length === 0) return;
+
+          // Perform targeted updates per exercise across future workouts (skip completed entries)
+          for (const exIdStr of Object.keys(latestByExercise)) {
+            const exId = Number(exIdStr);
+            const vals = latestByExercise[exId];
+            const { error: updErr } = await supabase
+              .from('workout_exercises')
+               .update({
+                 sets: vals.sets,
+                 reps: vals.reps,
+                 weight: vals.weight,
+                 rest_seconds: vals.rest_seconds,
+                updated_at: new Date().toISOString(),
+              })
+              .in('workout_id', futureIds)
+              .eq('exercise_id', exId)
+              .eq('completed', false);
+            if (updErr) {
+              console.error('❌ Error updating future workout_exercises for exercise', exId, updErr);
+            }
+          }
+        } catch (e) {
+          console.error('❌ Error propagating defaults after edit save:', e);
+        }
+      })();
+
       setEditingExercises(prev => ({
         ...prev,
         [exerciseId]: false
       }));
+
+      setHasPendingChanges(false);
 
       toast('Exercise updated successfully');
     } catch {
@@ -801,13 +986,33 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
   };
 
   const updateEditValue = (exerciseId: string, field: string, value: any) => {
+    const current = editValues[exerciseId] || { sets: '', reps: '', weight: '', rest_seconds: '' } as any;
+    let nextValues = { ...current } as any;
+    if (field === 'sets' || field === 'reps' || field === 'rest_seconds') {
+      nextValues[field] = value === '' ? '' : Number.parseInt(String(value)) || 0;
+    } else if (field === 'weight') {
+      nextValues[field] = value === '' ? '' : Number.parseFloat(String(value)) || 0;
+    } else {
+      nextValues[field] = value;
+    }
+
     setEditValues(prev => ({
       ...prev,
-      [exerciseId]: {
-        ...prev[exerciseId],
-        [field]: value
-      }
+      [exerciseId]: nextValues,
     }));
+  };
+
+  const isExerciseDirty = (exerciseId: string): boolean => {
+    const curr = editValues[exerciseId];
+    const base = initialEditValues[exerciseId];
+    if (!curr || !base) return false;
+    const eq = (a: any, b: any) => String(a) === String(b);
+    return !(
+      eq(curr.sets, base.sets) &&
+      eq(curr.reps, base.reps) &&
+      eq(curr.weight, base.weight) &&
+      eq(curr.rest_seconds, base.rest_seconds)
+    );
   };
 
 
@@ -963,7 +1168,7 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
       </div>
 
       {/* Unsaved Changes Banner */}
-      {hasPendingChanges && (
+      {hasPendingChanges && profile?.role !== 'user' && (
         <Card className="mb-6 border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -1147,11 +1352,12 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
                             </div>
                             <div className="grid grid-cols-2 gap-2">
                               <div>
-                                <Label className="text-xs text-gray-600 dark:text-gray-400">Weight</Label>
+                                <Label className="text-xs text-gray-600 dark:text-gray-400">Resistance</Label>
                                 <Input
+                                  type="number"
                                   value={currentEditValues.weight}
-                                  onChange={(e) => updateEditValue(exerciseId, 'weight', e.target.value)}
-                                  placeholder="e.g., 80kg"
+                                  onChange={(e) => updateEditValue(exerciseId, 'weight', e.target.value === '' ? '' : Number.parseFloat(e.target.value))}
+                                  placeholder="e.g., 80"
                                   className="h-8 text-sm"
                                 />
                               </div>
@@ -1166,19 +1372,23 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
                                 />
                               </div>
                             </div>
-                            <div className="flex gap-2">
-                              <Button size="sm" onClick={() => handleSaveEdit(exerciseId)} className="h-8 text-xs">
+                             <div className="flex gap-2">
+                               {isExerciseDirty(exerciseId) && (
+                               <Button size="sm" onClick={() => handleSaveEdit(exerciseId)} className="h-8 text-xs">
                                 <Save className="h-3 w-3 mr-1" />
                                 Save
-                              </Button>
-                              <Button
+                               </Button>
+                               )}
+                               {isExerciseDirty(exerciseId) && (
+                               <Button
                                 size="sm"
                                 variant="outline"
                                 onClick={() => cancelEditing(exerciseId, exercise)}
                                 className="h-8 text-xs"
                               >
                                 Cancel
-                              </Button>
+                               </Button>
+                               )}
                             </div>
                           </div>
                         ) : (
