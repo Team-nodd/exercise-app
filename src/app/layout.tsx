@@ -14,8 +14,13 @@ export const metadata: Metadata = {
   description: "Professional exercise program management system for coaches and athletes",
   manifest: "/manifest.webmanifest",
   icons: {
-    icon: [{ url: "/icons/pwa-192.png", sizes: "192x192", type: "image/png" }],
-    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+    icon: [{ url: "/brand/icons/app-192.png", sizes: "192x192", type: "image/png" }],
+    apple: [{ url: "/brand/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
+  appleWebApp: {
+    capable: true,
+    title: "FitTracker Pro",
+    statusBarStyle: "default",
   },
 }
 

@@ -1,6 +1,6 @@
 {
-  "name": "Exercise App",
-  "short_name": "Exercise",
+  "name": "FitTracker Pro",
+  "short_name": "FitTracker Pro",
   "description": "Training, programs, workouts.",
   "start_url": "/",
   "scope": "/",
@@ -9,10 +9,10 @@
   "theme_color": "#0ea5e9",
   "background_color": "#ffffff",
   "icons": [
-    { "src": "/icons/pwa-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/icons/pwa-512.png", "sizes": "512x512", "type": "image/png" },
-    { "src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
-    { "src": "/icons/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
+    { "src": "/brand/icons/app-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/brand/icons/app-192.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/brand/icons/app-192.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/brand/icons/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
   ]
 }
 
