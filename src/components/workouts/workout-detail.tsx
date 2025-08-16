@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { CheckCircle, Circle, Dumbbell,  AlertCircle, ArrowLeft, MessageSquare, Send,  Calendar, Zap,  Activity, ChevronDown, Loader2, RefreshCw, CheckCircle2, Clock,  Mail, Save, Timer, Share } from 'lucide-react';
 import type { WorkoutWithDetails, WorkoutExerciseWithDetails, Comment } from '@/types';
+import { notificationService } from '@/lib/notifications/notification-service';
 
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -641,7 +642,15 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
         })();
       }
 
-      // Note: In-app notifications for workout completion have been disabled
+      // Send notification to coach when workout is completed
+      if (workout?.program?.coach_id && profile?.role === 'user') {
+        try {
+          await notificationService.sendWorkoutCompletedNotifications(Number(workoutId));
+        } catch (notificationError) {
+          console.error('❌ Error sending coach notification:', notificationError);
+          // Don't block the completion flow if notification fails
+        }
+      }
       // Auto email coach if they opted in
       if (coachNotifyEnabled && coachEmail) {
         fetch('/api/send-workout-email', {
