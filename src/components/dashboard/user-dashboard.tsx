@@ -84,7 +84,8 @@ export function UserDashboard({ user, initialStats, initialWorkouts }: UserDashb
       const byId = new Map(prev.map((w) => [w.id, w]))
       for (const w of filteredWorkouts) {
         const existing = byId.get(w.id)
-        byId.set(w.id, existing ? { ...existing, ...w } : w)
+        // Prefer existing (locally updated/broadcast) values over stale backend ones
+        byId.set(w.id, existing ? { ...w, ...existing } : w)
       }
       return Array.from(byId.values())
     })

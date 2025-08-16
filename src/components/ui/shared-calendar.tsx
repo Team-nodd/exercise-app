@@ -671,7 +671,7 @@ export function SharedCalendar({
     }
   }, [supabase, userRole, userId, programId, scopedProgramIds.join(',')])
 
-  // BroadcastChannel fast-path: reflect local tab updates instantly
+  // BroadcastChannel fast-path: reflect local tab updates instantly (optimistic priority)
   useEffect(() => {
     let bc: BroadcastChannel | null = null
     try {
@@ -682,7 +682,8 @@ export function SharedCalendar({
         const idNum = Number(msg.workoutId)
         if (!Number.isFinite(idNum)) return
         const changes = msg.changes || {}
-        const updated = workouts.map((w) => (w.id === idNum ? { ...w, ...changes } : w))
+        // Optimistic: prioritize local/broadcast changes by spreading base first, then existing
+        const updated = workouts.map((w) => (w.id === idNum ? { ...w, ...changes, ...w } : w))
         onWorkoutUpdate?.(updated)
       }
     } catch {
@@ -695,7 +696,7 @@ export function SharedCalendar({
           const idNum = Number(msg.workoutId)
           if (!Number.isFinite(idNum)) return
           const changes = msg.changes || {}
-          const updated = workouts.map((w) => (w.id === idNum ? { ...w, ...changes } : w))
+          const updated = workouts.map((w) => (w.id === idNum ? { ...w, ...changes, ...w } : w))
           onWorkoutUpdate?.(updated)
         } catch {}
       }
