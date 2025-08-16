@@ -206,6 +206,87 @@ export class NotificationService {
     }
   }
 
+  async notifyCoachWorkoutCompleted(workoutId: number): Promise<void> {
+    try {
+      console.log('🔔 NOTIFICATION SERVICE: Coach-only workout completion notifications for workout:', workoutId)
+
+      const timeoutPromise = new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error('Request timeout')), 10000)
+      )
+
+      // Get workout details
+      const workoutPromise = this.supabase
+        .from('workouts')
+        .select(`
+          *,
+          program:programs(*)
+        `)
+        .eq('id', workoutId)
+        .single()
+
+      const { data: workout, error: workoutError } = await Promise.race([workoutPromise, timeoutPromise]) as { data: WorkoutData & { program: ProgramData }, error: any }
+
+      if (workoutError || !workout) {
+        console.error('❌ NOTIFICATION SERVICE: Failed to fetch workout:', workoutError)
+        return
+      }
+
+      // Get user details
+      const userPromise = this.supabase
+        .from('users')
+        .select('*')
+        .eq('id', workout.user_id)
+        .single()
+
+      const { data: user, error: userError } = await Promise.race([userPromise, timeoutPromise]) as { data: UserData, error: any }
+
+      if (userError || !user) {
+        console.error('❌ NOTIFICATION SERVICE: Failed to fetch user:', userError)
+        return
+      }
+
+      // Get coach details
+      if (!workout.program?.coach_id) {
+        console.log('🔔 NOTIFICATION SERVICE: No coach associated with workout')
+        return
+      }
+
+      const coachPromise = this.supabase
+        .from('users')
+        .select('*')
+        .eq('id', workout.program.coach_id)
+        .single()
+
+      const { data: coach, error: coachError } = await Promise.race([coachPromise, timeoutPromise]) as { data: UserData, error: any }
+
+      if (coachError || !coach) {
+        console.error('❌ NOTIFICATION SERVICE: Failed to fetch coach:', coachError)
+        return
+      }
+
+      // Email to coach (respect preference)
+      await this.sendWorkoutCompletedNotificationToCoach(workout, user, coach)
+
+      // In-app notification for coach only
+      const relatedId = `workout:${workout.id}:program:${workout.program.id}`
+      await fetch('/api/notifications/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          recipientId: coach.id,
+          title: 'Client Completed Workout',
+          message: `${user.name} completed "${workout.name}".`,
+          type: 'client_workout_completed',
+          relatedId,
+        }),
+      })
+
+    } catch (error) {
+      console.error('❌ NOTIFICATION SERVICE: Error processing coach-only notifications:', error)
+    }
+  }
+
   private async sendWorkoutCompletedNotificationToUser(
     workout: WorkoutData & { program: ProgramData },
     user: UserData

@@ -642,10 +642,10 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
         })();
       }
 
-      // Send notification to coach when workout is completed
+      // Send coach-only notification when workout is completed (no user notification)
       if (workout?.program?.coach_id && profile?.role === 'user') {
         try {
-          await notificationService.sendWorkoutCompletedNotifications(Number(workoutId));
+          await notificationService.notifyCoachWorkoutCompleted(Number(workoutId));
         } catch (notificationError) {
           console.error('❌ Error sending coach notification:', notificationError);
           // Don't block the completion flow if notification fails
