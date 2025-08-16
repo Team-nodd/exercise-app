@@ -90,6 +90,30 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
 
   const supabase = createClient();
 
+  // Cross-tab and cross-device broadcast helper
+  const broadcastUpdate = (changes: any) => {
+    try {
+      const payload = {
+        type: 'updated',
+        workoutId: Number(workoutId),
+        programId: (workout as any)?.program_id ?? workout?.program?.id,
+        userId: workout?.user_id,
+        changes,
+      }
+      try {
+        const bc = new BroadcastChannel('workouts')
+        bc.postMessage(payload)
+        bc.close()
+      } catch {
+        localStorage.setItem('workout-updated', JSON.stringify(payload))
+        setTimeout(() => localStorage.removeItem('workout-updated'), 1000)
+      }
+      try {
+        supabase.channel('workouts-live').send({ type: 'broadcast', event: 'workout-updated', payload })
+      } catch {}
+    } catch {}
+  }
+
   // Get current user profile
   useEffect(() => {
     async function fetchProfile() {
@@ -499,18 +523,7 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
       }
 
       // Notify other views (dashboard/calendar) immediately
-      try {
-        const payload = { type: 'updated', workoutId: Number(workoutId), changes: { completed: allCompleted } }
-        try {
-          const bc = new BroadcastChannel('workouts')
-          bc.postMessage(payload)
-          bc.close()
-        } catch {
-          localStorage.setItem('workout-updated', JSON.stringify(payload))
-          // Clean up to avoid storage bloat
-          setTimeout(() => localStorage.removeItem('workout-updated'), 1000)
-        }
-      } catch {}
+      broadcastUpdate({ completed: allCompleted })
 
       toast(completed ? 'Exercise marked as complete' : 'Exercise marked as incomplete');
     } catch (error) {
@@ -552,17 +565,7 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
       }
 
       // Notify other views immediately
-      try {
-        const payload = { type: 'updated', workoutId: Number(workoutId), changes: { completed } }
-        try {
-          const bc = new BroadcastChannel('workouts')
-          bc.postMessage(payload)
-          bc.close()
-        } catch {
-          localStorage.setItem('workout-updated', JSON.stringify(payload))
-          setTimeout(() => localStorage.removeItem('workout-updated'), 1000)
-        }
-      } catch {}
+      broadcastUpdate({ completed })
 
       toast(completed ? 'Cardio workout marked as complete' : 'Cardio workout marked as incomplete');
     } catch (error) {
@@ -593,17 +596,7 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
       setWorkout((prev) => (prev ? { ...prev, completed: true, completed_at: new Date().toISOString() } : null));
 
       // Notify other views immediately
-      try {
-        const payload = { type: 'updated', workoutId: Number(workoutId), changes: { completed: true } }
-        try {
-          const bc = new BroadcastChannel('workouts')
-          bc.postMessage(payload)
-          bc.close()
-        } catch {
-          localStorage.setItem('workout-updated', JSON.stringify(payload))
-          setTimeout(() => localStorage.removeItem('workout-updated'), 1000)
-        }
-      } catch {}
+      broadcastUpdate({ completed: true })
 
       // After completing a gym workout, propagate these exercise values to future workouts containing the same exercises
       if ((workout?.workout_type === 'gym') && exercises.length > 0) {

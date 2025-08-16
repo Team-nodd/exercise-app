@@ -679,6 +679,31 @@ export function SharedCalendar({
     }
   }, [workouts, onWorkoutUpdate])
 
+  // Supabase broadcast cross-device fast-path
+  useEffect(() => {
+    const channel = supabase
+      .channel('workouts-live')
+      .on('broadcast', { event: 'workout-updated' }, (payload: any) => {
+        const msg = payload.payload || payload
+        if (!msg || msg.type !== 'updated') return
+        // Scope check: only apply if it belongs to our visible scope
+        const belongsToScope =
+          (typeof msg.programId === 'number' && (programId ? msg.programId === programId : scopedProgramIds.includes(msg.programId))) ||
+          (typeof msg.userId === 'string' && (!!userId && msg.userId === userId))
+        if (!belongsToScope) return
+        const idNum = Number(msg.workoutId)
+        if (!Number.isFinite(idNum)) return
+        const changes = msg.changes || {}
+        const updated = workouts.map((w) => (w.id === idNum ? { ...w, ...changes } : w))
+        onWorkoutUpdate?.(updated)
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [supabase, programId, userId, scopedProgramIds.join(','), workouts, onWorkoutUpdate])
+
   const refetchScope = async () => {
     let q = supabase
       .from("workouts")
