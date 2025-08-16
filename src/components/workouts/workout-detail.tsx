@@ -498,6 +498,20 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
         await markWorkoutAsCompleted();
       }
 
+      // Notify other views (dashboard/calendar) immediately
+      try {
+        const payload = { type: 'updated', workoutId: Number(workoutId), changes: { completed: allCompleted } }
+        try {
+          const bc = new BroadcastChannel('workouts')
+          bc.postMessage(payload)
+          bc.close()
+        } catch {
+          localStorage.setItem('workout-updated', JSON.stringify(payload))
+          // Clean up to avoid storage bloat
+          setTimeout(() => localStorage.removeItem('workout-updated'), 1000)
+        }
+      } catch {}
+
       toast(completed ? 'Exercise marked as complete' : 'Exercise marked as incomplete');
     } catch (error) {
       console.error('Error toggling completion:', error);
@@ -537,6 +551,19 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
         await markWorkoutAsCompleted();
       }
 
+      // Notify other views immediately
+      try {
+        const payload = { type: 'updated', workoutId: Number(workoutId), changes: { completed } }
+        try {
+          const bc = new BroadcastChannel('workouts')
+          bc.postMessage(payload)
+          bc.close()
+        } catch {
+          localStorage.setItem('workout-updated', JSON.stringify(payload))
+          setTimeout(() => localStorage.removeItem('workout-updated'), 1000)
+        }
+      } catch {}
+
       toast(completed ? 'Cardio workout marked as complete' : 'Cardio workout marked as incomplete');
     } catch (error) {
       console.error('Error toggling cardio workout completion:', error);
@@ -562,8 +589,21 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
         return;
       }
 
-      // Update local workout statet
+      // Update local workout state
       setWorkout((prev) => (prev ? { ...prev, completed: true, completed_at: new Date().toISOString() } : null));
+
+      // Notify other views immediately
+      try {
+        const payload = { type: 'updated', workoutId: Number(workoutId), changes: { completed: true } }
+        try {
+          const bc = new BroadcastChannel('workouts')
+          bc.postMessage(payload)
+          bc.close()
+        } catch {
+          localStorage.setItem('workout-updated', JSON.stringify(payload))
+          setTimeout(() => localStorage.removeItem('workout-updated'), 1000)
+        }
+      } catch {}
 
       // After completing a gym workout, propagate these exercise values to future workouts containing the same exercises
       if ((workout?.workout_type === 'gym') && exercises.length > 0) {

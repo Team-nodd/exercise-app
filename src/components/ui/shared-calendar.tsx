@@ -120,6 +120,16 @@ export function SharedCalendar({
     return map
   }, [workouts])
 
+  // Compute unique program ids present in current scope
+  const scopedProgramIds = useMemo(() => {
+    const set = new Set<number>()
+    for (const w of workouts) {
+      const pid = (w as any).program_id ?? (w as any).program?.id
+      if (typeof pid === 'number') set.add(pid)
+    }
+    return Array.from(set)
+  }, [workouts])
+
   // FIXED: Better date comparison that avoids timezone issues
   const getWorkoutsForDate = (date: Date) => {
     const targetDateString = formatDateForComparison(date)
@@ -591,29 +601,83 @@ export function SharedCalendar({
     }
   }, [autoNavigateTimeout])
 
-  // Realtime: listen for changes to workouts for this user/program and refresh quickly
+  // Realtime: listen for changes to workouts and refresh quickly
   useEffect(() => {
-    // Require a scope to avoid listening to all workouts
-    if (!userId && !programId) return
+    // For coaches or when explicit programId is provided, use single scoped channel
+    if (programId || (userRole === 'coach' && userId)) {
+      const filter = programId ? `program_id=eq.${programId}` : `user_id=eq.${userId}`
+      const channel = supabase
+        .channel(`workouts-rt-scope-${programId ?? `u-${userId}`}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'workouts', filter },
+          async () => {
+            await refetchScope()
+          },
+        )
+        .subscribe()
 
-    const filter = userId ? `user_id=eq.${userId}` : `program_id=eq.${programId}`
-
-    const channel = supabase
-      .channel(`workouts-rt-${userId ?? `p-${programId}`}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'workouts', filter },
-        async () => {
-          // Fast refresh in response to INSERT/UPDATE/DELETE (e.g., marking complete)
-          await refetchScope()
-        },
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
+      return () => {
+        supabase.removeChannel(channel)
+      }
     }
-  }, [supabase, userId, programId])
+
+    // For user view without explicit programId, subscribe per visible program
+    if (userRole === 'user' && scopedProgramIds.length > 0) {
+      const channels = scopedProgramIds.map((pid) =>
+        supabase
+          .channel(`workouts-rt-p-${pid}`)
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'workouts', filter: `program_id=eq.${pid}` },
+            async () => {
+              await refetchScope()
+            },
+          )
+          .subscribe(),
+      )
+
+      return () => {
+        for (const ch of channels) supabase.removeChannel(ch)
+      }
+    }
+  }, [supabase, userRole, userId, programId, scopedProgramIds.join(',')])
+
+  // BroadcastChannel fast-path: reflect local tab updates instantly
+  useEffect(() => {
+    let bc: BroadcastChannel | null = null
+    try {
+      bc = new BroadcastChannel('workouts')
+      bc.onmessage = (event) => {
+        const msg = event.data as any
+        if (!msg || msg.type !== 'updated') return
+        const idNum = Number(msg.workoutId)
+        if (!Number.isFinite(idNum)) return
+        const changes = msg.changes || {}
+        const updated = workouts.map((w) => (w.id === idNum ? { ...w, ...changes } : w))
+        onWorkoutUpdate?.(updated)
+      }
+    } catch {
+      // Fallback to storage events
+      const handler = (e: StorageEvent) => {
+        if (e.key !== 'workout-updated' || !e.newValue) return
+        try {
+          const msg = JSON.parse(e.newValue)
+          if (!msg || msg.type !== 'updated') return
+          const idNum = Number(msg.workoutId)
+          if (!Number.isFinite(idNum)) return
+          const changes = msg.changes || {}
+          const updated = workouts.map((w) => (w.id === idNum ? { ...w, ...changes } : w))
+          onWorkoutUpdate?.(updated)
+        } catch {}
+      }
+      window.addEventListener('storage', handler)
+      return () => window.removeEventListener('storage', handler)
+    }
+    return () => {
+      try { bc && bc.close() } catch {}
+    }
+  }, [workouts, onWorkoutUpdate])
 
   const refetchScope = async () => {
     let q = supabase
