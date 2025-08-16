@@ -1,25 +1,24 @@
+"use client"
+
+import { useEffect } from "react"
+import { useRouter } from "next/navigation"
 import LandingPage from "@/components/landing/landing-page"
-import { createServerClient } from "@/lib/supabase/server"
-import { redirect } from "next/navigation"
-import { cookies } from "next/headers"
+import { useAuth } from "@/components/providers/auth-provider"
 
-export default async function Home() {
-  const cookieStore = await cookies()
-  const hasToken = cookieStore.get("sb-access-token")
+export default function Home() {
+  const { user, profile, loading } = useAuth()
+  const router = useRouter()
 
-  if (!hasToken) {
-    return <LandingPage />
-  }
+  useEffect(() => {
+    if (loading) return
+    if (user && profile) {
+      router.replace(profile.role === "coach" ? "/coach/dashboard" : "/dashboard")
+    }
+  }, [loading, user, profile, router])
 
-  const supabase = await createServerClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (user) {
-    const { data: profile } = await supabase.from("users").select("role").eq("id", user.id).single()
-    if (profile?.role === "coach") redirect("/coach/dashboard")
-    redirect("/dashboard")
+  // While determining auth or redirecting, avoid flashing the landing page
+  if (loading || (user && profile)) {
+    return null
   }
 
   return <LandingPage />

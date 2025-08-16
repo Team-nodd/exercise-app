@@ -42,14 +42,9 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/", request.url))
   }
 
-  // Very light gate: only check cookie presence, no Supabase call here
-  const publicRoutes = ["/", "/auth/login", "/auth/register"]
-  const isPublic = publicRoutes.includes(pathname)
-  const hasAccessToken = request.cookies.get("sb-access-token")?.value
-
-  if (!hasAccessToken && !isPublic) {
-    return NextResponse.redirect(new URL("/auth/login", request.url))
-  }
+  // Note: Do not gate by cookie here. In a PWA, sessions persist in localStorage
+  // on the client. Redirects based on cookies cause unnecessary login prompts
+  // on app relaunch and do not work offline. Client-side guards will handle it.
 
   return response
 }

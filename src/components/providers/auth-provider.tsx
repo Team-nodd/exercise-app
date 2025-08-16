@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { createContext, useContext, useState, useEffect, useRef, useMemo } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import type { User, Session } from "@supabase/supabase-js"
 
@@ -37,8 +37,28 @@ export function AuthProvider({ children, initialSession, initialProfile }: AuthP
   const fetchingProfile = useRef<string | null>(null) // Track which user we're fetching profile for
   const profileCache = useRef<Map<string, Profile>>(new Map()) // Cache profiles
   const router = useRouter()
+  const pathname = usePathname()
 
   const supabase = useMemo(() => createClient(), [])
+
+  const getProfileFromLocalStorage = (userId: string): Profile | null => {
+    try {
+      const raw = localStorage.getItem(`exercise-app-profile:${userId}`)
+      if (!raw) return null
+      const parsed = JSON.parse(raw) as Profile
+      return parsed || null
+    } catch {
+      return null
+    }
+  }
+
+  const saveProfileToLocalStorage = (userId: string, profile: Profile) => {
+    try {
+      localStorage.setItem(`exercise-app-profile:${userId}`, JSON.stringify(profile))
+    } catch {
+      // ignore quota errors
+    }
+  }
 
   const fetchProfile = async (userId: string): Promise<Profile | null> => {
     // Check cache first
@@ -46,6 +66,14 @@ export function AuthProvider({ children, initialSession, initialProfile }: AuthP
     if (cached) {
       console.log("📦 AUTH: Using cached profile for:", userId)
       return cached
+    }
+
+    // Check localStorage cache to support offline startup
+    const local = getProfileFromLocalStorage(userId)
+    if (local) {
+      profileCache.current.set(userId, local)
+      console.log("📦 AUTH: Using localStorage profile for:", userId)
+      return local
     }
 
     // Prevent duplicate fetches for the same user
@@ -69,7 +97,9 @@ export function AuthProvider({ children, initialSession, initialProfile }: AuthP
 
       if (error) {
         console.error("❌ AUTH: Error fetching profile:", error)
-        return null
+        // Fall back to localStorage if available
+        const fallback = getProfileFromLocalStorage(userId)
+        return fallback
       }
 
       console.log("✅ AUTH: Profile loaded successfully:", data?.name)
@@ -77,11 +107,14 @@ export function AuthProvider({ children, initialSession, initialProfile }: AuthP
 
       // Cache the profile
       profileCache.current.set(userId, profileData)
+      saveProfileToLocalStorage(userId, profileData)
 
       return profileData
     } catch (error) {
       console.error("❌ AUTH: Profile fetch failed:", error)
-      return null
+      // Fall back to localStorage if available
+      const fallback = getProfileFromLocalStorage(userId)
+      return fallback
     } finally {
       fetchingProfile.current = null
     }
@@ -108,7 +141,7 @@ export function AuthProvider({ children, initialSession, initialProfile }: AuthP
           return
         }
 
-        // Otherwise, get the current session
+        // Otherwise, get the current session (uses localStorage in PWA)
         console.log("🔄 AUTH: Getting current session...")
         const {
           data: { session },
@@ -199,6 +232,16 @@ export function AuthProvider({ children, initialSession, initialProfile }: AuthP
     }
   }, [initialSession, initialProfile, supabase])
 
+  // Client-side guard: redirect unauthenticated users from protected routes
+  useEffect(() => {
+    if (loading) return
+    const publicRoutes = ["/", "/auth/login", "/auth/register", "/offline"]
+    const isPublic = publicRoutes.includes(pathname)
+    if (!user && !isPublic) {
+      router.replace("/auth/login")
+    }
+  }, [loading, user, pathname, router])
+
   const signOut = async () => {
     try {
       setLoading(true)
@@ -208,6 +251,9 @@ export function AuthProvider({ children, initialSession, initialProfile }: AuthP
 
       // Clear cache and state
       profileCache.current.clear()
+      try {
+        if (user?.id) localStorage.removeItem(`exercise-app-profile:${user.id}`)
+      } catch {}
       setUser(null)
       setProfile(null)
 
