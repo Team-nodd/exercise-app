@@ -3,7 +3,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -102,19 +102,24 @@ export function SharedCalendar({
     return new Date(date.getFullYear(), date.getMonth(), 1).getDay()
   }
 
+  // Build a date -> workouts map for fast lookups across calendar cells
+  const workoutsByDate = useMemo(() => {
+    const map = new Map<string, WorkoutWithDetails[]>()
+    for (const w of workouts) {
+      if (!w.scheduled_date) continue
+      const d = parseWorkoutDate(w.scheduled_date)
+      const key = formatDateForComparison(d)
+      const arr = map.get(key)
+      if (arr) arr.push(w)
+      else map.set(key, [w])
+    }
+    return map
+  }, [workouts])
+
   // FIXED: Better date comparison that avoids timezone issues
   const getWorkoutsForDate = (date: Date) => {
     const targetDateString = formatDateForComparison(date)
-
-    return workouts.filter((workout) => {
-      if (!workout.scheduled_date) return false
-
-      // Parse the workout date properly
-      const workoutDate = parseWorkoutDate(workout.scheduled_date)
-      const workoutDateString = formatDateForComparison(workoutDate)
-
-      return workoutDateString === targetDateString
-    })
+    return workoutsByDate.get(targetDateString) ?? []
   }
 
   const navigateMonth = (direction: "prev" | "next") => {
@@ -581,6 +586,30 @@ export function SharedCalendar({
       }
     }
   }, [autoNavigateTimeout])
+
+  // Realtime: listen for changes to workouts for this user/program and refresh quickly
+  useEffect(() => {
+    // Require a scope to avoid listening to all workouts
+    if (!userId && !programId) return
+
+    const filter = userId ? `user_id=eq.${userId}` : `program_id=eq.${programId}`
+
+    const channel = supabase
+      .channel(`workouts-rt-${userId ?? `p-${programId}`}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'workouts', filter },
+        async () => {
+          // Fast refresh in response to INSERT/UPDATE/DELETE (e.g., marking complete)
+          await refetchScope()
+        },
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [supabase, userId, programId])
 
   const refetchScope = async () => {
     let q = supabase
