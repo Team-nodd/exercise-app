@@ -90,7 +90,11 @@ export function SharedCalendar({
 
   // Add this useEffect near the top of the component, after the state declarations
   useEffect(() => {
-    // This ensures the component re-renders when workouts prop changes
+    // Keep selected-day dialog in sync if workouts prop changes
+    if (showWorkoutDialog && selectedDate) {
+      const workoutsForDay = getWorkoutsForDate(selectedDate)
+      setSelectedDayWorkouts(workoutsForDay)
+    }
   }, [workouts])
 
   // Calendar functions

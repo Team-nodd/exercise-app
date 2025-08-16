@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+
 import { Separator } from "@/components/ui/separator"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Calendar, Dumbbell, TrendingUp, Clock, RefreshCw, Target, Activity, Play, ArrowRight, CheckCircle, Zap, Filter } from 'lucide-react'
@@ -51,9 +52,17 @@ export function UserDashboard({ user, initialStats, initialWorkouts }: UserDashb
       : (upcomingWorkouts || []).filter(workout => workout.program?.id === Number(selectedProgramId))
   }, [selectedProgramId, upcomingWorkouts]);
 
-  // Update workouts state when filtered workouts change
+  // Update workouts state when filtered workouts change (merge, don't overwrite)
   useEffect(() => {
-    setWorkouts(filteredWorkouts)
+    setWorkouts((prev) => {
+      if (prev.length === 0) return filteredWorkouts
+      const byId = new Map(prev.map((w) => [w.id, w]))
+      for (const w of filteredWorkouts) {
+        const existing = byId.get(w.id)
+        byId.set(w.id, existing ? { ...existing, ...w } : w)
+      }
+      return Array.from(byId.values())
+    })
   }, [filteredWorkouts])
 
   // Get today's workouts
