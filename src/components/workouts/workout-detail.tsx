@@ -520,6 +520,14 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
       // Notify other views (dashboard/calendar) immediately and then mark if needed
       broadcastUpdate({ completed: allCompleted })
 
+      // Also reflect on selected date dialog/calendars that rely on scheduled_date presence
+      if (!workout?.scheduled_date) {
+        const now = new Date()
+        now.setHours(0,0,0,0)
+        const iso = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().split('T')[0] + 'T00:00:00.000Z'
+        broadcastUpdate({ scheduled_date: iso } as any)
+      }
+
       // If all exercises are completed, mark workout as completed and send notifications
       if (allCompleted && !workout?.completed) {
         await markWorkoutAsCompleted();

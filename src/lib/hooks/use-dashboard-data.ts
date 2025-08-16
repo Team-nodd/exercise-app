@@ -222,6 +222,52 @@ export function useDashboardData({ userId, coachId, isCoach = false, initialStat
     })()
   }, [cacheKey, isCoach, coachId, userId, fetchCoachDashboardData, fetchUserDashboardData, initialStats, initialUpcomingWorkouts, initialRecentClients])
 
+  // Listen for realtime workout changes for users to invalidate cache quickly
+  useEffect(() => {
+    if (isCoach || !userId) return
+    const channel = supabase
+      .channel(`workouts_user_${userId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'workouts', filter: `user_id=eq.${userId}` },
+        () => {
+          dashboardCache.delete(cacheKey)
+          refetchQuietly()
+        },
+      )
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [isCoach, userId, supabase, cacheKey, refetchQuietly])
+
+  // BroadcastChannel fast path: merge changes into local upcomingWorkouts
+  useEffect(() => {
+    if (!userId) return
+    let bc: BroadcastChannel | null = null
+    try {
+      bc = new BroadcastChannel('workouts')
+      bc.onmessage = (event) => {
+        const msg = event.data as any
+        if (!msg || msg.type !== 'updated') return
+        // Only apply if message belongs to this user
+        if (msg.userId && msg.userId !== userId) return
+        setUpcomingWorkouts((prev) => prev.map((w) => (w.id === msg.workoutId ? { ...w, ...msg.changes } as any : w)))
+      }
+    } catch {
+      const handler = (e: StorageEvent) => {
+        if (e.key !== 'workout-updated' || !e.newValue) return
+        try {
+          const msg = JSON.parse(e.newValue)
+          if (!msg || msg.type !== 'updated') return
+          if (msg.userId && msg.userId !== userId) return
+          setUpcomingWorkouts((prev) => prev.map((w) => (w.id === msg.workoutId ? { ...w, ...msg.changes } as any : w)))
+        } catch {}
+      }
+      if (typeof window !== 'undefined') window.addEventListener('storage', handler)
+      return () => { if (typeof window !== 'undefined') window.removeEventListener('storage', handler) }
+    }
+    return () => { try { bc && bc.close() } catch {} }
+  }, [userId])
+
   useEffect(() => {
     if (!isCoach || !coachId) return
     const channel = supabase
