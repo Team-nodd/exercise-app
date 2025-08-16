@@ -26,6 +26,34 @@ export function ClientDetails({ client, initialProgramId }: ClientCalendarProps)
 
   const supabase = createClient()
 
+  // Listen for cross-tab/device broadcast updates
+  useEffect(() => {
+    let bc: BroadcastChannel | null = null
+    try {
+      bc = new BroadcastChannel('workouts')
+      bc.onmessage = (event) => {
+        const msg = event.data as any
+        if (!msg || msg.type !== 'updated') return
+        // If filtered by program, ensure it belongs to current selection
+        if (selectedProgram !== 'all' && Number(selectedProgram) !== Number(msg.programId)) return
+        setWorkouts((prev) => prev.map((w) => (w.id === msg.workoutId ? { ...w, ...msg.changes } as any : w)))
+      }
+    } catch {
+      const handler = (e: StorageEvent) => {
+        if (e.key !== 'workout-updated' || !e.newValue) return
+        try {
+          const msg = JSON.parse(e.newValue)
+          if (!msg || msg.type !== 'updated') return
+          if (selectedProgram !== 'all' && Number(selectedProgram) !== Number(msg.programId)) return
+          setWorkouts((prev) => prev.map((w) => (w.id === msg.workoutId ? { ...w, ...msg.changes } as any : w)))
+        } catch {}
+      }
+      if (typeof window !== 'undefined') window.addEventListener('storage', handler)
+      return () => { if (typeof window !== 'undefined') window.removeEventListener('storage', handler) }
+    }
+    return () => { try { bc && bc.close() } catch {} }
+  }, [selectedProgram])
+
   // Fetch programs and workouts
   useEffect(() => {
     const fetchData = async () => {

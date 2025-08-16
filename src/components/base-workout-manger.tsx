@@ -70,6 +70,31 @@ export function BaseWorkoutManager({
 
   const supabase = createClient()
 
+  // Instant UI updates from broadcasts (coach side)
+  useEffect(() => {
+    let bc: BroadcastChannel | null = null
+    try {
+      bc = new BroadcastChannel('workouts')
+      bc.onmessage = (event) => {
+        const msg = event.data as any
+        if (!msg || msg.type !== 'updated') return
+        setWorkouts((prev) => prev.map((w) => (w.id === msg.workoutId ? { ...w, ...msg.changes } : w)))
+      }
+    } catch {
+      const handler = (e: StorageEvent) => {
+        if (e.key !== 'workout-updated' || !e.newValue) return
+        try {
+          const msg = JSON.parse(e.newValue)
+          if (!msg || msg.type !== 'updated') return
+          setWorkouts((prev) => prev.map((w) => (w.id === msg.workoutId ? { ...w, ...msg.changes } : w)))
+        } catch {}
+      }
+      if (typeof window !== 'undefined') window.addEventListener('storage', handler)
+      return () => { if (typeof window !== 'undefined') window.removeEventListener('storage', handler) }
+    }
+    return () => { try { bc && bc.close() } catch {} }
+  }, [])
+
   // Open when parent provides program (e.g., after clicking Add in parent)
   useEffect(() => {
     if (openCreateWhenProgramProvided && createDialogProgram) {

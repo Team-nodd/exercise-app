@@ -88,6 +88,31 @@ export function SharedCalendar({
   const supabase = createClient()
   const isMobile = useMediaQuery("(max-width: 768px)")
 
+  // Cross-tab / cross-device broadcast helper
+  const broadcastChange = (workoutId: number, changes: Partial<WorkoutWithDetails>) => {
+    try {
+      const w = workouts.find((x) => x.id === workoutId)
+      const payload: any = {
+        type: 'updated',
+        workoutId,
+        programId: (w as any)?.program_id ?? (w as any)?.program?.id ?? programId,
+        userId: (w as any)?.user_id ?? userId,
+        changes,
+      }
+      try {
+        const bc = new BroadcastChannel('workouts')
+        bc.postMessage(payload)
+        bc.close()
+      } catch {
+        localStorage.setItem('workout-updated', JSON.stringify(payload))
+        setTimeout(() => localStorage.removeItem('workout-updated'), 1000)
+      }
+      try {
+        supabase.channel('workouts-live').send({ type: 'broadcast', event: 'workout-updated', payload })
+      } catch {}
+    } catch {}
+  }
+
   // Add this useEffect near the top of the component, after the state declarations
   useEffect(() => {
     // Keep selected-day dialog in sync if workouts prop changes
@@ -177,6 +202,9 @@ export function SharedCalendar({
 
       // Call the parent update function to trigger re-render
       onWorkoutUpdate?.(updatedWorkouts)
+
+      // Broadcast to other views (coach/user, other tabs/devices)
+      broadcastChange(workoutId, { scheduled_date: dateString } as any)
 
       toast.success(`Workout moved to ${newDate.toLocaleDateString()}`)
       return true

@@ -517,13 +517,13 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
       const updatedExercises = exercises.map((ex) => (String(ex.id) === exerciseId ? { ...ex, completed } : ex));
       const allCompleted = updatedExercises.every((ex) => ex.completed);
 
+      // Notify other views (dashboard/calendar) immediately and then mark if needed
+      broadcastUpdate({ completed: allCompleted })
+
       // If all exercises are completed, mark workout as completed and send notifications
       if (allCompleted && !workout?.completed) {
         await markWorkoutAsCompleted();
       }
-
-      // Notify other views (dashboard/calendar) immediately
-      broadcastUpdate({ completed: allCompleted })
 
       toast(completed ? 'Exercise marked as complete' : 'Exercise marked as incomplete');
     } catch (error) {
@@ -559,13 +559,13 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
           : null,
       );
 
+      // Notify other views immediately
+      broadcastUpdate({ completed })
+
       // If marking as completed, send notifications
       if (completed) {
         await markWorkoutAsCompleted();
       }
-
-      // Notify other views immediately
-      broadcastUpdate({ completed })
 
       toast(completed ? 'Cardio workout marked as complete' : 'Cardio workout marked as incomplete');
     } catch (error) {

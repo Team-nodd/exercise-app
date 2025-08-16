@@ -35,6 +35,31 @@ export function UserDashboard({ user, initialStats, initialWorkouts }: UserDashb
   const [selectedProgramId, setSelectedProgramId] = useState<string>("all")
   const [workouts, setWorkouts] = useState<WorkoutWithDetails[]>([])
 
+  // Listen for broadcast updates for instant UI without full refetch
+  useEffect(() => {
+    let bc: BroadcastChannel | null = null
+    try {
+      bc = new BroadcastChannel('workouts')
+      bc.onmessage = (event) => {
+        const msg = event.data as any
+        if (!msg || msg.type !== 'updated') return
+        setWorkouts((prev) => prev.map((w) => (w.id === msg.workoutId ? { ...w, ...msg.changes } : w)))
+      }
+    } catch {
+      const handler = (e: StorageEvent) => {
+        if (e.key !== 'workout-updated' || !e.newValue) return
+        try {
+          const msg = JSON.parse(e.newValue)
+          if (!msg || msg.type !== 'updated') return
+          setWorkouts((prev) => prev.map((w) => (w.id === msg.workoutId ? { ...w, ...msg.changes } : w)))
+        } catch {}
+      }
+      window.addEventListener('storage', handler)
+      return () => window.removeEventListener('storage', handler)
+    }
+    return () => { try { bc && bc.close() } catch {} }
+  }, [])
+
   // Get unique programs from upcomingWorkouts and memoize them
   const programs = useMemo(() => {
     return upcomingWorkouts?.reduce((acc: Program[], workout: WorkoutWithDetails) => {
