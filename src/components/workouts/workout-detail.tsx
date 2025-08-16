@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { CheckCircle, Circle, Dumbbell,  AlertCircle, ArrowLeft, MessageSquare, Send,  Calendar, Zap,  Activity, ChevronDown, Loader2, RefreshCw, CheckCircle2, Clock,  Mail, Save, Timer, Share } from 'lucide-react';
 import type { WorkoutWithDetails, WorkoutExerciseWithDetails, Comment } from '@/types';
-import { notificationService } from '@/lib/notifications/notification-service';
+
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
@@ -641,8 +641,7 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
         })();
       }
 
-      // Send notifications
-      await notificationService.sendWorkoutCompletedNotifications(Number(workoutId));
+      // Note: In-app notifications for workout completion have been disabled
       // Auto email coach if they opted in
       if (coachNotifyEnabled && coachEmail) {
         fetch('/api/send-workout-email', {
@@ -983,19 +982,7 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
         if (!res.ok) throw new Error('Failed to send email');
         toast('Email sent successfully!');
 
-        // Notify coach only if a client sent the email and a coach exists
-        if (workout?.program?.coach_id && profile?.role === 'user') {
-          try {
-            await notificationService.notifyCoachWorkoutEmailSent(
-              Number(workoutId),
-              userId,
-              workout.program.coach_id
-            );
-          } catch {
-            // Log only; don’t block UX
-            // console.error('Error notifying coach about email:', e);
-          }
-        }
+        // Note: In-app notifications for email sent have been disabled
       })
       .catch((err) => {
         console.error('Error sending email:', err);
@@ -1048,34 +1035,7 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
       // Replace temp with real
       setWorkoutComments(prev => prev.map(c => c.id === tempId ? (data as Comment) : c));
 
-      // Send notifications in background with comment id
-      if (workout && profile) {
-        (async () => {
-          try {
-            if (profile.role === 'user') {
-              if (workout.program?.coach_id) {
-                await notificationService.notifyCoachWorkoutComment(
-                  Number(workoutId),
-                  userId,
-                  workout.program.coach_id,
-                  sentText,
-                  (data as any)?.id
-                );
-              }
-            } else if (profile.role === 'coach') {
-              await notificationService.notifyUserWorkoutComment(
-                Number(workoutId),
-                profile.id,
-                workout.user_id,
-                sentText,
-                (data as any)?.id
-              );
-            }
-          } catch (notificationError) {
-            console.error('❌ Error sending notification:', notificationError);
-          }
-        })();
-      }
+      // Note: In-app notifications for workout comments have been disabled
 
       toast('Comment added successfully!');
     } catch (err: any) {
