@@ -682,8 +682,8 @@ export function SharedCalendar({
         const idNum = Number(msg.workoutId)
         if (!Number.isFinite(idNum)) return
         const changes = msg.changes || {}
-        // Optimistic: prioritize local/broadcast changes by spreading base first, then existing
-        const updated = workouts.map((w) => (w.id === idNum ? { ...w, ...changes, ...w } : w))
+        // Optimistic: apply incoming changes over existing values
+        const updated = workouts.map((w) => (w.id === idNum ? { ...w, ...changes } : w))
         onWorkoutUpdate?.(updated)
       }
     } catch {
@@ -696,7 +696,7 @@ export function SharedCalendar({
           const idNum = Number(msg.workoutId)
           if (!Number.isFinite(idNum)) return
           const changes = msg.changes || {}
-          const updated = workouts.map((w) => (w.id === idNum ? { ...w, ...changes, ...w } : w))
+          const updated = workouts.map((w) => (w.id === idNum ? { ...w, ...changes } : w))
           onWorkoutUpdate?.(updated)
         } catch {}
       }

@@ -16,6 +16,7 @@ const SharedCalendar = dynamic(() => import("../ui/shared-calendar").then(m => m
   loading: () => <div className="h-64 w-full rounded-md border flex items-center justify-center text-sm text-muted-foreground">Loading calendar…</div>
 })
 import { AppLink } from "../ui/app-link"
+import { createClient } from "@/lib/supabase/client"
 
 interface UserDashboardProps {
   user: User
@@ -24,6 +25,7 @@ interface UserDashboardProps {
 }
 
 export function UserDashboard({ user, initialStats, initialWorkouts }: UserDashboardProps) {
+  const supabase = createClient()
   const { stats, upcomingWorkouts, loading, error, refetch, refetchQuietly } = useDashboardData({
     userId: user.id,
     isCoach: false,
@@ -43,7 +45,7 @@ export function UserDashboard({ user, initialStats, initialWorkouts }: UserDashb
       bc.onmessage = (event) => {
         const msg = event.data as any
         if (!msg || msg.type !== 'updated') return
-        setWorkouts((prev) => prev.map((w) => (w.id === msg.workoutId ? { ...w, ...msg.changes } : w)))
+        setWorkouts((prev) => prev.map((w) => (w.id === msg.workoutId ? { ...w, ...(msg.changes || {}) } : w)))
       }
     } catch {
       const handler = (e: StorageEvent) => {
@@ -51,7 +53,7 @@ export function UserDashboard({ user, initialStats, initialWorkouts }: UserDashb
         try {
           const msg = JSON.parse(e.newValue)
           if (!msg || msg.type !== 'updated') return
-          setWorkouts((prev) => prev.map((w) => (w.id === msg.workoutId ? { ...w, ...msg.changes } : w)))
+          setWorkouts((prev) => prev.map((w) => (w.id === msg.workoutId ? { ...w, ...(msg.changes || {}) } : w)))
         } catch {}
       }
       window.addEventListener('storage', handler)
@@ -59,6 +61,27 @@ export function UserDashboard({ user, initialStats, initialWorkouts }: UserDashb
     }
     return () => { try { bc && bc.close() } catch {} }
   }, [])
+
+  // Cross-device broadcast: reflect updates from other devices/sessions instantly (also helps PWA)
+  useEffect(() => {
+    const channel = supabase
+      .channel('workouts-live')
+      .on('broadcast', { event: 'workout-updated' }, (payload: any) => {
+        const msg = (payload && (payload.payload || payload)) as any
+        if (!msg || msg.type !== 'updated') return
+        if (msg.userId && msg.userId !== user.id) return
+        setWorkouts((prev) => prev.map((w) => (w.id === msg.workoutId ? { ...w, ...(msg.changes || {}) } : w)))
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [supabase, user.id])
+
+  // When window regains focus (common on mobile/PWA after navigating back), refresh quietly
+  useEffect(() => {
+    const onFocus = () => { if (refetchQuietly) refetchQuietly() }
+    if (typeof window !== 'undefined') window.addEventListener('focus', onFocus)
+    return () => { if (typeof window !== 'undefined') window.removeEventListener('focus', onFocus) }
+  }, [refetchQuietly])
 
   // Get unique programs from upcomingWorkouts and memoize them
   const programs = useMemo(() => {
