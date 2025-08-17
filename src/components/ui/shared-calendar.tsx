@@ -497,14 +497,14 @@ export function SharedCalendar({
             onDrop={(e) => handleDrop(e, date)}
           >
             <div className="text-xs sm:text-sm font-medium text-gray-400 dark:text-gray-600">{day}</div>
-            <div className="flex-1 overflow-y-auto scrollbar-hide mt-1 space-y-0.5">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide mt-1 space-y-0.5">
               {workoutsForDay.map((workout) => (
-                <a
+                <div
                   key={workout.id}
                   draggable={!isReadOnly}
-                  onDragStart={(e) => handleDragStart(e, workout)}
+                  onDragStart={(e: React.DragEvent) => handleDragStart(e, workout)}
                   className={cn(
-                    "text-xs font-medium px-1 py-0.5 rounded truncate",
+                    "block w-full text-xs font-medium px-1 py-0.5 rounded truncate cursor-pointer",
                     !isReadOnly && "cursor-move",
                     workout.completed
                       ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
@@ -512,10 +512,9 @@ export function SharedCalendar({
                     draggedWorkout?.id === workout.id && "opacity-50",
                   )}
                   title={workout.name}
-                  href={`/dashboard/workouts/${workout.id}${workoutLinkQuery ?? ''}`}
                 >
                   {workout.name}
-                </a>
+                </div>
               ))}
             </div>
           </div>
@@ -549,14 +548,14 @@ export function SharedCalendar({
             onDrop={(e) => handleDrop(e, date)}
           >
             <div className="text-xs sm:text-sm font-medium">{day}</div>
-            <div className="flex-1 overflow-y-auto scrollbar-hide mt-1 space-y-0.5">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide mt-1 space-y-0.5">
               {workoutsForDay.map((workout) => (
-                <a
+                <div
                   key={workout.id}
                   draggable={!isReadOnly}
-                  onDragStart={(e) => handleDragStart(e, workout)}
+                  onDragStart={(e: React.DragEvent) => handleDragStart(e, workout)}
                   className={cn(
-                    "text-xs block font-medium px-1 py-0.5 rounded truncate",
+                    "block w-full text-xs font-medium px-1 py-0.5 rounded truncate cursor-pointer",
                     !isReadOnly && "cursor-move",
                     workout.completed
                       ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
@@ -564,10 +563,9 @@ export function SharedCalendar({
                     draggedWorkout?.id === workout.id && "opacity-50",
                   )}
                   title={workout.name}
-                  href={`/dashboard/workouts/${workout.id}${workoutLinkQuery ?? ''}`}
                 >
                   {workout.name}
-                </a>
+                </div>
               ))}
             </div>
           </div>
@@ -605,14 +603,14 @@ export function SharedCalendar({
             onDrop={(e) => handleDrop(e, date)}
           >
             <div className="text-xs sm:text-sm font-medium text-gray-400 dark:text-gray-600">{day}</div>
-            <div className="flex-1 overflow-y-auto scrollbar-hide mt-1 space-y-0.5">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide mt-1 space-y-0.5">
               {workoutsForDay.map((workout) => (
                 <div
                   key={workout.id}
                   draggable={!isReadOnly}
-                  onDragStart={(e) => handleDragStart(e, workout)}
+                  onDragStart={(e: React.DragEvent) => handleDragStart(e, workout)}
                   className={cn(
-                    "text-xs font-medium px-1 py-0.5 rounded truncate",
+                    "block w-full text-xs font-medium px-1 py-0.5 rounded truncate cursor-pointer",
                     !isReadOnly && "cursor-move",
                     workout.completed
                       ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
@@ -847,13 +845,7 @@ export function SharedCalendar({
           </div>
         </div>
       </CardHeader>
-      <CardContent
-        className="relative"
-        onClick={() => {
-          // Clicking background closes the dialog if open
-          setShowWorkoutDialog(false)
-        }}
-      >
+      <CardContent className="relative">
         {/* Edge navigation zones for coaches */}
         {userRole === "coach" && draggedWorkout && (
           <>
@@ -986,15 +978,16 @@ export function SharedCalendar({
                       {userRole === "user" ? (
                         <>
                           <div className="flex flex-row gap-2 w-full sm:w-auto">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              href={`/dashboard/workouts/${workout.id}`}
-                              onClick={() => setShowWorkoutDialog(false)}
-                              className="text-xs h-7"
-                            >
-                              Start
-                            </Button>
+                            <AppLink href={`/dashboard/workouts/${workout.id}${workoutLinkQuery ?? ''}`}>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setShowWorkoutDialog(false)}
+                                className="text-xs h-7"
+                              >
+                                Start
+                              </Button>
+                            </AppLink>
                             {/* Only show on mobile and when not read-only */}
                             {isMobile && !isReadOnly && (
                               <div className="flex flex-col gap-2">
