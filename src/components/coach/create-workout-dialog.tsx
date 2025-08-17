@@ -3,6 +3,7 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import type { ProgramWithDetails } from "@/types"
 import { CreateWorkoutForm } from "./create-workout-form"
+import { createClient } from "@/lib/supabase/client"
 
 export function CreateWorkoutDialog({
   open,
@@ -28,12 +29,30 @@ export function CreateWorkoutDialog({
             onSuccess={() => {
               onCreated?.()
               onOpenChange(false)
-              // Broadcast creation; actual record is not available here, calendars will refetch via realtime
-              try {
-                const bc = new BroadcastChannel('workouts')
-                bc.postMessage({ type: 'created', workoutId: -1, programId: (program as any).id })
-                bc.close()
-              } catch {}
+              // Broadcast creation with latest record so calendars can add instantly
+              ;(async () => {
+                try {
+                  const supa = createClient()
+                  const { data } = await supa
+                    .from('workouts')
+                    .select('*, program:programs(*)')
+                    .eq('program_id', (program as any).id)
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .single()
+                  if (data) {
+                    const payload = { type: 'created', workoutId: (data as any).id, programId: (data as any).program_id, userId: (data as any).user_id, record: data }
+                    try {
+                      const bc = new BroadcastChannel('workouts')
+                      bc.postMessage(payload)
+                      bc.close()
+                    } catch {}
+                    try {
+                      supa.channel('workouts-live').send({ type: 'broadcast', event: 'workout-updated', payload })
+                    } catch {}
+                  }
+                } catch {}
+              })()
             }}
             onCancel={() => onOpenChange(false)}
           />

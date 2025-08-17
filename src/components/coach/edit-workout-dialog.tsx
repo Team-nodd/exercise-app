@@ -73,18 +73,40 @@ export function EditWorkoutDialog({
               onSuccess={() => {
                 onUpdated?.()
                 onOpenChange(false)
-                // Broadcast update to reflect instantly in calendars
-                try {
-                  const bc = new BroadcastChannel('workouts')
-                  bc.postMessage({
-                    type: 'updated',
-                    workoutId: (workout as any).id,
-                    programId: (workout as any).program_id,
-                    userId: (workout as any).user_id,
-                    changes: {},
-                  })
-                  bc.close()
-                } catch {}
+                // Broadcast update with fresh values to reflect instantly in calendars
+                ;(async () => {
+                  try {
+                    const supa = createClient()
+                    const { data: latest } = await supa
+                      .from('workouts')
+                      .select('*, program:programs(*)')
+                      .eq('id', workoutId)
+                      .single()
+                    const changes = latest
+                      ? {
+                          scheduled_date: (latest as any).scheduled_date,
+                          completed: (latest as any).completed,
+                          name: (latest as any).name,
+                        }
+                      : {}
+                    const payload = {
+                      type: 'updated',
+                      workoutId: workoutId,
+                      programId: (latest as any)?.program_id ?? (latest as any)?.program?.id ?? (workout as any).program_id,
+                      userId: (latest as any)?.user_id ?? (workout as any).user_id,
+                      changes,
+                      record: latest ?? undefined,
+                    }
+                    try {
+                      const bc = new BroadcastChannel('workouts')
+                      bc.postMessage(payload)
+                      bc.close()
+                    } catch {}
+                    try {
+                      supa.channel('workouts-live').send({ type: 'broadcast', event: 'workout-updated', payload })
+                    } catch {}
+                  } catch {}
+                })()
               }}
               onCancel={() => onOpenChange(false)}
             />

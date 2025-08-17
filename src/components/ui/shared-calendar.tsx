@@ -798,7 +798,11 @@ export function SharedCalendar({
     if (userId) q = q.eq("user_id", userId)
 
     const { data } = await q
-    if (data) onWorkoutUpdate?.(data as WorkoutWithDetails[])
+    if (data) {
+      const list = data as WorkoutWithDetails[]
+      // If we have a freshly created record in a broadcast payload (record), ensure it's included
+      onWorkoutUpdate?.(list)
+    }
   }
 
   return (
