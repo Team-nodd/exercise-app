@@ -946,46 +946,55 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
 
   const handleShare = async () => {
     if (!isWorkoutCompleted()) return;
-    setSharing(true);
     try {
+      // Prefer native file share when available
+      const hasCanShare = typeof (navigator as any).canShare === 'function';
+      if (hasCanShare) {
+        setSharing(true);
+        const blob = await generateShareImage();
+        if (blob) {
+          const file = new File([blob], `workout-${workoutId}.png`, { type: 'image/png' });
+          if ((navigator as any).canShare({ files: [file] })) {
+            await (navigator as any).share({
+              title: workout?.name || 'Workout',
+              text: 'My workout from FitTracker Pro',
+              files: [file],
+            } as any);
+            setSharing(false);
+            return;
+          }
+        }
+        setSharing(false);
+      }
+
+      // iOS PWA-friendly fallback: share the workout link (no files)
+      if (typeof navigator.share === 'function') {
+        const shareUrl = `${window.location.origin}/dashboard/workouts/${workoutId}`;
+        await navigator.share({
+          title: workout?.name || 'Workout',
+          text: 'My workout from FitTracker Pro',
+          url: shareUrl,
+        });
+        return;
+      }
+
+      // Last resort: open the image in a new tab for manual save/share (works on iOS PWAs)
+      setSharing(true);
       const blob = await generateShareImage();
       if (!blob) {
         toast('Failed to create share image');
+        setSharing(false);
         return;
       }
-      const file = new File([blob], `workout-${workoutId}.png`, { type: 'image/png' });
-      const shareData: ShareData = {
-        title: workout?.name || 'Workout',
-        text: 'My workout from Exercise App',
-        files: [file],
-      } as any;
-      if ((navigator as any).canShare && (navigator as any).canShare({ files: [file] })) {
-        await (navigator as any).share(shareData);
-      } else if (navigator.share) {
-        // Some browsers support share without files
-        await navigator.share({ title: shareData.title, text: shareData.text });
-        // Fallback download for image
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = file.name;
-        a.click();
-        URL.revokeObjectURL(url);
-      } else {
-        // Download fallback
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = file.name;
-        a.click();
-        URL.revokeObjectURL(url);
-        toast('Image ready to save/share');
-      }
-    } catch (e) {
-      console.error('Error sharing:', e);
-      toast('Unable to open share sheet on this device');
-    } finally {
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      toast('Image opened. Use your browser’s Share/Save.');
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
       setSharing(false);
+    } catch (e) {
+      setSharing(false);
+      console.error('Error sharing:', e);
+      toast('Sharing not supported on this device/browser');
     }
   };
 
