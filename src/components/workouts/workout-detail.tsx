@@ -1389,9 +1389,15 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
       <div className="mb-8">
         <div className="flex items-center justify-between mb-4">
           <Button variant="ghost" size="sm" asChild>
-            <AppLink href={from === 'program' && programIdParam ? `/dashboard/programs/${programIdParam}` : '/dashboard'}>
+            <AppLink href={
+              from === 'program' && programIdParam 
+                ? `/dashboard/programs/${programIdParam}` 
+                : from === 'workouts' 
+                  ? '/dashboard/workouts' 
+                  : '/dashboard'
+            }>
               <ArrowLeft className="h-4 w-4 mr-2" />
-              {from === 'program' ? 'Back to Program' : 'Back to Dashboard'}
+              {from === 'program' ? 'Back to Program' : from === 'workouts' ? 'Back to Workouts' : 'Back to Dashboard'}
             </AppLink>
           </Button>
           <Badge

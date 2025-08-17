@@ -376,7 +376,7 @@ export function UserWorkouts({ userId }: UserWorkoutsProps) {
                             : "bg-blue-600 hover:bg-blue-700 text-white",
                         )}
                       >
-                        <AppLink href={`/dashboard/workouts/${workout.id}`}>
+                        <AppLink href={`/dashboard/workouts/${workout.id}?from=workouts`}>
                           <Play className="h-3.5 w-3.5 mr-1.5" />
                           {workout.completed ? "View Details" : "Start Workout"}
                         </AppLink>
