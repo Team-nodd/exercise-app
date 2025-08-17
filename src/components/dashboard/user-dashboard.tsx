@@ -45,6 +45,8 @@ export function UserDashboard({ user, initialStats, initialWorkouts }: UserDashb
       bc.onmessage = (event) => {
         const msg = event.data as any
         if (!msg || msg.type !== 'updated') return
+        // Ignore messages for other users when userId is provided
+        if (msg.userId && msg.userId !== user.id) return
         setWorkouts((prev) => prev.map((w) => (w.id === msg.workoutId ? { ...w, ...(msg.changes || {}) } : w)))
       }
     } catch {
@@ -53,6 +55,7 @@ export function UserDashboard({ user, initialStats, initialWorkouts }: UserDashb
         try {
           const msg = JSON.parse(e.newValue)
           if (!msg || msg.type !== 'updated') return
+          if (msg.userId && msg.userId !== user.id) return
           setWorkouts((prev) => prev.map((w) => (w.id === msg.workoutId ? { ...w, ...(msg.changes || {}) } : w)))
         } catch {}
       }
@@ -103,23 +106,36 @@ export function UserDashboard({ user, initialStats, initialWorkouts }: UserDashb
   // Update workouts state when filtered workouts change (merge, don't overwrite)
   useEffect(() => {
     setWorkouts((prev) => {
-      if (prev.length === 0) return filteredWorkouts
-      const byId = new Map(prev.map((w) => [w.id, w]))
-      for (const w of filteredWorkouts) {
-        const existing = byId.get(w.id)
-        // Prefer existing (locally updated/broadcast) values over stale backend ones
-        byId.set(w.id, existing ? { ...w, ...existing } : w)
-      }
-      return Array.from(byId.values())
+      // Keep only items in the filtered set, but preserve local fields for overlapping items
+      const prevById = new Map(prev.map((w) => [w.id, w]))
+      return filteredWorkouts.map((w) => {
+        const existing = prevById.get(w.id)
+        // Prefer locally updated values over freshly fetched ones
+        return existing ? { ...w, ...existing } : w
+      })
     })
   }, [filteredWorkouts])
 
+  // If current selection disappears (e.g., user switches accounts), reset the program filter
+  useEffect(() => {
+    if (selectedProgramId !== "all" && !programs.some((p) => String(p.id) === selectedProgramId)) {
+      setSelectedProgramId("all")
+    }
+  }, [programs, selectedProgramId])
+
+  // When user changes (sign out/in), reset local dashboard state to avoid showing stale data
+  useEffect(() => {
+    setSelectedProgramId("all")
+    setWorkouts([])
+    setTodaysWorkouts([])
+  }, [user.id])
+
   // Get today's workouts
   useEffect(() => {
-    if (filteredWorkouts.length > 0) {
+    if (workouts.length > 0) {
       const today = new Date()
       const todayString = today.toDateString()
-      const workoutsToday = filteredWorkouts.filter(workout => {
+      const workoutsToday = workouts.filter(workout => {
         if (!workout.scheduled_date) return false
         const workoutDate = new Date(workout.scheduled_date)
         return workoutDate.toDateString() === todayString
@@ -128,7 +144,7 @@ export function UserDashboard({ user, initialStats, initialWorkouts }: UserDashb
     } else {
       setTodaysWorkouts([])
     }
-  }, [filteredWorkouts])
+  }, [workouts])
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return "No date set"
@@ -157,11 +173,8 @@ export function UserDashboard({ user, initialStats, initialWorkouts }: UserDashb
   }
 
   const handleWorkoutUpdate = (updatedWorkouts: WorkoutWithDetails[]) => {
+    // Optimistic: apply immediately and avoid immediate refetch to prevent race with stale data
     setWorkouts(updatedWorkouts)
-    // Background sync without triggering loading state
-    if (refetchQuietly) {
-      refetchQuietly()
-    }
   }
 
   if (loading) {
