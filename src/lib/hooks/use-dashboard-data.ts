@@ -222,6 +222,29 @@ export function useDashboardData({ userId, coachId, isCoach = false, initialStat
     })()
   }, [cacheKey, isCoach, coachId, userId, fetchCoachDashboardData, fetchUserDashboardData, initialStats, initialUpcomingWorkouts, initialRecentClients])
 
+  // If the identity (userId/coachId) changes between renders, clear cache and local state to avoid stale data
+  useEffect(() => {
+    // Clear all dashboard cache to be safe across views
+    dashboardCache.clear()
+    // Reset local state to empty to avoid flashing previous user's data
+    setStats(null)
+    setUpcomingWorkouts([])
+    setRecentClients([])
+    // Trigger a silent refresh for the new identity
+    ;(async () => {
+      try {
+        if (isCoach && coachId) {
+          await fetchCoachDashboardData(coachId)
+        } else if (userId) {
+          await fetchUserDashboardData(userId)
+        }
+      } catch {
+        // ignore
+      }
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, coachId])
+
   // Listen for realtime workout changes for users to invalidate cache quickly
   useEffect(() => {
     if (isCoach || !userId) return
@@ -250,7 +273,7 @@ export function useDashboardData({ userId, coachId, isCoach = false, initialStat
         if (!msg || msg.type !== 'updated') return
         // Only apply if message belongs to this user
         if (msg.userId && msg.userId !== userId) return
-        setUpcomingWorkouts((prev) => prev.map((w) => (w.id === msg.workoutId ? { ...w, ...msg.changes } as any : w)))
+        setUpcomingWorkouts((prev) => prev.map((w) => (w.id === msg.workoutId ? { ...w, ...(msg.changes || {}) } as any : w)))
       }
     } catch {
       const handler = (e: StorageEvent) => {
@@ -259,7 +282,7 @@ export function useDashboardData({ userId, coachId, isCoach = false, initialStat
           const msg = JSON.parse(e.newValue)
           if (!msg || msg.type !== 'updated') return
           if (msg.userId && msg.userId !== userId) return
-          setUpcomingWorkouts((prev) => prev.map((w) => (w.id === msg.workoutId ? { ...w, ...msg.changes } as any : w)))
+          setUpcomingWorkouts((prev) => prev.map((w) => (w.id === msg.workoutId ? { ...w, ...(msg.changes || {}) } as any : w)))
         } catch {}
       }
       if (typeof window !== 'undefined') window.addEventListener('storage', handler)
