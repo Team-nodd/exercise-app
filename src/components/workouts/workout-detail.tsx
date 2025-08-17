@@ -947,38 +947,6 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
   const handleShare = async () => {
     if (!isWorkoutCompleted()) return;
     try {
-      // Prefer native file share when available
-      const hasCanShare = typeof (navigator as any).canShare === 'function';
-      if (hasCanShare) {
-        setSharing(true);
-        const blob = await generateShareImage();
-        if (blob) {
-          const file = new File([blob], `workout-${workoutId}.png`, { type: 'image/png' });
-          if ((navigator as any).canShare({ files: [file] })) {
-            await (navigator as any).share({
-              title: workout?.name || 'Workout',
-              text: 'My workout from FitTracker Pro',
-              files: [file],
-            } as any);
-            setSharing(false);
-            return;
-          }
-        }
-        setSharing(false);
-      }
-
-      // iOS PWA-friendly fallback: share the workout link (no files)
-      if (typeof navigator.share === 'function') {
-        const shareUrl = `${window.location.origin}/dashboard/workouts/${workoutId}`;
-        await navigator.share({
-          title: workout?.name || 'Workout',
-          text: 'My workout from FitTracker Pro',
-          url: shareUrl,
-        });
-        return;
-      }
-
-      // Last resort: open the image in a new tab for manual save/share (works on iOS PWAs)
       setSharing(true);
       const blob = await generateShareImage();
       if (!blob) {
@@ -986,9 +954,24 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
         setSharing(false);
         return;
       }
+      const file = new File([blob], `workout-${workoutId}.png`, { type: 'image/png' });
+
+      // Try native file share first
+      const canShareFiles = typeof (navigator as any).canShare === 'function' && (navigator as any).canShare({ files: [file] });
+      if (canShareFiles && typeof (navigator as any).share === 'function') {
+        await (navigator as any).share({
+          title: workout?.name || 'Workout',
+          text: 'My workout from FitTracker Pro',
+          files: [file],
+        } as any);
+        setSharing(false);
+        return;
+      }
+
+      // Fallback: open the image for manual share/save (works on iOS PWAs)
       const url = URL.createObjectURL(blob);
       window.open(url, '_blank');
-      toast('Image opened. Use your browser’s Share/Save.');
+      toast('Image opened. Use Share/Save from your browser.');
       setTimeout(() => URL.revokeObjectURL(url), 10000);
       setSharing(false);
     } catch (e) {
