@@ -73,6 +73,18 @@ export function EditWorkoutDialog({
               onSuccess={() => {
                 onUpdated?.()
                 onOpenChange(false)
+                // Broadcast update to reflect instantly in calendars
+                try {
+                  const bc = new BroadcastChannel('workouts')
+                  bc.postMessage({
+                    type: 'updated',
+                    workoutId: (workout as any).id,
+                    programId: (workout as any).program_id,
+                    userId: (workout as any).user_id,
+                    changes: {},
+                  })
+                  bc.close()
+                } catch {}
               }}
               onCancel={() => onOpenChange(false)}
             />

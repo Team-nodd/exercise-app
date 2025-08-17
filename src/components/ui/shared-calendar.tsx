@@ -89,15 +89,20 @@ export function SharedCalendar({
   const isMobile = useMediaQuery("(max-width: 768px)")
 
   // Cross-tab / cross-device broadcast helper
-  const broadcastChange = (workoutId: number, changes: Partial<WorkoutWithDetails>) => {
+  const broadcastChange = (
+    workoutId: number,
+    changes: Partial<WorkoutWithDetails>,
+    options?: { op?: 'updated' | 'created' | 'deleted'; record?: any },
+  ) => {
     try {
       const w = workouts.find((x) => x.id === workoutId)
       const payload: any = {
-        type: 'updated',
+        type: options?.op ?? 'updated',
         workoutId,
         programId: (w as any)?.program_id ?? (w as any)?.program?.id ?? programId,
         userId: (w as any)?.user_id ?? userId,
         changes,
+        record: options?.record,
       }
       try {
         const bc = new BroadcastChannel('workouts')
@@ -282,6 +287,9 @@ export function SharedCalendar({
 
       const updatedWorkouts = [...workouts, newWorkout as WorkoutWithDetails]
       onWorkoutUpdate?.(updatedWorkouts)
+
+      // Broadcast creation so user dashboards update instantly
+      broadcastChange((newWorkout as any).id, {} as any, { op: 'created', record: newWorkout })
 
       toast(
         `Workout duplicated successfully${targetDate ? ` and scheduled for ${targetDate.toLocaleDateString()}` : ""}!`,
@@ -678,13 +686,22 @@ export function SharedCalendar({
       bc = new BroadcastChannel('workouts')
       bc.onmessage = (event) => {
         const msg = event.data as any
-        if (!msg || msg.type !== 'updated') return
+        if (!msg || !msg.type) return
         const idNum = Number(msg.workoutId)
-        if (!Number.isFinite(idNum)) return
-        const changes = msg.changes || {}
-        // Optimistic: apply incoming changes over existing values
-        const updated = workouts.map((w) => (w.id === idNum ? { ...w, ...changes } : w))
-        onWorkoutUpdate?.(updated)
+        if (msg.type === 'updated') {
+          if (!Number.isFinite(idNum)) return
+          const changes = msg.changes || {}
+          const updated = workouts.map((w) => (w.id === idNum ? { ...w, ...changes } : w))
+          onWorkoutUpdate?.(updated)
+        } else if (msg.type === 'created' && msg.record) {
+          const rec = msg.record as WorkoutWithDetails
+          // include only if within scope
+          const inScope = (programId ? (rec as any).program_id === programId : true) && (userId ? (rec as any).user_id === userId : true)
+          if (inScope) onWorkoutUpdate?.([...workouts, rec])
+        } else if (msg.type === 'deleted') {
+          if (!Number.isFinite(idNum)) return
+          onWorkoutUpdate?.(workouts.filter((w) => w.id !== idNum))
+        }
       }
     } catch {
       // Fallback to storage events
@@ -692,12 +709,21 @@ export function SharedCalendar({
         if (e.key !== 'workout-updated' || !e.newValue) return
         try {
           const msg = JSON.parse(e.newValue)
-          if (!msg || msg.type !== 'updated') return
+          if (!msg || !msg.type) return
           const idNum = Number(msg.workoutId)
-          if (!Number.isFinite(idNum)) return
-          const changes = msg.changes || {}
-          const updated = workouts.map((w) => (w.id === idNum ? { ...w, ...changes } : w))
-          onWorkoutUpdate?.(updated)
+          if (msg.type === 'updated') {
+            if (!Number.isFinite(idNum)) return
+            const changes = msg.changes || {}
+            const updated = workouts.map((w) => (w.id === idNum ? { ...w, ...changes } : w))
+            onWorkoutUpdate?.(updated)
+          } else if (msg.type === 'created' && msg.record) {
+            const rec = msg.record as WorkoutWithDetails
+            const inScope = (programId ? (rec as any).program_id === programId : true) && (userId ? (rec as any).user_id === userId : true)
+            if (inScope) onWorkoutUpdate?.([...workouts, rec])
+          } else if (msg.type === 'deleted') {
+            if (!Number.isFinite(idNum)) return
+            onWorkoutUpdate?.(workouts.filter((w) => w.id !== idNum))
+          }
         } catch {}
       }
       window.addEventListener('storage', handler)

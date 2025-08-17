@@ -77,16 +77,38 @@ export function BaseWorkoutManager({
       bc = new BroadcastChannel('workouts')
       bc.onmessage = (event) => {
         const msg = event.data as any
-        if (!msg || msg.type !== 'updated') return
-        setWorkouts((prev) => prev.map((w) => (w.id === msg.workoutId ? { ...w, ...msg.changes } : w)))
+        if (!msg || !msg.type) return
+        if (msg.type === 'updated') {
+          setWorkouts((prev) => prev.map((w) => (w.id === msg.workoutId ? { ...w, ...(msg.changes || {}) } : w)))
+        } else if (msg.type === 'created' && msg.record) {
+          // Add only if it belongs to this view scope
+          const rec = msg.record as any
+          if (!programId || Number(rec.program_id) === Number(programId)) {
+            setWorkouts((prev) => {
+              if (prev.some((w) => w.id === rec.id)) return prev
+              return [...prev, rec]
+            })
+          }
+        } else if (msg.type === 'deleted') {
+          setWorkouts((prev) => prev.filter((w) => w.id !== msg.workoutId))
+        }
       }
     } catch {
       const handler = (e: StorageEvent) => {
         if (e.key !== 'workout-updated' || !e.newValue) return
         try {
           const msg = JSON.parse(e.newValue)
-          if (!msg || msg.type !== 'updated') return
-          setWorkouts((prev) => prev.map((w) => (w.id === msg.workoutId ? { ...w, ...msg.changes } : w)))
+          if (!msg || !msg.type) return
+          if (msg.type === 'updated') {
+            setWorkouts((prev) => prev.map((w) => (w.id === msg.workoutId ? { ...w, ...(msg.changes || {}) } : w)))
+          } else if (msg.type === 'created' && msg.record) {
+            const rec = msg.record as any
+            if (!programId || Number(rec.program_id) === Number(programId)) {
+              setWorkouts((prev) => (prev.some((w) => w.id === rec.id) ? prev : [...prev, rec]))
+            }
+          } else if (msg.type === 'deleted') {
+            setWorkouts((prev) => prev.filter((w) => w.id !== msg.workoutId))
+          }
         } catch {}
       }
       if (typeof window !== 'undefined') window.addEventListener('storage', handler)

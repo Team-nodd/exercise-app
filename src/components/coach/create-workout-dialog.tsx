@@ -28,6 +28,12 @@ export function CreateWorkoutDialog({
             onSuccess={() => {
               onCreated?.()
               onOpenChange(false)
+              // Broadcast creation; actual record is not available here, calendars will refetch via realtime
+              try {
+                const bc = new BroadcastChannel('workouts')
+                bc.postMessage({ type: 'created', workoutId: -1, programId: (program as any).id })
+                bc.close()
+              } catch {}
             }}
             onCancel={() => onOpenChange(false)}
           />
