@@ -324,6 +324,24 @@ export function EditWorkoutForm({ program, workout, initialExercises, redirectOn
         return
       }
 
+      // Broadcast deletion so calendars update instantly
+      try {
+        const payload = {
+          type: 'deleted',
+          workoutId: workout.id,
+          programId: (workout as any).program_id,
+          userId: (workout as any).user_id,
+        }
+        try {
+          const bc = new BroadcastChannel('workouts')
+          bc.postMessage(payload)
+          bc.close()
+        } catch {}
+        try {
+          supabase.channel('workouts-live').send({ type: 'broadcast', event: 'workout-updated', payload })
+        } catch {}
+      } catch {}
+
       toast.success("Workout deleted successfully")
       if (redirectOnSuccess) {
         router.push(`/coach/programs/${program.id}`)
