@@ -17,6 +17,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { AppLink } from '../ui/app-link';
+import { useSearchParams } from 'next/navigation';
 // import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 // import { useRouter } from 'next/navigation';
 import {
@@ -89,6 +90,9 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
   }>>({});
 
   const supabase = createClient();
+  const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
+  const from = searchParams?.get('from')
+  const programIdParam = searchParams?.get('programId')
 
   // Cross-tab and cross-device broadcast helper
   const broadcastUpdate = (changes: any) => {
@@ -1385,9 +1389,9 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
       <div className="mb-8">
         <div className="flex items-center justify-between mb-4">
           <Button variant="ghost" size="sm" asChild>
-            <AppLink href="/dashboard/workouts">
+            <AppLink href={from === 'program' && programIdParam ? `/dashboard/programs/${programIdParam}` : '/dashboard'}>
               <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Workouts
+              {from === 'program' ? 'Back to Program' : 'Back to Dashboard'}
             </AppLink>
           </Button>
           <Badge

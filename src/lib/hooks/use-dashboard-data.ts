@@ -263,7 +263,7 @@ export function useDashboardData({ userId, coachId, isCoach = false, initialStat
     return () => { supabase.removeChannel(channel) }
   }, [isCoach, userId, supabase, cacheKey, refetchQuietly])
 
-  // BroadcastChannel fast path: merge changes into local upcomingWorkouts
+  // BroadcastChannel fast path: merge changes into local upcomingWorkouts (updated/created/deleted)
   useEffect(() => {
     if (!userId) return
     let bc: BroadcastChannel | null = null
@@ -271,19 +271,36 @@ export function useDashboardData({ userId, coachId, isCoach = false, initialStat
       bc = new BroadcastChannel('workouts')
       bc.onmessage = (event) => {
         const msg = event.data as any
-        if (!msg || msg.type !== 'updated') return
-        // Only apply if message belongs to this user
+        if (!msg || !msg.type) return
         if (msg.userId && msg.userId !== userId) return
-        setUpcomingWorkouts((prev) => prev.map((w) => (w.id === msg.workoutId ? { ...w, ...(msg.changes || {}) } as any : w)))
+        if (msg.type === 'updated') {
+          setUpcomingWorkouts((prev) => prev.map((w) => (w.id === msg.workoutId ? { ...w, ...(msg.changes || {}) } as any : w)))
+        } else if (msg.type === 'created' && msg.record) {
+          const rec = msg.record as any
+          if (rec.user_id === userId) {
+            setUpcomingWorkouts((prev) => (prev.some((w) => w.id === rec.id) ? prev : [...prev, rec]))
+          }
+        } else if (msg.type === 'deleted') {
+          setUpcomingWorkouts((prev) => prev.filter((w) => w.id !== msg.workoutId))
+        }
       }
     } catch {
       const handler = (e: StorageEvent) => {
         if (e.key !== 'workout-updated' || !e.newValue) return
         try {
           const msg = JSON.parse(e.newValue)
-          if (!msg || msg.type !== 'updated') return
+          if (!msg || !msg.type) return
           if (msg.userId && msg.userId !== userId) return
-          setUpcomingWorkouts((prev) => prev.map((w) => (w.id === msg.workoutId ? { ...w, ...(msg.changes || {}) } as any : w)))
+          if (msg.type === 'updated') {
+            setUpcomingWorkouts((prev) => prev.map((w) => (w.id === msg.workoutId ? { ...w, ...(msg.changes || {}) } as any : w)))
+          } else if (msg.type === 'created' && msg.record) {
+            const rec = msg.record as any
+            if (rec.user_id === userId) {
+              setUpcomingWorkouts((prev) => (prev.some((w) => w.id === rec.id) ? prev : [...prev, rec]))
+            }
+          } else if (msg.type === 'deleted') {
+            setUpcomingWorkouts((prev) => prev.filter((w) => w.id !== msg.workoutId))
+          }
         } catch {}
       }
       if (typeof window !== 'undefined') window.addEventListener('storage', handler)
@@ -291,6 +308,30 @@ export function useDashboardData({ userId, coachId, isCoach = false, initialStat
     }
     return () => { try { bc && bc.close() } catch {} }
   }, [userId])
+
+  // Supabase broadcast fast path: created/updated/deleted
+  useEffect(() => {
+    if (!userId) return
+    const channel = supabase
+      .channel('workouts-live')
+      .on('broadcast', { event: 'workout-updated' }, (payload: any) => {
+        const msg = (payload && (payload.payload || payload)) as any
+        if (!msg || !msg.type) return
+        if (msg.userId && msg.userId !== userId) return
+        if (msg.type === 'updated') {
+          setUpcomingWorkouts((prev) => prev.map((w) => (w.id === msg.workoutId ? { ...w, ...(msg.changes || {}) } as any : w)))
+        } else if (msg.type === 'created' && msg.record) {
+          const rec = msg.record as any
+          if (rec.user_id === userId) {
+            setUpcomingWorkouts((prev) => (prev.some((w) => w.id === rec.id) ? prev : [...prev, rec]))
+          }
+        } else if (msg.type === 'deleted') {
+          setUpcomingWorkouts((prev) => prev.filter((w) => w.id !== msg.workoutId))
+        }
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [supabase, userId])
 
   // On mount, replay any queued optimistic updates written by workout detail pages
   useEffect(() => {

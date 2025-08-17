@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils"
 import { useMediaQuery } from "@/lib/hooks/use-media-query"
 import type { WorkoutWithDetails } from "@/types"
 import { EditWorkoutDialog } from "@/components/coach/edit-workout-dialog"
+import { AppLink } from "./app-link"
 
 // import { EditWorkoutDialog } from "./edit-workout-dialog"
 
@@ -30,6 +31,7 @@ interface SharedCalendarProps {
   isReadOnly?: boolean
   onEditWorkout?: (workout: WorkoutWithDetails) => void
   onCreateWorkout?: () => void // NEW
+  workoutLinkQuery?: string
 }
 
 // Helper function to format date consistently (avoiding timezone issues)
@@ -66,6 +68,7 @@ export function SharedCalendar({
   isReadOnly = false,
   onEditWorkout,
   onCreateWorkout,
+  workoutLinkQuery,
 }: SharedCalendarProps) {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
@@ -496,7 +499,7 @@ export function SharedCalendar({
             <div className="text-xs sm:text-sm font-medium text-gray-400 dark:text-gray-600">{day}</div>
             <div className="flex-1 overflow-y-auto scrollbar-hide mt-1 space-y-0.5">
               {workoutsForDay.map((workout) => (
-                <div
+                <a
                   key={workout.id}
                   draggable={!isReadOnly}
                   onDragStart={(e) => handleDragStart(e, workout)}
@@ -509,9 +512,10 @@ export function SharedCalendar({
                     draggedWorkout?.id === workout.id && "opacity-50",
                   )}
                   title={workout.name}
+                  href={`/dashboard/workouts/${workout.id}${workoutLinkQuery ?? ''}`}
                 >
                   {workout.name}
-                </div>
+                </a>
               ))}
             </div>
           </div>
@@ -547,12 +551,12 @@ export function SharedCalendar({
             <div className="text-xs sm:text-sm font-medium">{day}</div>
             <div className="flex-1 overflow-y-auto scrollbar-hide mt-1 space-y-0.5">
               {workoutsForDay.map((workout) => (
-                <div
+                <a
                   key={workout.id}
                   draggable={!isReadOnly}
                   onDragStart={(e) => handleDragStart(e, workout)}
                   className={cn(
-                    "text-xs font-medium px-1 py-0.5 rounded truncate",
+                    "text-xs block font-medium px-1 py-0.5 rounded truncate",
                     !isReadOnly && "cursor-move",
                     workout.completed
                       ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
@@ -560,14 +564,15 @@ export function SharedCalendar({
                     draggedWorkout?.id === workout.id && "opacity-50",
                   )}
                   title={workout.name}
+                  href={`/dashboard/workouts/${workout.id}${workoutLinkQuery ?? ''}`}
                 >
                   {workout.name}
-                </div>
+                </a>
               ))}
             </div>
           </div>
           
-        </div>,
+        </div>
       )
     }
 

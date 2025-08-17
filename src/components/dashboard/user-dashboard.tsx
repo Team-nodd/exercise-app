@@ -341,6 +341,7 @@ export function UserDashboard({ user, initialStats, initialWorkouts }: UserDashb
           onWorkoutUpdate={handleWorkoutUpdate}
           userRole="user"
           userId={user.id}
+          workoutLinkQuery={"?from=dashboard"}
         />
       </div>
 

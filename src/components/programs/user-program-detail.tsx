@@ -246,6 +246,7 @@ export function UserProgramDetail({ program }: UserProgramDetailProps) {
             userRole="user"
             userId={program.user.id}
             isReadOnly={false}
+            workoutLinkQuery={`?from=program&programId=${program.id}`}
           />
         </TabsContent>
 
@@ -293,7 +294,7 @@ export function UserProgramDetail({ program }: UserProgramDetailProps) {
                   <CardContent className="pt-0">
                     <div className="space-y-3">
                       {groupedWorkouts[date].map((workout, index) => (
-                        <AppLink key={workout.id} href={`/dashboard/workouts/${workout.id}`} className="block">
+                        <AppLink key={workout.id} href={`/dashboard/workouts/${workout.id}?from=program&programId=${program.id}`} className="block">
                           <div className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors">
                             <div className="flex-1 min-w-0">
                               <div className="flex items-start justify-between gap-3">
