@@ -44,19 +44,36 @@ export function UserDashboard({ user, initialStats, initialWorkouts }: UserDashb
       bc = new BroadcastChannel('workouts')
       bc.onmessage = (event) => {
         const msg = event.data as any
-        if (!msg || msg.type !== 'updated') return
-        // Ignore messages for other users when userId is provided
+        if (!msg || !msg.type) return
         if (msg.userId && msg.userId !== user.id) return
-        setWorkouts((prev) => prev.map((w) => (w.id === msg.workoutId ? { ...w, ...(msg.changes || {}) } : w)))
+        if (msg.type === 'updated') {
+          setWorkouts((prev) => prev.map((w) => (w.id === msg.workoutId ? { ...w, ...(msg.changes || {}) } : w)))
+        } else if (msg.type === 'created' && msg.record) {
+          const rec = msg.record as any
+          if (rec.user_id === user.id) {
+            setWorkouts((prev) => (prev.some((w) => w.id === rec.id) ? prev : [...prev, rec]))
+          }
+        } else if (msg.type === 'deleted') {
+          setWorkouts((prev) => prev.filter((w) => w.id !== msg.workoutId))
+        }
       }
     } catch {
       const handler = (e: StorageEvent) => {
         if (e.key !== 'workout-updated' || !e.newValue) return
         try {
           const msg = JSON.parse(e.newValue)
-          if (!msg || msg.type !== 'updated') return
+          if (!msg || !msg.type) return
           if (msg.userId && msg.userId !== user.id) return
-          setWorkouts((prev) => prev.map((w) => (w.id === msg.workoutId ? { ...w, ...(msg.changes || {}) } : w)))
+          if (msg.type === 'updated') {
+            setWorkouts((prev) => prev.map((w) => (w.id === msg.workoutId ? { ...w, ...(msg.changes || {}) } : w)))
+          } else if (msg.type === 'created' && msg.record) {
+            const rec = msg.record as any
+            if (rec.user_id === user.id) {
+              setWorkouts((prev) => (prev.some((w) => w.id === rec.id) ? prev : [...prev, rec]))
+            }
+          } else if (msg.type === 'deleted') {
+            setWorkouts((prev) => prev.filter((w) => w.id !== msg.workoutId))
+          }
         } catch {}
       }
       window.addEventListener('storage', handler)
@@ -71,9 +88,19 @@ export function UserDashboard({ user, initialStats, initialWorkouts }: UserDashb
       .channel('workouts-live')
       .on('broadcast', { event: 'workout-updated' }, (payload: any) => {
         const msg = (payload && (payload.payload || payload)) as any
-        if (!msg || msg.type !== 'updated') return
+        if (!msg || !msg.type) return
         if (msg.userId && msg.userId !== user.id) return
-        setWorkouts((prev) => prev.map((w) => (w.id === msg.workoutId ? { ...w, ...(msg.changes || {}) } : w)))
+        if (msg.type === 'updated') {
+          setWorkouts((prev) => prev.map((w) => (w.id === msg.workoutId ? { ...w, ...(msg.changes || {}) } : w)))
+        } else if (msg.type === 'created' && msg.record) {
+          // Add only if the workout belongs to this user's programs list
+          const rec = msg.record as any
+          if (rec.user_id === user.id) {
+            setWorkouts((prev) => (prev.some((w) => w.id === rec.id) ? prev : [...prev, rec]))
+          }
+        } else if (msg.type === 'deleted') {
+          setWorkouts((prev) => prev.filter((w) => w.id !== msg.workoutId))
+        }
       })
       .subscribe()
     return () => { supabase.removeChannel(channel) }
