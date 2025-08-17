@@ -708,6 +708,35 @@ export function SharedCalendar({
     }
   }, [workouts, onWorkoutUpdate])
 
+  // Apply any queued updates that happened just before navigating here (e.g., finishing a workout then going back)
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('workout-updates-queue')
+      if (!raw) return
+      const queue = JSON.parse(raw)
+      if (!Array.isArray(queue) || queue.length === 0) return
+      // Apply messages that belong to this scope
+      const applyMsgs = queue.filter((msg: any) => {
+        if (!msg || msg.type !== 'updated') return false
+        const scopeOk =
+          (typeof msg.programId === 'number' && (programId ? msg.programId === programId : scopedProgramIds.includes(msg.programId))) ||
+          (typeof msg.userId === 'string' && (!!userId && msg.userId === userId))
+        return scopeOk
+      })
+      if (applyMsgs.length === 0) return
+      let updated = workouts
+      for (const m of applyMsgs) {
+        const idNum = Number(m.workoutId)
+        if (!Number.isFinite(idNum)) continue
+        const changes = m.changes || {}
+        updated = updated.map((w) => (w.id === idNum ? { ...w, ...changes } : w))
+      }
+      onWorkoutUpdate?.(updated)
+      // Clear queue after applying
+      localStorage.removeItem('workout-updates-queue')
+    } catch {}
+  }, [workouts, onWorkoutUpdate, programId, userId, scopedProgramIds.join(',')])
+
   // Supabase broadcast cross-device fast-path
   useEffect(() => {
     const channel = supabase

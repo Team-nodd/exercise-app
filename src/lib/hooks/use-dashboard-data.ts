@@ -35,6 +35,7 @@ const dashboardCache = new Map<string, {
   }; 
   timestamp: number 
 }>()
+
 const CACHE_DURATION = 30 * 1000 // 30s
 
 export function useDashboardData({ userId, coachId, isCoach = false, initialStats, initialUpcomingWorkouts, initialRecentClients }: UseDashboardDataOptions): DashboardData {
@@ -289,6 +290,27 @@ export function useDashboardData({ userId, coachId, isCoach = false, initialStat
       return () => { if (typeof window !== 'undefined') window.removeEventListener('storage', handler) }
     }
     return () => { try { bc && bc.close() } catch {} }
+  }, [userId])
+
+  // On mount, replay any queued optimistic updates written by workout detail pages
+  useEffect(() => {
+    if (!userId) return
+    try {
+      const raw = localStorage.getItem('workout-updates-queue')
+      if (!raw) return
+      const queue = JSON.parse(raw)
+      if (!Array.isArray(queue)) return
+      const toApply = queue.filter((m: any) => m && m.type === 'updated' && (!m.userId || m.userId === userId))
+      if (toApply.length === 0) return
+      setUpcomingWorkouts((prev) => {
+        let next = prev
+        for (const m of toApply) {
+          next = next.map((w) => (w.id === m.workoutId ? { ...w, ...(m.changes || {}) } as any : w))
+        }
+        return next
+      })
+      localStorage.removeItem('workout-updates-queue')
+    } catch {}
   }, [userId])
 
   useEffect(() => {

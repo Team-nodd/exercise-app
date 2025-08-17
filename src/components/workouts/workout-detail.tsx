@@ -111,6 +111,20 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
       try {
         supabase.channel('workouts-live').send({ type: 'broadcast', event: 'workout-updated', payload })
       } catch {}
+      // Persist into a small local queue so dashboards can replay on mount
+      try {
+        const key = 'workout-updates-queue'
+        const raw = localStorage.getItem(key)
+        const arr = raw ? JSON.parse(raw) : []
+        if (Array.isArray(arr)) {
+          arr.push({ ...payload, ts: Date.now() })
+          // Keep queue bounded
+          while (arr.length > 100) arr.shift()
+          localStorage.setItem(key, JSON.stringify(arr))
+        } else {
+          localStorage.setItem(key, JSON.stringify([{ ...payload, ts: Date.now() }]))
+        }
+      } catch {}
     } catch {}
   }
 
@@ -1895,7 +1909,7 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
                 </p>
               </div>
             </div>
-            <div className="flex gap-2 sm:items-center sm:flex-row flex-row flex-col sm:space-y-0 space-y-2">
+            <div className="flex gap-2 sm:items-center sm:flex-row flex-col sm:space-y-0 space-y-2">
               <Button
                 onClick={handleOpenEmailDialog}
                 disabled={!isWorkoutCompleted()}
