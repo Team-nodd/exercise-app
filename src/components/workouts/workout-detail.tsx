@@ -290,16 +290,26 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
         setTrDetails(null)
         if (!workout || workout.workout_type !== 'cardio' || !workout.completed) return
         // Determine window for the day of the workout in UTC boundaries used by TrainerRoad
-        // Prefer scheduled day to scope the calendar correctly
-        const whenIso = workout.scheduled_date || workout.completed_at
-
-        console.log('whenIso', whenIso)
+        // Prefer the actual completion date; fallback to scheduled
+        const whenIso = workout.completed_at || workout.scheduled_date
         if (!whenIso) return
         setTrLoading(true)
         const when = new Date(whenIso)
-        // Build local day boundaries to match user's calendar day
-        const start = new Date(when.getFullYear(), when.getMonth(), when.getDate(), 0, 0, 0, 0)
-        const end = new Date(when.getFullYear(), when.getMonth(), when.getDate(), 23, 59, 59, 999)
+        // Build timezone-aware boundaries for user's local day
+        const startLocal = new Date(when.getFullYear(), when.getMonth(), when.getDate(), 0, 0, 0, 0)
+        const endLocal = new Date(when.getFullYear(), when.getMonth(), when.getDate(), 23, 59, 59, 999)
+        const isTodayLocal = (d: Date) => {
+          const now = new Date()
+          return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate()
+        }
+        const isToday = isTodayLocal(when)
+        // Widen the fetch window to account for TR timezone normalization (wider for today)
+        const widenMs = isToday ? 36 * 60 * 60 * 1000 : 12 * 60 * 60 * 1000
+        const startWindowLocal = new Date(startLocal.getTime() - widenMs)
+        const endWindowLocal = new Date(endLocal.getTime() + widenMs)
+        // Convert to ISO, preserving local-based windows
+        const start = new Date(startWindowLocal.getTime() - startWindowLocal.getTimezoneOffset() * 60000)
+        const end = new Date(endWindowLocal.getTime() - endWindowLocal.getTimezoneOffset() * 60000)
         const startStr = start.toISOString()
         const endStr = end.toISOString()
 
@@ -318,27 +328,27 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
           setTrError('No TrainerRoad activity found for this day')
           return
         }
-        // Strictly select activities whose local date matches the workout date
-        const toDateKey = (isoLike: string | Date) => {
+        // Strictly select activities whose local date matches the workout date (using local day key)
+        const toLocalKey = (isoLike: string | Date) => {
           const d = new Date(isoLike)
-          const y = d.getFullYear()
-          const m = String(d.getMonth() + 1).padStart(2, '0')
-          const da = String(d.getDate()).padStart(2, '0')
-          return `${y}-${m}-${da}`
+          return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
         }
-        const targetKey = toDateKey(when)
+        const targetKey = toLocalKey(when)
+        const isTodayKey = targetKey === toLocalKey(new Date())
         const sameDayActs = acts.filter((cur) => {
           const iso = (cur.started || cur.Started || cur.processed || cur.Processed) as string
           if (!iso) return false
-          return toDateKey(iso) === targetKey
+          return toLocalKey(iso) === targetKey
         })
-        if (sameDayActs.length === 0) {
+        // If it's today, be lenient: pick most recent from all acts
+        const pool = isTodayKey && acts.length > 0 ? acts : sameDayActs
+        if (pool.length === 0) {
           setTrLoading(false)
           setTrError('No TrainerRoad activity found for this day')
           return
         }
         const whenMs = when.getTime()
-        const best = sameDayActs.reduce((acc, cur) => {
+        const best = pool.reduce((acc, cur) => {
           const tIso = (cur.started || cur.Started || cur.processed || cur.Processed) as string
           const t = tIso ? new Date(tIso).getTime() : Number.POSITIVE_INFINITY
           const dist = Math.abs(t - whenMs)
