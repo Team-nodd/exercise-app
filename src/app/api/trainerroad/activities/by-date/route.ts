@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
+import { createServerClient } from '@/lib/supabase/server'
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,10 +14,30 @@ export async function GET(request: NextRequest) {
     }
 
     // Auto-discover username from TrainerRoad if not provided (needs cookies first)
+    // Prefer DB-stored bundle; fallback to request cookies
     const cookieStore = await cookies()
-    const trCookies = Array.from(cookieStore.getAll())
-      .filter((c) => c.name.startsWith('tr_'))
-      .map((c) => `${c.name.substring(3)}=${c.value}`)
+    let trCookies: string[] = []
+    try {
+      const supabase = await createServerClient()
+      const { data: auth } = await supabase.auth.getUser()
+      const userId = auth.user?.id
+      if (userId) {
+        const { data: sess } = await supabase
+          .from('trainerroad_sessions')
+          .select('cookies,is_active')
+          .eq('user_id', userId)
+          .eq('is_active', true)
+          .maybeSingle()
+        if (sess?.cookies) {
+          trCookies = [sess.cookies]
+        }
+      }
+    } catch {}
+    if (trCookies.length === 0) {
+      trCookies = Array.from(cookieStore.getAll())
+        .filter((c) => c.name.startsWith('tr_'))
+        .map((c) => `${c.name.substring(3)}=${c.value}`)
+    }
 
     if (!username) {
       const careerResp = await fetch('https://www.trainerroad.com/app/career', {
@@ -65,7 +86,7 @@ export async function GET(request: NextRequest) {
         Cookie: trCookies.join('; '),
         Accept: 'application/json, text/plain, */*',
         'User-Agent': 'Mozilla/5.0',
-        Referer: 'https://www.trainerroad.com/',
+        Referer: `https://www.trainerroad.com/app/career/${encodeURIComponent(username)}`,
       },
     })
 

@@ -219,6 +219,26 @@ CREATE TABLE IF NOT EXISTS public.comments (
   CONSTRAINT fk_comments_we      FOREIGN KEY (workout_exercise_id) REFERENCES public.workout_exercises(id) ON DELETE CASCADE
 );
 
+-- TRAINERROAD_SESSIONS TABLE ------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.trainerroad_sessions (
+  user_id uuid PRIMARY KEY REFERENCES public.users(id) ON DELETE CASCADE,
+  cookies text,
+  is_active boolean NOT NULL DEFAULT true,
+  expires_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger WHERE tgname = 'trainerroad_sessions_set_updated_at'
+  ) THEN
+    CREATE TRIGGER trainerroad_sessions_set_updated_at
+    BEFORE UPDATE ON public.trainerroad_sessions
+    FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+  END IF;
+END $$;
+
 -- INDEXES -------------------------------------------------------------------
 -- Users
 CREATE INDEX IF NOT EXISTS idx_users_email ON public.users (email);

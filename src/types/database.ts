@@ -321,6 +321,32 @@ export interface Database {
           created_at?: string
         }
       }
+      trainerroad_sessions: {
+        Row: {
+          user_id: string
+          cookies: string | null
+          is_active: boolean
+          created_at: string
+          updated_at: string
+          expires_at: string | null
+        }
+        Insert: {
+          user_id: string
+          cookies?: string | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+          expires_at?: string | null
+        }
+        Update: {
+          user_id?: string
+          cookies?: string | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+          expires_at?: string | null
+        }
+      }
     }
     Views: {
       [_ in never]: never

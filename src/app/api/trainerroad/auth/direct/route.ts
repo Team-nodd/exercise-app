@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
+import { createServerClient } from '@/lib/supabase/server'
 
 interface DirectAuthRequest {
   email: string
@@ -177,6 +178,21 @@ export async function POST(request: NextRequest) {
     }
 
     console.log(`✅ TRAINERROAD API: Direct authentication successful, stored ${sessionCookies.length} session cookies`)
+
+    // Persist cookies bundle to DB for seamless reuse
+    try {
+      const supabase = await createServerClient()
+      const { data: auth } = await supabase.auth.getUser()
+      const userId = auth.user?.id
+      if (userId) {
+        const bundle = sessionCookies.join('; ')
+        await supabase
+          .from('trainerroad_sessions')
+          .upsert({ user_id: userId, cookies: bundle, is_active: true, updated_at: new Date().toISOString() })
+      }
+    } catch (e) {
+      console.error('❌ TRAINERROAD API: Failed to save cookies to DB:', e)
+    }
     
     return NextResponse.json({
       success: true,

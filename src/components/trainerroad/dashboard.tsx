@@ -7,15 +7,32 @@ import { AlertCircle, CheckCircle, Loader2, RefreshCw, Activity } from 'lucide-r
 import { trainerRoadClient, TrainerRoadAPIError } from '@/lib/trainerroad/client'
 import { TrainerRoadAuthForm } from '@/components/trainerroad/auth-form'
 import { TrainerRoadWorkoutList } from '@/components/trainerroad/workout-list'
+import { createClient } from '@/lib/supabase/client'
 
 export function TrainerRoadDashboard() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isCheckingAuth, setIsCheckingAuth] = useState(true)
   const [authError, setAuthError] = useState<string | null>(null)
+  const [hasStoredSession, setHasStoredSession] = useState<boolean>(false)
+  const supabase = createClient()
 
   // Check authentication status on component mount
   useEffect(() => {
     checkAuthStatus()
+    ;(async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          const { data } = await supabase
+            .from('trainerroad_sessions')
+            .select('is_active')
+            .eq('user_id', user.id)
+            .eq('is_active', true)
+            .maybeSingle()
+          setHasStoredSession(!!data)
+        }
+      } catch {}
+    })()
   }, [])
 
   const checkAuthStatus = async () => {
@@ -117,6 +134,9 @@ export function TrainerRoadDashboard() {
             onAuthSuccess={handleAuthSuccess}
             onAuthError={handleAuthError}
           />
+          {hasStoredSession && (
+            <p className="text-xs text-gray-500 text-center mt-2">We found a stored TrainerRoad session. Try Refresh if you recently connected.</p>
+          )}
         </div>
       </div>
     )

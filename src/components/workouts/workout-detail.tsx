@@ -303,8 +303,9 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
           return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate()
         }
         const isToday = isTodayLocal(when)
-        // Widen the fetch window to account for TR timezone normalization (wider for today)
-        const widenMs = isToday ? 36 * 60 * 60 * 1000 : 12 * 60 * 60 * 1000
+        // Widen the fetch window to ±7 days to tolerate TR calendar ranges/timezone shifts
+        const widenDays = 7
+        const widenMs = widenDays * 24 * 60 * 60 * 1000
         const startWindowLocal = new Date(startLocal.getTime() - widenMs)
         const endWindowLocal = new Date(endLocal.getTime() + widenMs)
         // Convert to ISO, preserving local-based windows
@@ -335,19 +336,31 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
         }
         const targetKey = toLocalKey(when)
         const isTodayKey = targetKey === toLocalKey(new Date())
-        const sameDayActs = acts.filter((cur) => {
+        let sameDayActs = acts.filter((cur) => {
           const iso = (cur.started || cur.Started || cur.processed || cur.Processed) as string
           if (!iso) return false
           return toLocalKey(iso) === targetKey
         })
-        // If it's today, be lenient: pick most recent from all acts
-        const pool = isTodayKey && acts.length > 0 ? acts : sameDayActs
+        // Build a tolerant pool if none strictly match local date
+        const whenMs = when.getTime()
+        const toleranceMs = (isTodayKey ? 72 : 48) * 60 * 60 * 1000
+        let pool = sameDayActs
+        if (pool.length === 0) {
+          pool = acts.filter((cur) => {
+            const tIso = (cur.started || cur.Started || cur.processed || cur.Processed) as string
+            const t = tIso ? new Date(tIso).getTime() : Number.POSITIVE_INFINITY
+            return Math.abs(t - whenMs) <= toleranceMs
+          })
+        }
+        if (pool.length === 0 && acts.length > 0 && isTodayKey) {
+          // Last-resort for today: use all acts
+          pool = acts
+        }
         if (pool.length === 0) {
           setTrLoading(false)
           setTrError('No TrainerRoad activity found for this day')
           return
         }
-        const whenMs = when.getTime()
         const best = pool.reduce((acc, cur) => {
           const tIso = (cur.started || cur.Started || cur.processed || cur.Processed) as string
           const t = tIso ? new Date(tIso).getTime() : Number.POSITIVE_INFINITY
