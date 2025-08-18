@@ -6,10 +6,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Calendar, User, Plus, Eye, Dumbbell, Clock, Target } from "lucide-react"
+import { Calendar, User, Plus, Eye, Dumbbell, Clock, Target, Copy, Loader2 } from "lucide-react"
 import type { ProgramWithDetails } from "@/types"
 import { Progress } from "@/components/ui/progress"
 import { cn } from "@/lib/utils"
+import { toast } from "sonner"
 
 interface CoachProgramsProps {
   coachId: string
@@ -19,6 +20,7 @@ export function CoachPrograms({ coachId }: CoachProgramsProps) {
   const [programs, setPrograms] = useState<ProgramWithDetails[]>([])
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState<string>("all")
+  const [duplicatingProgramId, setDuplicatingProgramId] = useState<number | null>(null)
   const supabase = createClient()
 
   useEffect(() => {
@@ -102,6 +104,120 @@ export function CoachPrograms({ coachId }: CoachProgramsProps) {
     if (!program.workouts || program.workouts.length === 0) return 0
     const completedWorkouts = program.workouts.filter((w) => w.completed).length
     return Math.round((completedWorkouts / program.workouts.length) * 100)
+  }
+
+  const duplicateProgram = async (program: ProgramWithDetails) => {
+    try {
+      setDuplicatingProgramId(program.id)
+      toast("Duplicating program in the background. You'll be notified when it's ready.")
+      // 1) Create the new program
+      const { data: newProgram, error: createProgramError } = await supabase
+        .from("programs")
+        .insert({
+          name: `${program.name} (Copy)`,
+          description: program.description,
+          coach_id: program.coach_id,
+          user_id: program.user_id,
+          start_date: program.start_date,
+          end_date: program.end_date,
+          status: "draft",
+        })
+        .select()
+        .single()
+
+      if (createProgramError || !newProgram) {
+        console.error("Error creating duplicated program", createProgramError)
+        return
+      }
+
+      // 2) Fetch original workouts with embedded exercises
+      const { data: origWorkouts, error: fetchWError } = await supabase
+        .from("workouts")
+        .select(`*, workout_exercises(*)`)
+        .eq("program_id", program.id)
+        .order("order_in_program", { ascending: true })
+
+      if (fetchWError) {
+        console.error("Error fetching source workouts", fetchWError)
+      }
+
+      // 3) Duplicate sequentially to keep mapping stable
+      if (origWorkouts && origWorkouts.length > 0) {
+        for (const w of origWorkouts as any[]) {
+          const { data: newW, error: createWError } = await supabase
+            .from("workouts")
+            .insert({
+              program_id: newProgram.id,
+              user_id: w.user_id,
+              name: w.name,
+              workout_type: w.workout_type,
+              scheduled_date: w.scheduled_date,
+              order_in_program: w.order_in_program ?? 0,
+              intensity_type: w.intensity_type,
+              duration_minutes: w.duration_minutes,
+              target_tss: w.target_tss,
+              target_ftp: w.target_ftp,
+              notes: w.notes,
+              cardio_exercise_id: w.workout_type === "cardio" ? w.cardio_exercise_id ?? null : null,
+              completed: false,
+              completed_at: null,
+            })
+            .select()
+            .single()
+
+          if (createWError || !newW) {
+            console.error("Error creating duplicated workout", createWError)
+            continue
+          }
+
+          // Duplicate gym exercises if any
+          if (w.workout_type === "gym" && Array.isArray(w.workout_exercises) && w.workout_exercises.length > 0) {
+            const dupExercises = w.workout_exercises.map((ex: any) => ({
+              workout_id: newW.id,
+              exercise_id: ex.exercise_id,
+              order_in_workout: ex.order_in_workout,
+              sets: ex.sets,
+              reps: ex.reps,
+              weight: ex.weight,
+              rest_seconds: ex.rest_seconds,
+              volume_level: ex.volume_level,
+              completed: false,
+            }))
+            const { error: exErr } = await supabase.from("workout_exercises").insert(dupExercises)
+            if (exErr) {
+              console.error("Error duplicating exercises", exErr)
+            }
+          }
+        }
+      }
+
+      // Refresh list in place
+      try {
+        let q = supabase
+          .from("programs")
+          .select(
+            `
+            *,
+            coach:users!programs_coach_id_fkey(*),
+            user:users!programs_user_id_fkey(*),
+            workouts(*)
+          `,
+          )
+          .eq("coach_id", coachId)
+          .order("created_at", { ascending: false })
+        if (statusFilter !== "all") {
+          q = q.eq("status", statusFilter)
+        }
+        const { data: refreshed } = await q
+        if (refreshed) setPrograms(refreshed as ProgramWithDetails[])
+        toast("Program duplicated successfully.")
+      } catch {}
+    } catch (e) {
+      console.error("Unexpected error duplicating program", e)
+      toast("Failed to duplicate program.")
+    } finally {
+      setDuplicatingProgramId(null)
+    }
   }
 
   if (loading) {
@@ -313,6 +429,19 @@ export function CoachPrograms({ coachId }: CoachProgramsProps) {
                       Created {new Date(program.created_at).toLocaleDateString()}
                     </div>
                     <div className="space-x-2 flex items-center">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => duplicateProgram(program)}
+                        disabled={duplicatingProgramId === program.id}
+                        title="Duplicate program"
+                      >
+                        {duplicatingProgramId === program.id ? (
+                          <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                        ) : (
+                          <Copy className="h-4 w-4 mr-1" />
+                        )}
+                      </Button>
                       <Button variant="outline" size="sm" href={`/coach/programs/${program.id}`}>
                         <Eye className="h-4 w-4 mr-1" />
                         View

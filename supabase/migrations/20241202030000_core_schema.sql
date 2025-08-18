@@ -531,5 +531,44 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+-- TRAINERROAD_SESSIONS RLS --------------------------------------------------
+ALTER TABLE public.trainerroad_sessions ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'trainerroad_sessions' AND policyname = 'trainerroad_sessions_owner_select'
+  ) THEN
+    CREATE POLICY trainerroad_sessions_owner_select
+      ON public.trainerroad_sessions
+      FOR SELECT
+      USING (auth.uid() = user_id);
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'trainerroad_sessions' AND policyname = 'trainerroad_sessions_owner_insert'
+  ) THEN
+    CREATE POLICY trainerroad_sessions_owner_insert
+      ON public.trainerroad_sessions
+      FOR INSERT
+      WITH CHECK (auth.uid() = user_id);
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'trainerroad_sessions' AND policyname = 'trainerroad_sessions_owner_update'
+  ) THEN
+    CREATE POLICY trainerroad_sessions_owner_update
+      ON public.trainerroad_sessions
+      FOR UPDATE
+      USING (auth.uid() = user_id)
+      WITH CHECK (auth.uid() = user_id);
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'trainerroad_sessions' AND policyname = 'trainerroad_sessions_owner_delete'
+  ) THEN
+    CREATE POLICY trainerroad_sessions_owner_delete
+      ON public.trainerroad_sessions
+      FOR DELETE
+      USING (auth.uid() = user_id);
+  END IF;
+END $$;
+
 -- Done ----------------------------------------------------------------------
 
