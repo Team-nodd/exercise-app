@@ -2000,7 +2000,7 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
         <CardContent>
           <div className="space-y-4 mb-6 max-h-80 overflow-y-auto pr-2">
             {workoutComments.length === 0 ? (
-              <p className="text-sm text-gray-500 dark:text-gray-400 text-left py-4">No comments yet. Be the first to leave one!</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 text-left py-2">No comments yet. Be the first to leave one!</p>
             ) : (
               workoutComments.map((comment) => (
                 <div id={`comment-${comment.id}`} key={comment.id} className="flex items-start gap-3">

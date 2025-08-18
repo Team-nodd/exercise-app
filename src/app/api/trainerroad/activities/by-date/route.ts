@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (!username) {
-      return NextResponse.json({ error: 'Unable to resolve TrainerRoad username' }, { status: 400 })
+      return NextResponse.json({ error: 'Unable to resolve TrainerRoad username. Try to login first.' }, { status: 400 })
     }
 
     if (trCookies.length === 0) {
