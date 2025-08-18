@@ -43,7 +43,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Note: Do not gate by cookie here. In a PWA, sessions persist in localStorage
-  // on the client. Redirects based on cookies cause unnecessary login prompts
+  // on the client. Redirects based on cookies cause unnecessary login promptsh
   // on app relaunch and do not work offline. Client-side guards will handle it.
 
   return response

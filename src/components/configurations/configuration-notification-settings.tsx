@@ -9,6 +9,7 @@ import { useAuth } from "@/components/providers/auth-provider"
 import { Bell, CheckCircle, AlertCircle, Loader2 } from "lucide-react"
 import type { User } from "@/types"
 import { H6 } from "../ui/heading"
+import { TrainerRoadDashboard } from "@/components/trainerroad/dashboard"
 
 interface ConfigurationNotificationSettingsProps {
   profile: User
@@ -296,6 +297,14 @@ export function ConfigurationNotificationSettings({ profile }: ConfigurationNoti
         </div>
       </CardContent>
     </Card>
+
+      {/* TrainerRoad Integration (users only) */}
+      {profile.role === "user" && (
+        <div className="space-y-4">
+          <H6>TrainerRoad</H6>
+          <TrainerRoadDashboard />
+        </div>
+      )}
     </div>
   )
 } 

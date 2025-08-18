@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { CheckCircle, Circle, Dumbbell,  AlertCircle, ArrowLeft, MessageSquare, Send,  Calendar, Zap,  Activity, ChevronDown, Loader2, RefreshCw, CheckCircle2, Clock,  Mail, Save, Timer, Share } from 'lucide-react';
+import { CheckCircle, Circle, Dumbbell,  AlertCircle, ArrowLeft, MessageSquare, Send,  Calendar, Zap,  Activity, ChevronDown, Loader2, RefreshCw, CheckCircle2, Clock,  Mail, Save, Timer, Share, Folder, Target } from 'lucide-react';
 import type { WorkoutWithDetails, WorkoutExerciseWithDetails, Comment } from '@/types';
 import { notificationService } from '@/lib/notifications/notification-service';
 
@@ -29,6 +29,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import Image from 'next/image';
+import { Card as UiCard, CardHeader as UiCardHeader, CardTitle as UiCardTitle, CardContent as UiCardContent } from '@/components/ui/card'
+import { Calendar as CalIcon, Zap as ZapIcon, Activity as ActivityIcon, Image as ImageIcon, Map as MapIcon, Gauge as GaugeIcon, BarChart3 as BarChartIcon } from 'lucide-react'
 
 interface WorkoutDetailProps {
   workoutId: string;
@@ -275,6 +277,99 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
       setLoading(false);
     }
   }, [workoutId, userId, supabase]);
+
+  // TrainerRoad integration: fetch and display data for completed cardio workouts
+  const [trLoading, setTrLoading] = useState(false)
+  const [trError, setTrError] = useState<string | null>(null)
+  const [trDetails, setTrDetails] = useState<any | null>(null)
+
+  useEffect(() => {
+    (async () => {
+      try {
+        setTrError(null)
+        setTrDetails(null)
+        if (!workout || workout.workout_type !== 'cardio' || !workout.completed) return
+        // Determine window for the day of the workout in UTC boundaries used by TrainerRoad
+        // Prefer scheduled day to scope the calendar correctly
+        const whenIso = workout.scheduled_date || workout.completed_at
+
+        console.log('whenIso', whenIso)
+        if (!whenIso) return
+        setTrLoading(true)
+        const when = new Date(whenIso)
+        // Build local day boundaries to match user's calendar day
+        const start = new Date(when.getFullYear(), when.getMonth(), when.getDate(), 0, 0, 0, 0)
+        const end = new Date(when.getFullYear(), when.getMonth(), when.getDate(), 23, 59, 59, 999)
+        const startStr = start.toISOString()
+        const endStr = end.toISOString()
+
+        // 1) Fetch activities for that day
+        const actResp = await fetch(`/api/trainerroad/activities/by-date?start=${encodeURIComponent(startStr)}&end=${encodeURIComponent(endStr)}&wid=${workout.id}`, {
+          credentials: 'include',
+          cache: 'no-store',
+        })
+        if (!actResp.ok) {
+          const msg = (await actResp.json().catch(() => ({} as any))).error || 'Failed to fetch TrainerRoad activities'
+          throw new Error(msg)
+        }
+        const acts: any[] = await actResp.json()
+        if (!Array.isArray(acts) || acts.length === 0) {
+          setTrLoading(false)
+          setTrError('No TrainerRoad activity found for this day')
+          return
+        }
+        // Strictly select activities whose local date matches the workout date
+        const toDateKey = (isoLike: string | Date) => {
+          const d = new Date(isoLike)
+          const y = d.getFullYear()
+          const m = String(d.getMonth() + 1).padStart(2, '0')
+          const da = String(d.getDate()).padStart(2, '0')
+          return `${y}-${m}-${da}`
+        }
+        const targetKey = toDateKey(when)
+        const sameDayActs = acts.filter((cur) => {
+          const iso = (cur.started || cur.Started || cur.processed || cur.Processed) as string
+          if (!iso) return false
+          return toDateKey(iso) === targetKey
+        })
+        if (sameDayActs.length === 0) {
+          setTrLoading(false)
+          setTrError('No TrainerRoad activity found for this day')
+          return
+        }
+        const whenMs = when.getTime()
+        const best = sameDayActs.reduce((acc, cur) => {
+          const tIso = (cur.started || cur.Started || cur.processed || cur.Processed) as string
+          const t = tIso ? new Date(tIso).getTime() : Number.POSITIVE_INFINITY
+          const dist = Math.abs(t - whenMs)
+          return !acc || dist < acc._dist ? { ...cur, _dist: dist } : acc
+        }, null as any)
+        const workoutId = best?.workoutId || best?.WorkoutId
+        if (!workoutId) {
+          setTrLoading(false)
+          setTrError('TrainerRoad workout id not found for the activity')
+          return
+        }
+
+        // 2) Fetch workout information by id
+        const infoResp = await fetch(`/api/trainerroad/workout-information?ids=${encodeURIComponent(String(workoutId))}&wid=${workout.id}`, {
+          credentials: 'include',
+          cache: 'no-store',
+        })
+        if (!infoResp.ok) {
+          const msg = (await infoResp.json().catch(() => ({} as any))).error || 'Failed to fetch TrainerRoad workout info'
+          throw new Error(msg)
+        }
+        const infoArr: any[] = await infoResp.json()
+        const info = Array.isArray(infoArr) && infoArr.length > 0 ? infoArr[0] : null
+        setTrDetails({ activity: best, workout: info })
+        setTrLoading(false)
+      } catch (e: any) {
+        setTrLoading(false)
+        setTrError(e?.message || 'Failed to load TrainerRoad data')
+      }
+    })()
+  }, [workout])
 
   // Fetch comments for workout
   const fetchComments = useCallback(
@@ -1815,6 +1910,83 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
             )}
           </CardContent>
         </Card>
+      )}
+
+      {/* TrainerRoad Data Card for completed cardio workouts */}
+      {workout.workout_type === 'cardio' && workout.completed && (
+        <UiCard className="mt-5">
+          <UiCardHeader>
+            <UiCardTitle className="flex items-center gap-2">
+              <ActivityIcon className="h-5 w-5" />
+              TrainerRoad Data
+            </UiCardTitle>
+          </UiCardHeader>
+          <UiCardContent>
+            {trLoading ? (
+              <div className="flex items-center gap-2 text-sm">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading TrainerRoad data...
+              </div>
+            ) : trError ? (
+              <div className="flex items-center gap-2 text-sm text-red-600">
+                <AlertCircle className="h-4 w-4" />
+                {trError}
+              </div>
+            ) : trDetails ? (
+              <div className="space-y-3">
+
+                {/* Image */}
+                {trDetails.workout?.PicUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={trDetails.workout.PicUrl} alt={trDetails.workout.Name || 'Workout'} className="w-full rounded-md border" />
+                ) : (
+                  <div className="flex items-center gap-2 text-sm text-gray-500"><ImageIcon className="h-4 w-4" /> No image</div>
+                )}
+                {/* Name */}
+                <div className="flex items-center gap-2 text-base font-semibold pt-2">
+                  <Target className="h-4 w-4" />
+                  {trDetails.workout?.Name ?? trDetails.activity?.name ?? trDetails.activity?.Name ?? 'Activity'}
+                </div>
+
+                {/* Facts grid */}
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+                  <div className="bg-gray-50 dark:bg-gray-800 rounded p-2">
+                    <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400 mb-1"><Clock className="h-4 w-4" /> Duration</div>
+                    <div className="font-medium">{trDetails.workout?.Duration || `${Math.round((trDetails.activity?.durationInSeconds||trDetails.activity?.DurationInSeconds||0)/60)} min`}</div>
+                  </div>
+                  <div className="bg-gray-50 dark:bg-gray-800 rounded p-2">
+                    <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400 mb-1"><ZapIcon className="h-4 w-4" /> TSS</div>
+                    <div className="font-medium">{trDetails.workout?.Tss ?? trDetails.activity?.tss ?? trDetails.activity?.Tss ?? '-'}</div>
+                  </div>
+                  <div className="bg-gray-50 dark:bg-gray-800 rounded p-2">
+                    <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400 mb-1"><ActivityIcon className="h-4 w-4" /> kJ</div>
+                    <div className="font-medium">{trDetails.workout?.Kj ?? trDetails.activity?.kj ?? trDetails.activity?.Kj ?? '-'}</div>
+                  </div>
+                  <div className="bg-gray-50 dark:bg-gray-800 rounded p-2">
+                    <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400 mb-1"><GaugeIcon className="h-4 w-4" /> Intensity Factor</div>
+                    <div className="font-medium">{(() => {
+                      const raw = trDetails.workout?.IntensityFactor ?? trDetails.activity?.intensityFactor ?? trDetails.activity?.IntensityFactor
+                      if (raw == null) return '-'
+                      const num = Number(raw)
+                      const normalized = num > 1.5 ? num / 100 : num
+                      return normalized.toFixed(2)
+                    })()}</div>
+                  </div>
+                  <div className="bg-gray-50 dark:bg-gray-800 rounded p-2">
+                    <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400 mb-1"><BarChartIcon className="h-4 w-4" /> Difficulty</div>
+                    <div className="font-medium">{trDetails.activity?.progressionDetails?.difficultyRating ?? trDetails.workout?.WorkoutDifficultyRating ?? '-'}</div>
+                  </div>
+                  <div className="bg-gray-50 dark:bg-gray-800 rounded p-2">
+                    <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400 mb-1"><MapIcon className="h-4 w-4" /> Inside/Outside</div>
+                    <div className="font-medium">{(trDetails.workout?.IsOutside ?? trDetails.activity?.isOutside ?? trDetails.activity?.IsOutside) ? 'Outside' : 'Inside'}</div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-sm text-gray-500">No TrainerRoad data found.</div>
+            )}
+          </UiCardContent>
+        </UiCard>
       )}
 
       {/* Comments Section */}
