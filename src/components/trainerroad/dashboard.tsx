@@ -123,7 +123,7 @@ export function TrainerRoadDashboard() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 mb-3">
       {/* Connection Status */}
       <Card className="border-green-200 bg-green-50 dark:bg-green-900/20">
         <CardContent>
@@ -139,7 +139,7 @@ export function TrainerRoadDashboard() {
                 </p>
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 sm:flex-row flex-col ">
               <Button
                 variant="outline"
                 size="sm"
@@ -166,7 +166,7 @@ export function TrainerRoadDashboard() {
       </Card>
 
       {/* Workout List */}
-      <TrainerRoadWorkoutList />
+      {/* <TrainerRoadWorkoutList /> */}
     </div>
   )
 }
