@@ -83,6 +83,8 @@ export function ClientDetails({ client, initialProgramId }: ClientCalendarProps)
     fetchData()
   }, [client.id, supabase])
 
+
+
   // Get selected program object
   const selectedProgramObj = useMemo(
     () => (selectedProgram === "all" ? null : (programs.find((p) => p.id === Number(selectedProgram)) ?? null)),
@@ -108,8 +110,13 @@ export function ClientDetails({ client, initialProgramId }: ClientCalendarProps)
     return `${month}, ${day}, ${year}`
   }
 
-  const openCreateForSelected = async () => {
-    if (!selectedProgramObj) return
+  const openCreateForSelected = async (scheduledDate?: Date) => {
+    console.log('openCreateForSelected called with scheduledDate:', scheduledDate)
+    if (!selectedProgramObj) {
+      // Show program selection alert when no program is selected
+      // This will be handled by the SharedCalendar component
+      return
+    }
     const { data } = await supabase
       .from("programs")
       .select(`*, coach:users!programs_coach_id_fkey(*), user:users!programs_user_id_fkey(*)`)
@@ -118,6 +125,7 @@ export function ClientDetails({ client, initialProgramId }: ClientCalendarProps)
 
     if (data) {
       setDialogProgram(data as ProgramWithDetails)
+      // The BaseWorkoutManager will handle opening the dialog when createDialogProgram is set
     }
   }
 

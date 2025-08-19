@@ -18,7 +18,7 @@ export function CreateWorkoutDialog({
   onCreated?: () => void
   scheduledDate?: Date
 }) {
-  console.log('CreateWorkoutDialog received scheduledDate:', scheduledDate)
+  console.log('CreateWorkoutDialog received scheduledDate:', scheduledDate, 'open:', open)
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] overflow-y-auto p-0">

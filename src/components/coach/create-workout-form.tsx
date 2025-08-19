@@ -35,6 +35,7 @@ interface WorkoutExercise {
 }
 
 export function CreateWorkoutForm({ program, redirectOnSuccess = true, onSuccess, onCancel, initialScheduledDate }: CreateWorkoutFormProps) {
+  console.log('CreateWorkoutForm received initialScheduledDate:', initialScheduledDate)
   const [name, setName] = useState("")
   const [workoutType, setWorkoutType] = useState<"gym" | "cardio">("gym")
   const [scheduledDate, setScheduledDate] = useState("")

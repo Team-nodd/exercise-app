@@ -10,10 +10,11 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogDescription } from "@/components/ui/dialog"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { toast } from "sonner"
-import { Calendar, ChevronLeft, ChevronRight, Edit, Copy, Loader2, Clock, Dumbbell, Plus } from "lucide-react"
+import { Calendar, ChevronLeft, ChevronRight, Edit, Copy, Loader2, Clock, Dumbbell, Plus, AlertTriangle } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useMediaQuery } from "@/lib/hooks/use-media-query"
 import type { WorkoutWithDetails } from "@/types"
@@ -76,6 +77,7 @@ export function SharedCalendar({
   const [showWorkoutDialog, setShowWorkoutDialog] = useState(false)
   const [editingWorkout, setEditingWorkout] = useState<WorkoutWithDetails | null>(null)
   const [duplicatingWorkout, setDuplicatingWorkout] = useState<number | null>(null)
+  const [showProgramAlert, setShowProgramAlert] = useState(false)
 
   // New: per-workout date state for dialog reschedule on mobile (user role)
   const [rescheduleDateById, setRescheduleDateById] = useState<Record<number, string>>({})
@@ -313,8 +315,13 @@ export function SharedCalendar({
     const workoutsForDay = getWorkoutsForDate(date)
   
     if (workoutsForDay.length === 0) {
-      // For coaches, directly open create workout dialog
+      // For coaches, check if program is selected first
       if (userRole === "coach" && !isReadOnly) {
+        if (!programId) {
+          setShowProgramAlert(true)
+          return
+        }
+        console.log('SharedCalendar: calling onCreateWorkout with date:', date)
         onCreateWorkout?.(date)
       }
       return
@@ -484,46 +491,70 @@ export function SharedCalendar({
       const isToday = formatDateForComparison(date) === formatDateForComparison(today)
       const isDragOver = dragOverDate && formatDateForComparison(dragOverDate) === formatDateForComparison(date)
 
-      days.push(
-        <div key={`prev-${day}`} className="relative">
-          <div
-            className={cn(
-              "h-20 sm:h-24 p-1 border border-gray-100 dark:border-gray-800 relative cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors flex flex-col opacity-40",
-              isToday && "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800",
-              isDragOver && "bg-green-100 dark:bg-green-900/20 border-green-300 dark:border-green-700 opacity-100",
-              
-              workoutsForDay.length === 0 && userRole === "coach" && !isReadOnly && "cursor-pointer",
-            )}
-            onClick={(e) => handleDayClick(date, e)}
-            onDragOver={(e) => handleDragOver(e, date)}
-            onDragLeave={handleDragLeave}
-            onDrop={(e) => handleDrop(e, date)}
-          >
-            <div className="text-xs sm:text-sm font-medium text-gray-400 dark:text-gray-600">{day}</div>
-            <div className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide mt-1 space-y-0.5">
-              {workoutsForDay.map((workout) => (
-                <div
-                  key={workout.id}
-                  draggable={!isReadOnly}
-                  onDragStart={(e: React.DragEvent) => handleDragStart(e, workout)}
-                  className={cn(
-                    "block w-full text-xs font-medium px-1 py-0.5 rounded truncate cursor-pointer",
-                    !isReadOnly && "cursor-move",
-                    workout.completed
-                      ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                      : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-                    draggedWorkout?.id === workout.id && "opacity-50",
-                  )}
-                  title={workout.name}
-                >
-                  {workout.name}
-                </div>
-              ))}
-            </div>
-          </div>
-          
-        </div>,
-      )
+             days.push(
+         <div key={`prev-${day}`} className="relative">
+           {workoutsForDay.length === 0 && userRole === "coach" && !isReadOnly ? (
+             <TooltipProvider>
+               <Tooltip>
+                 <TooltipTrigger asChild>
+                   <div
+                     className={cn(
+                       "h-20 sm:h-24 p-1 border border-gray-100 dark:border-gray-800 relative cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors flex flex-col opacity-40",
+                       isToday && "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800",
+                       isDragOver && "bg-green-100 dark:bg-green-900/20 border-green-300 dark:border-green-700 opacity-100",
+                     )}
+                     onClick={(e) => handleDayClick(date, e)}
+                     onDragOver={(e) => handleDragOver(e, date)}
+                     onDragLeave={handleDragLeave}
+                     onDrop={(e) => handleDrop(e, date)}
+                   >
+                     <div className="text-xs sm:text-sm font-medium text-gray-400 dark:text-gray-600">{day}</div>
+                     <div className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide mt-1 space-y-0.5">
+                     </div>
+                   </div>
+                 </TooltipTrigger>
+                 <TooltipContent>
+                   <p>Add Workout</p>
+                 </TooltipContent>
+               </Tooltip>
+             </TooltipProvider>
+           ) : (
+             <div
+               className={cn(
+                 "h-20 sm:h-24 p-1 border border-gray-100 dark:border-gray-800 relative cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors flex flex-col opacity-40",
+                 isToday && "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800",
+                 isDragOver && "bg-green-100 dark:bg-green-900/20 border-green-300 dark:border-green-700 opacity-100",
+               )}
+               onClick={(e) => handleDayClick(date, e)}
+               onDragOver={(e) => handleDragOver(e, date)}
+               onDragLeave={handleDragLeave}
+               onDrop={(e) => handleDrop(e, date)}
+             >
+               <div className="text-xs sm:text-sm font-medium text-gray-400 dark:text-gray-600">{day}</div>
+               <div className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide mt-1 space-y-0.5">
+                 {workoutsForDay.map((workout) => (
+                   <div
+                     key={workout.id}
+                     draggable={!isReadOnly}
+                     onDragStart={(e: React.DragEvent) => handleDragStart(e, workout)}
+                     className={cn(
+                       "block w-full text-xs font-medium px-1 py-0.5 rounded truncate cursor-pointer",
+                       !isReadOnly && "cursor-move",
+                       workout.completed
+                         ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                         : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+                       draggedWorkout?.id === workout.id && "opacity-50",
+                     )}
+                     title={workout.name}
+                   >
+                     {workout.name}
+                   </div>
+                 ))}
+               </div>
+             </div>
+           )}
+         </div>,
+       )
     }
 
     // Days of the current month
@@ -534,47 +565,72 @@ export function SharedCalendar({
       const isPast = date < today && !isToday
       const isDragOver = dragOverDate && formatDateForComparison(dragOverDate) === formatDateForComparison(date)
 
-      days.push(
-        <div key={day} className="relative">
-          <div
-            className={cn(
-              "h-20 sm:h-24 p-1 border border-gray-100 dark:border-gray-800 relative cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors flex flex-col",
-              isToday && "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800",
-              isPast && "text-gray-400 dark:text-gray-600",
-              isDragOver && "bg-green-100 dark:bg-green-900/20 border-green-300 dark:border-green-700",
-              
-              workoutsForDay.length === 0 && userRole === "coach" && !isReadOnly && "cursor-pointer",
-            )}
-            onClick={(e) => handleDayClick(date, e)}
-            onDragOver={(e) => handleDragOver(e, date)}
-            onDragLeave={handleDragLeave}
-            onDrop={(e) => handleDrop(e, date)}
-          >
-            <div className="text-xs sm:text-sm font-medium">{day}</div>
-            <div className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide mt-1 space-y-0.5">
-              {workoutsForDay.map((workout) => (
-                <div
-                  key={workout.id}
-                  draggable={!isReadOnly}
-                  onDragStart={(e: React.DragEvent) => handleDragStart(e, workout)}
-                  className={cn(
-                    "block w-full text-xs font-medium px-1 py-0.5 rounded truncate cursor-pointer",
-                    !isReadOnly && "cursor-move",
-                    workout.completed
-                      ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                      : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-                    draggedWorkout?.id === workout.id && "opacity-50",
-                  )}
-                  title={workout.name}
-                >
-                  {workout.name}
-                </div>
-              ))}
-            </div>
-          </div>
-          
-        </div>
-      )
+             days.push(
+         <div key={day} className="relative">
+           {workoutsForDay.length === 0 && userRole === "coach" && !isReadOnly ? (
+             <TooltipProvider>
+               <Tooltip>
+                 <TooltipTrigger asChild>
+                   <div
+                     className={cn(
+                       "h-20 sm:h-24 p-1 border border-gray-100 dark:border-gray-800 relative cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors flex flex-col",
+                       isToday && "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800",
+                       isPast && "text-gray-400 dark:text-gray-600",
+                       isDragOver && "bg-green-100 dark:bg-green-900/20 border-green-300 dark:border-green-700",
+                     )}
+                     onClick={(e) => handleDayClick(date, e)}
+                     onDragOver={(e) => handleDragOver(e, date)}
+                     onDragLeave={handleDragLeave}
+                     onDrop={(e) => handleDrop(e, date)}
+                   >
+                     <div className="text-xs sm:text-sm font-medium">{day}</div>
+                     <div className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide mt-1 space-y-0.5">
+                     </div>
+                   </div>
+                 </TooltipTrigger>
+                 <TooltipContent>
+                   <p>Add Workout</p>
+                 </TooltipContent>
+               </Tooltip>
+             </TooltipProvider>
+           ) : (
+             <div
+               className={cn(
+                 "h-20 sm:h-24 p-1 border border-gray-100 dark:border-gray-800 relative cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors flex flex-col",
+                 isToday && "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800",
+                 isPast && "text-gray-400 dark:text-gray-600",
+                 isDragOver && "bg-green-100 dark:bg-green-900/20 border-green-300 dark:border-green-700",
+               )}
+               onClick={(e) => handleDayClick(date, e)}
+               onDragOver={(e) => handleDragOver(e, date)}
+               onDragLeave={handleDragLeave}
+               onDrop={(e) => handleDrop(e, date)}
+             >
+               <div className="text-xs sm:text-sm font-medium">{day}</div>
+               <div className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide mt-1 space-y-0.5">
+                 {workoutsForDay.map((workout) => (
+                   <div
+                     key={workout.id}
+                     draggable={!isReadOnly}
+                     onDragStart={(e: React.DragEvent) => handleDragStart(e, workout)}
+                     className={cn(
+                       "block w-full text-xs font-medium px-1 py-0.5 rounded truncate cursor-pointer",
+                       !isReadOnly && "cursor-move",
+                       workout.completed
+                         ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                         : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+                       draggedWorkout?.id === workout.id && "opacity-50",
+                     )}
+                     title={workout.name}
+                   >
+                     {workout.name}
+                   </div>
+                 ))}
+               </div>
+             </div>
+           )}
+         </div>
+       )
     }
 
     // Calculate how many days we need from next month to complete the grid
@@ -590,46 +646,70 @@ export function SharedCalendar({
       const isToday = formatDateForComparison(date) === formatDateForComparison(today)
       const isDragOver = dragOverDate && formatDateForComparison(dragOverDate) === formatDateForComparison(date)
 
-      days.push(
-        <div key={`next-${day}`} className="relative">
-          <div
-            className={cn(
-              "h-20 sm:h-24 p-1 border border-gray-100 dark:border-gray-800 relative cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors flex flex-col opacity-40",
-              isToday && "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800",
-              isDragOver && "bg-green-100 dark:bg-green-900/20 border-green-300 dark:border-green-700 opacity-100",
-              
-              workoutsForDay.length === 0 && userRole === "coach" && !isReadOnly && "cursor-pointer",
-            )}
-            onClick={(e) => handleDayClick(date, e)}
-            onDragOver={(e) => handleDragOver(e, date)}
-            onDragLeave={handleDragLeave}
-            onDrop={(e) => handleDrop(e, date)}
-          >
-            <div className="text-xs sm:text-sm font-medium text-gray-400 dark:text-gray-600">{day}</div>
-            <div className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide mt-1 space-y-0.5">
-              {workoutsForDay.map((workout) => (
-                <div
-                  key={workout.id}
-                  draggable={!isReadOnly}
-                  onDragStart={(e: React.DragEvent) => handleDragStart(e, workout)}
-                  className={cn(
-                    "block w-full text-xs font-medium px-1 py-0.5 rounded truncate cursor-pointer",
-                    !isReadOnly && "cursor-move",
-                    workout.completed
-                      ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                      : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-                    draggedWorkout?.id === workout.id && "opacity-50",
-                  )}
-                  title={workout.name}
-                >
-                  {workout.name}
-                </div>
-              ))}
-            </div>
-          </div>
-          
-        </div>,
-      )
+             days.push(
+         <div key={`next-${day}`} className="relative">
+           {workoutsForDay.length === 0 && userRole === "coach" && !isReadOnly ? (
+             <TooltipProvider>
+               <Tooltip>
+                 <TooltipTrigger asChild>
+                   <div
+                     className={cn(
+                       "h-20 sm:h-24 p-1 border border-gray-100 dark:border-gray-800 relative cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors flex flex-col opacity-40",
+                       isToday && "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800",
+                       isDragOver && "bg-green-100 dark:bg-green-900/20 border-green-300 dark:border-green-700 opacity-100",
+                     )}
+                     onClick={(e) => handleDayClick(date, e)}
+                     onDragOver={(e) => handleDragOver(e, date)}
+                     onDragLeave={handleDragLeave}
+                     onDrop={(e) => handleDrop(e, date)}
+                   >
+                     <div className="text-xs sm:text-sm font-medium text-gray-400 dark:text-gray-600">{day}</div>
+                     <div className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide mt-1 space-y-0.5">
+                     </div>
+                   </div>
+                 </TooltipTrigger>
+                 <TooltipContent>
+                   <p>Add program</p>
+                 </TooltipContent>
+               </Tooltip>
+             </TooltipProvider>
+           ) : (
+             <div
+               className={cn(
+                 "h-20 sm:h-24 p-1 border border-gray-100 dark:border-gray-800 relative cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors flex flex-col opacity-40",
+                 isToday && "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800",
+                 isDragOver && "bg-green-100 dark:bg-green-900/20 border-green-300 dark:border-green-700 opacity-100",
+               )}
+               onClick={(e) => handleDayClick(date, e)}
+               onDragOver={(e) => handleDragOver(e, date)}
+               onDragLeave={handleDragLeave}
+               onDrop={(e) => handleDrop(e, date)}
+             >
+               <div className="text-xs sm:text-sm font-medium text-gray-400 dark:text-gray-600">{day}</div>
+               <div className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide mt-1 space-y-0.5">
+                 {workoutsForDay.map((workout) => (
+                   <div
+                     key={workout.id}
+                     draggable={!isReadOnly}
+                     onDragStart={(e: React.DragEvent) => handleDragStart(e, workout)}
+                     className={cn(
+                       "block w-full text-xs font-medium px-1 py-0.5 rounded truncate cursor-pointer",
+                       !isReadOnly && "cursor-move",
+                       workout.completed
+                         ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                         : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+                       draggedWorkout?.id === workout.id && "opacity-50",
+                     )}
+                     title={workout.name}
+                   >
+                     {workout.name}
+                   </div>
+                 ))}
+               </div>
+             </div>
+           )}
+         </div>,
+       )
     }
 
     return days
@@ -849,11 +929,13 @@ export function SharedCalendar({
                 className="hidden sm:flex"
                 size="sm"
                 onClick={() => {
-                  if (!programId) return
-                  onCreateWorkout?.()
+                  if (!programId) {
+                    setShowProgramAlert(true)
+                  } else {
+                    onCreateWorkout?.()
+                  }
                 }}
-                disabled={!programId}
-                aria-disabled={!programId}
+                // Button is always enabled, so remove disabled/aria-disabled
                 title={!programId ? "First choose a program please" : undefined}
               >
                 <Plus className="h-4 w-4 mr-2" />
@@ -872,7 +954,7 @@ export function SharedCalendar({
                 "absolute left-0 top-0 w-20 h-full border-r-2 z-10 flex items-center justify-center transition-all duration-300 pointer-events-none",
                 navigationDirection === "prev"
                   ? "bg-blue-300/30 dark:bg-blue-700/30 border-blue-400 dark:border-blue-600"
-                  : "bg-blue-200/15 dark:bg-blue-800/15 border-blue-300/50 dark:border-blue-700/50",
+                  : "bg-bltue-200/15 dark:bg-blue-800/15 border-blue-300/50 dark:border-blue-700/50",
               )}
             >
               <div className="flex flex-col items-center gap-1">
@@ -1132,10 +1214,15 @@ export function SharedCalendar({
              {userRole === "coach" && !isReadOnly && (
                <Button
                  onClick={() => {
+                   if (!programId) {
+                     setShowWorkoutDialog(false)
+                     setShowProgramAlert(true)
+                     return
+                   }
                    setShowWorkoutDialog(false)
                    onCreateWorkout?.(selectedDate || undefined)
                  }}
-                 disabled={!programId}
+                 disabled={false}
                  className="mr-auto"
                >
                  <Plus className="h-4 w-4 mr-2" />
@@ -1161,6 +1248,26 @@ export function SharedCalendar({
           await refetchScope()
         }}
       />
+
+      {/* Program Selection Alert Dialog */}
+      <Dialog open={showProgramAlert} onOpenChange={setShowProgramAlert}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-yellow-800 dark:text-yellow-200">
+              <AlertTriangle className="h-5 w-5" />
+              Program Required
+            </DialogTitle>
+            <DialogDescription className="text-yellow-900/80 dark:text-yellow-100/80">
+              You need to select a program first before creating a workout.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setShowProgramAlert(false)}>
+              Got it
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   )
 }

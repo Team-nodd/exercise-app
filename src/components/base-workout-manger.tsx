@@ -125,6 +125,14 @@ export function BaseWorkoutManager({
     }
   }, [openCreateWhenProgramProvided, createDialogProgram])
 
+  // Open dialog when createDialogProgram is set and we have a pending scheduled date
+  useEffect(() => {
+    console.log('BaseWorkoutManager: createScheduledDate changed to:', createScheduledDate, 'createDialogProgram:', !!createDialogProgram)
+    if (createDialogProgram && createScheduledDate !== undefined) {
+      setCreateOpen(true)
+    }
+  }, [createDialogProgram, createScheduledDate])
+
   // Fetch workouts
   const fetchWorkouts = async () => {
     setLoading(true)
@@ -286,10 +294,13 @@ export function BaseWorkoutManager({
 
   const handleCreateWorkout = (scheduledDate?: Date) => {
     console.log('handleCreateWorkout called with scheduledDate:', scheduledDate)
+    // Always set the scheduled date first
+    setCreateScheduledDate(scheduledDate)
+    
     if (onCreateWorkout) {
       onCreateWorkout(scheduledDate)
-    } else {
-      setCreateScheduledDate(scheduledDate)
+    } else if (createDialogProgram) {
+      // If we have a program and no onCreateWorkout callback, open the dialog directly
       setCreateOpen(true)
     }
   }
