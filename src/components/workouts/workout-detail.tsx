@@ -177,7 +177,21 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
       return workout.completed;
     } else {
       // For gym workouts, check if all exercises are completed
-      return exercises.length > 0 && exercises.every(ex => ex.completed);
+      // Handle edge case: if no exercises, consider it completed if it was previously marked as such
+      if (exercises.length === 0) {
+        console.log('🔍 WORKOUT: No exercises found, checking if previously completed:', workout?.completed);
+        return workout?.completed || false;
+      }
+      
+      const allCompleted = exercises.every(ex => ex.completed);
+      console.log('🔍 WORKOUT: Completion check:', {
+        workoutId,
+        exerciseCount: exercises.length,
+        completedCount: exercises.filter(ex => ex.completed).length,
+        allCompleted,
+        workoutCompleted: workout?.completed
+      });
+      return allCompleted;
     }
   };
 
@@ -249,6 +263,18 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
         const exercisesList = exercisesData as WorkoutExerciseWithDetails[];
         setExercises(exercisesList);
 
+        // Check if workout should be marked as completed after loading exercises
+        if (exercisesList.length > 0 && !workoutData.completed) {
+          const allExercisesCompleted = exercisesList.every(ex => ex.completed);
+          if (allExercisesCompleted) {
+            console.log('🔄 WORKOUT: All exercises completed after data load, marking workout as completed');
+            // Use setTimeout to avoid state update conflicts during initial load
+            setTimeout(() => {
+              markWorkoutAsCompleted();
+            }, 200);
+          }
+        }
+
         // Initialize edit values for all exercises
         const makeParsedWeight = (w: string | null): number | '' => {
           if (!w) return '';
@@ -303,7 +329,7 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
           return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate()
         }
         const isToday = isTodayLocal(when)
-        // Widen the fetch window to ±7 days to tolerate TR calendar ranges/timezone shifts
+        // Widen the fetch window to ±7 days to tolerate TR calendafr ranges/timezone shifts
         const widenDays = 7
         const widenMs = widenDays * 24 * 60 * 60 * 1000
         const startWindowLocal = new Date(startLocal.getTime() - widenMs)
@@ -496,6 +522,55 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
     return () => { cancelled = true };
   }, [supabase, workoutId, workoutComments]);
 
+  // Monitor workout completion state for debugging
+  useEffect(() => {
+    if (workout && exercises.length > 0) {
+      const allExercisesCompleted = exercises.every(ex => ex.completed);
+      const shouldBeCompleted = allExercisesCompleted && !workout.completed;
+      
+      console.log('🔍 WORKOUT: Completion state check:', {
+        workoutId,
+        workoutCompleted: workout.completed,
+        exerciseCount: exercises.length,
+        completedExercises: exercises.filter(ex => ex.completed).length,
+        allExercisesCompleted,
+        shouldBeCompleted
+      });
+      
+      if (shouldBeCompleted) {
+        console.log('⚠️ WORKOUT: All exercises completed but workout not marked as completed!');
+      }
+    }
+  }, [workout?.completed, exercises.map(ex => ex.completed)]);
+
+  // Re-evaluate completion status when exercises list changes (e.g., when exercises are added/removed)
+  useEffect(() => {
+    if (workout?.workout_type === 'gym' && !workout.completed) {
+      // Handle case where all exercises are removed
+      if (exercises.length === 0) {
+        console.log('🔄 WORKOUT: No exercises remaining, keeping workout as pending');
+        return;
+      }
+      
+      const allExercisesCompleted = exercises.every(ex => ex.completed);
+      
+      console.log('🔄 WORKOUT: Re-evaluating completion after exercise list change:', {
+        workoutId,
+        exerciseCount: exercises.length,
+        completedExercises: exercises.filter(ex => ex.completed).length,
+        allExercisesCompleted
+      });
+      
+      if (allExercisesCompleted) {
+        console.log('✅ WORKOUT: All exercises completed after list change, marking workout as completed');
+        // Use setTimeout to avoid state update conflicts
+        setTimeout(() => {
+          markWorkoutAsCompleted();
+        }, 100);
+      }
+    }
+  }, [exercises.length, exercises.map(ex => ex.id).join(',')]); // Trigger when exercise count or IDs change
+
   useEffect(() => {
     fetchWorkoutData();
   }, [fetchWorkoutData]);
@@ -637,24 +712,33 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
         return;
       }
 
-      // Update local state
-      setExercises((prev) =>
-        prev.map((ex) =>
+      // Update local state FIRST
+      setExercises((prev) => {
+        const updated = prev.map((ex) =>
           String(ex.id) === exerciseId
             ? {
                 ...ex,
                 completed,
               }
             : ex,
-        ),
-      );
+        );
+        
+        // Check if all exercises are completed using the UPDATED state
+        const allCompleted = updated.every((ex) => ex.completed);
+        
+        // If all exercises are completed, mark workout as completed
+        if (allCompleted && !workout?.completed) {
+          // Use setTimeout to avoid state update conflicts
+          setTimeout(() => {
+            markWorkoutAsCompleted();
+          }, 0);
+        }
+        
+        return updated;
+      });
 
-      // Check if all exercises are completed
-      const updatedExercises = exercises.map((ex) => (String(ex.id) === exerciseId ? { ...ex, completed } : ex));
-      const allCompleted = updatedExercises.every((ex) => ex.completed);
-
-      // Notify other views (dashboard/calendar) immediately and then mark if needed
-      broadcastUpdate({ completed: allCompleted })
+      // Notify other views (dashboard/calendar) immediately
+      broadcastUpdate({ completed })
 
       // Also reflect on selected date dialog/calendars that rely on scheduled_date presence
       if (!workout?.scheduled_date) {
@@ -662,11 +746,6 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
         now.setHours(0,0,0,0)
         const iso = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().split('T')[0] + 'T00:00:00.000Z'
         broadcastUpdate({ scheduled_date: iso } as any)
-      }
-
-      // If all exercises are completed, mark workout as completed and send notifications
-      if (allCompleted && !workout?.completed) {
-        await markWorkoutAsCompleted();
       }
 
       toast(completed ? 'Exercise marked as complete' : 'Exercise marked as incomplete');
@@ -720,7 +799,14 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
 
   const markWorkoutAsCompleted = async () => {
     try {
-      console.log('🔄 WORKOUT: Marking workout as completed and sending notifications...');
+      console.log('🔄 WORKOUT: Marking workout as completed and sending notifications...', {
+        workoutId,
+        workoutType: workout?.workout_type,
+        currentCompleted: workout?.completed,
+        exerciseCount: exercises.length,
+        completedExercises: exercises.filter(ex => ex.completed).length
+      });
+      
       // Mark workout as completed
       const { error: workoutError } = await supabase
         .from('workouts')
@@ -731,10 +817,12 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
         .eq('id', workoutId);
 
       if (workoutError) {
-        console.error('Error marking workout as completed:', workoutError);
+        console.error('❌ Error marking workout as completed:', workoutError);
         toast('Failed to mark workout as completed');
         return;
       }
+
+      console.log('✅ WORKOUT: Successfully marked workout as completed in database');
 
       // Update local workout state
       setWorkout((prev) => (prev ? { ...prev, completed: true, completed_at: new Date().toISOString() } : null));
@@ -853,6 +941,30 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
 
   const manualSave = () => {
     saveUpdates();
+  };
+
+  // Manual completion re-evaluation function
+  const reEvaluateCompletion = () => {
+    if (workout?.workout_type === 'gym' && exercises.length > 0) {
+      const allExercisesCompleted = exercises.every(ex => ex.completed);
+      
+      console.log('🔄 WORKOUT: Manual completion re-evaluation:', {
+        workoutId,
+        workoutCompleted: workout.completed,
+        exerciseCount: exercises.length,
+        completedExercises: exercises.filter(ex => ex.completed).length,
+        allExercisesCompleted
+      });
+      
+      if (allExercisesCompleted && !workout.completed) {
+        console.log('✅ WORKOUT: Manual completion check passed, marking workout as completed');
+        markWorkoutAsCompleted();
+      } else if (workout.completed && !allExercisesCompleted) {
+        console.log('⚠️ WORKOUT: Workout marked as completed but not all exercises are done');
+        // Optionally unmark as completed if not all exercises are done
+        // This could be useful if exercises were added after completion
+      }
+    }
   };
 
   // Generate shareable image with responsive height and stable word wrapping
@@ -1616,6 +1728,50 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
         </Card>
       )}
 
+      {/* Debug Completion Button - Only show if all exercises are done but workout isn't completed */}
+      {/* {workout?.workout_type === 'gym' && 
+       exercises.length > 0 && 
+       exercises.every(ex => ex.completed) && 
+       !workout.completed && (
+        <Card className="mb-6 border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
+                  <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
+                </div>
+                <div>
+                  <p className="font-medium text-red-800 dark:text-red-200">Completion Issue Detected</p>
+                  <p className="text-sm text-red-600 dark:text-red-300">
+                    All exercises are completed but workout is still pending. This may happen when exercises are modified externally.
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button 
+                  onClick={reEvaluateCompletion} 
+                  size="sm" 
+                  variant="outline"
+                  className="text-blue-600 border-blue-300 hover:bg-blue-100"
+                >
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Re-evaluate
+                </Button>
+                <Button 
+                  onClick={() => markWorkoutAsCompleted()} 
+                  size="sm" 
+                  variant="outline"
+                  className="text-red-600 border-red-300 hover:bg-red-100"
+                >
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                  Force Complete
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )} */}
+
       {/* Workout Content */}
       {workout.workout_type === 'gym' ? (
         <div className="space-y-4">
@@ -2085,7 +2241,7 @@ export function WorkoutDetail({ workoutId, userId }: WorkoutDetailProps) {
 
       {/* Info about automatic coach email */}
       <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">
-        Note: If your coach enabled email notifications, they’ll be emailed automatically when you complete this workout.
+        Note: If your coach enabled email notifications, they'll be emailed automatically when you complete this workout.
         Sending a manual email below is optional.
       </p>
 
