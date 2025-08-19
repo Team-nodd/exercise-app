@@ -27,7 +27,7 @@ interface BaseWorkoutManagerProps {
   header: ReactNode
   showCreateButton?: boolean
   createButtonText?: string
-  onCreateWorkout?: () => void
+  onCreateWorkout?: (scheduledDate?: Date) => void
 
   // Filtering
   workoutFilter?: (workouts: WorkoutWithDetails[]) => WorkoutWithDetails[]
@@ -67,6 +67,7 @@ export function BaseWorkoutManager({
   const [createOpen, setCreateOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<{ programId: number; workoutId: number } | null>(null)
+  const [createScheduledDate, setCreateScheduledDate] = useState<Date | undefined>(undefined)
 
   const supabase = createClient()
 
@@ -283,12 +284,18 @@ export function BaseWorkoutManager({
     return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })
   }
 
-  const handleCreateWorkout = () => {
+  const handleCreateWorkout = (scheduledDate?: Date) => {
+    console.log('handleCreateWorkout called with scheduledDate:', scheduledDate)
     if (onCreateWorkout) {
-      onCreateWorkout()
+      onCreateWorkout(scheduledDate)
     } else {
+      setCreateScheduledDate(scheduledDate)
       setCreateOpen(true)
     }
+  }
+
+  const handleCreateWorkoutClick = () => {
+    handleCreateWorkout()
   }
 
   const handleEditWorkout = (w: WorkoutWithDetails) => {
@@ -504,7 +511,7 @@ export function BaseWorkoutManager({
                 </div>
                 {showCreateButton && (
                   <Button
-                    onClick={handleCreateWorkout}
+                    onClick={handleCreateWorkoutClick}
                     disabled={!programId}
                     title={!programId ? "First choose a program please" : undefined}
                   >
@@ -531,7 +538,7 @@ export function BaseWorkoutManager({
                     </p>
                     {showCreateButton && activeStatFilter === "all" && (
                       <Button
-                        onClick={handleCreateWorkout}
+                        onClick={handleCreateWorkoutClick}
                         className="mt-6"
                         disabled={!programId}
                         title={!programId ? "First choose a program please" : undefined}
@@ -638,11 +645,13 @@ export function BaseWorkoutManager({
           onOpenChange={(open) => {
             setCreateOpen(open)
             if (!open) {
+              setCreateScheduledDate(undefined)
               onCreateDialogClose?.()
             }
           }}
           program={createDialogProgram}
           onCreated={fetchWorkouts}
+          scheduledDate={createScheduledDate}
         />
       )}
       {editTarget && (

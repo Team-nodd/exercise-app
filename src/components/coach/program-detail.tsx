@@ -1,20 +1,20 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Calendar, ArrowLeft, CalendarPlus, CalendarMinus, AlertTriangle } from "lucide-react"
+import { Calendar, ArrowLeft, CalendarPlus, CalendarMinus, AlertTriangle, Clock, CalendarDays, ArrowRight } from "lucide-react"
 import { toast } from "sonner"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import type { Program, ProgramWithDetails } from "@/types"
 import { BaseWorkoutManager } from "../base-workout-manger"
 // import { BaseWorkoutManager } from "./base-workout-manager"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 
 interface ProgramDetailProps {
   program: ProgramWithDetails
@@ -31,6 +31,8 @@ export function ProgramDetail({ program }: ProgramDetailProps) {
   const [shifting, setShifting] = useState(false)
   const [showShiftConfirm, setShowShiftConfirm] = useState(false)
   const [shiftDirection, setShiftDirection] = useState<"forward" | "backward" | null>(null)
+  const [shiftType, setShiftType] = useState<"month" | "week" | "day" | null>(null)
+  const [dropdownOpen, setDropdownOpen] = useState(false)
 
   // Fetch all programs for this client (for header filter)
   useEffect(() => {
@@ -182,28 +184,82 @@ export function ProgramDetail({ program }: ProgramDetailProps) {
             <Badge className={getStatusColor(program.status)}>
               {program.status.charAt(0).toUpperCase() + program.status.slice(1)}
             </Badge>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button size="sm" variant="outline" disabled={shifting}>
-                  <Calendar className="h-4 w-4 mr-1" />
-                  {shifting ? "Shifting..." : "Shift"}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-44">
-                <DropdownMenuItem
-                  onClick={() => { setShiftDirection("forward"); setShowShiftConfirm(true) }}
-                  className="cursor-pointer"
-                >
-                  <CalendarPlus className="h-4 w-4 mr-2" /> Next month
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => { setShiftDirection("backward"); setShowShiftConfirm(true) }}
-                  className="cursor-pointer"
-                >
-                  <CalendarMinus className="h-4 w-4 mr-2" /> Previous month
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+              <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
+               <DropdownMenuTrigger asChild>
+                 <Button size="sm" variant="outline" disabled={shifting}>
+                   <Calendar className="h-4 w-4 mr-1" />
+                   {shifting ? "Shifting..." : "Shift"}
+                 </Button>
+               </DropdownMenuTrigger>
+               <DropdownMenuContent align="start" className="w-56">
+                 <DropdownMenuItem
+                   onClick={() => { 
+                     setShiftDirection("forward"); 
+                     setShiftType("month"); 
+                     setShowShiftConfirm(true);
+                     setDropdownOpen(false);
+                   }}
+                   className="cursor-pointer"
+                 >
+                   <CalendarPlus className="h-4 w-4 mr-2" /> Next month
+                 </DropdownMenuItem>
+                 <DropdownMenuItem
+                   onClick={() => { 
+                     setShiftDirection("backward"); 
+                     setShiftType("month"); 
+                     setShowShiftConfirm(true);
+                     setDropdownOpen(false);
+                   }}
+                   className="cursor-pointer"
+                 >
+                   <CalendarMinus className="h-4 w-4 mr-2" /> Previous month
+                 </DropdownMenuItem>
+                 <DropdownMenuItem
+                   onClick={() => { 
+                     setShiftDirection("forward"); 
+                     setShiftType("week"); 
+                     setShowShiftConfirm(true);
+                     setDropdownOpen(false);
+                   }}
+                   className="cursor-pointer"
+                 >
+                   <CalendarDays className="h-4 w-4 mr-2" /> Next week
+                 </DropdownMenuItem>
+                 <DropdownMenuItem
+                   onClick={() => { 
+                     setShiftDirection("backward"); 
+                     setShiftType("week"); 
+                     setShowShiftConfirm(true);
+                     setDropdownOpen(false);
+                   }}
+                   className="cursor-pointer"
+                 >
+                   <CalendarDays className="h-4 w-4 mr-2" /> Previous week
+                 </DropdownMenuItem>
+                 <DropdownMenuItem
+                   onClick={() => { 
+                     setShiftDirection("forward"); 
+                     setShiftType("day"); 
+                     setShowShiftConfirm(true);
+                     setDropdownOpen(false);
+                   }}
+                   className="cursor-pointer"
+                 >
+                   <ArrowRight className="h-4 w-4 mr-2" /> Next day
+                 </DropdownMenuItem>
+                 <DropdownMenuItem
+                   onClick={() => { 
+                     setShiftDirection("backward"); 
+                     setShiftType("day"); 
+                     setShowShiftConfirm(true);
+                     setDropdownOpen(false);
+                   }}
+                   className="cursor-pointer"
+                 >
+                   <ArrowLeft className="h-4 w-4 mr-2" /> Previous day
+                 </DropdownMenuItem>
+               </DropdownMenuContent>
+             </DropdownMenu>
             <Button size="sm" href={`/coach/programs/${program.id}/edit`}>
               Edit
             </Button>
@@ -214,9 +270,15 @@ export function ProgramDetail({ program }: ProgramDetailProps) {
   )
 
   const handleConfirmShift = async () => {
+    // Close dialog immediately when user confirms
+    setShowShiftConfirm(false)
+    setShiftDirection(null)
+    setShiftType(null)
+    
     try {
       setShifting(true)
       const delta = shiftDirection === "backward" ? -1 : 1
+      
       // 1) Fetch workouts with scheduled_date
       const { data: workouts, error } = await supabase
         .from("workouts")
@@ -232,11 +294,27 @@ export function ProgramDetail({ program }: ProgramDetailProps) {
       // Broadcast so calendar updates instantly
       let bc: BroadcastChannel | null = null
       try { bc = new BroadcastChannel('workouts') } catch {}
+      
       for (const w of items as any[]) {
         const d = new Date(w.scheduled_date as string)
         const newDate = new Date(d)
-        newDate.setMonth(newDate.getMonth() + delta)
-        // Ensure time component preserved; store as ISO date string (yyyy-mm-dd) if original was date-only
+        
+        // Apply shift based on type
+        switch (shiftType) {
+          case "month":
+            newDate.setDate(newDate.getDate() + (delta * 30)) // 30 days for month
+            break
+          case "week":
+            newDate.setDate(newDate.getDate() + (delta * 7))
+            break
+          case "day":
+            newDate.setDate(newDate.getDate() + delta)
+            break
+          default:
+            newDate.setDate(newDate.getDate() + (delta * 30)) // fallback to 30 days
+        }
+        
+        // Ensure time component preserved; store as ISO date string
         const iso = newDate.toISOString()
         const { error: upErr } = await supabase.from("workouts").update({ scheduled_date: iso }).eq("id", w.id)
         if (!upErr) {
@@ -252,21 +330,43 @@ export function ProgramDetail({ program }: ProgramDetailProps) {
       const updates: Record<string, string | null> = {}
       if (program.start_date) {
         const ds = new Date(program.start_date)
-        ds.setMonth(ds.getMonth() + delta)
+        switch (shiftType) {
+          case "month":
+            ds.setDate(ds.getDate() + (delta * 30)) // 30 days for month
+            break
+          case "week":
+            ds.setDate(ds.getDate() + (delta * 7))
+            break
+          case "day":
+            ds.setDate(ds.getDate() + delta)
+            break
+          default:
+            ds.setDate(ds.getDate() + (delta * 30)) // fallback to 30 days
+        }
         updates.start_date = ds.toISOString()
       }
       if (program.end_date) {
         const de = new Date(program.end_date)
-        de.setMonth(de.getMonth() + delta)
+        switch (shiftType) {
+          case "month":
+            de.setDate(de.getDate() + (delta * 30)) // 30 days for month
+            break
+          case "week":
+            de.setDate(de.getDate() + (delta * 7))
+            break
+          case "day":
+            de.setDate(de.getDate() + delta)
+            break
+          default:
+            de.setDate(de.getDate() + (delta * 30)) // fallback to 30 days
+        }
         updates.end_date = de.toISOString()
       }
       if (Object.keys(updates).length > 0) {
         await supabase.from("programs").update(updates).eq("id", program.id)
       }
 
-      toast(`All workouts shifted by one month ${delta > 0 ? 'forward' : 'backward'}`)
-      setShowShiftConfirm(false)
-      setShiftDirection(null)
+      toast(`All workouts shifted by one ${shiftType} ${delta > 0 ? 'forward' : 'backward'}`)
       // Refresh view
       router.refresh()
     } catch (e) {
@@ -278,35 +378,40 @@ export function ProgramDetail({ program }: ProgramDetailProps) {
 
   return (
     <>
-      {showShiftConfirm && (
-        <div className="container mx-auto px-2 sm:px-4 mb-4 max-w-6xl">
-          <Card className="border-yellow-200 bg-yellow-50 dark:bg-yellow-900/20 dark:border-yellow-800">
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2 text-yellow-800 dark:text-yellow-200 text-base">
-                <AlertTriangle className="h-5 w-5" />
-                {shiftDirection === 'backward' ? 'Shift all workouts to previous month?' : 'Shift all workouts to next month?'}
-              </CardTitle>
-              <CardDescription className="text-yellow-900/80 dark:text-yellow-100/80">
-                {shiftDirection === 'backward'
-                  ? 'This will move every scheduled workout in this program back by one month.'
-                  : 'This will move every scheduled workout in this program forward by one month.'}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="flex gap-3">
-              <Button size="sm" variant="destructive" onClick={handleConfirmShift} disabled={shifting}>
-                {shifting ? "Shifting..." : "Yes, shift"}
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => { setShowShiftConfirm(false); setShiftDirection(null) }} disabled={shifting}>
-                Cancel
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+      <Dialog open={showShiftConfirm} onOpenChange={(open) => {
+        if (!open) {
+          setShowShiftConfirm(false)
+          setShiftDirection(null)
+          setShiftType(null)
+        }
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-yellow-800 dark:text-yellow-200">
+              <AlertTriangle className="h-5 w-5" />
+              {shiftDirection === 'backward' 
+                ? `Shift all workouts to previous ${shiftType}?` 
+                : `Shift all workouts to next ${shiftType}?`}
+            </DialogTitle>
+            <DialogDescription className="text-yellow-900/80 dark:text-yellow-100/80">
+              {shiftDirection === 'backward'
+                ? `This will move every scheduled workout in this program back by one ${shiftType}.`
+                : `This will move every scheduled workout in this program forward by one ${shiftType}.`}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-3">
+            <Button variant="destructive" onClick={handleConfirmShift} disabled={shifting}>
+              {shifting ? "Shifting..." : "Yes, shift"}
+            </Button>
+            <Button variant="outline" onClick={() => { setShowShiftConfirm(false); setShiftDirection(null); setShiftType(null) }} disabled={shifting}>
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <BaseWorkoutManager userId={program.user.id} programId={program.id} header={header} createDialogProgram={program} />
     </>
   )
 }
 
-// Shift confirm dialog inline (lightweight): we can render a simple confirm card above header when asked
-// Keeping it minimal without extra dialog component imports
+// Shift confirm dialog using proper Dialog component for better UX

@@ -20,6 +20,7 @@ interface CreateWorkoutFormProps {
   redirectOnSuccess?: boolean
   onSuccess?: (workoutId: number) => void
   onCancel?: () => void
+  initialScheduledDate?: Date
 }
 
 interface WorkoutExercise {
@@ -33,7 +34,7 @@ interface WorkoutExercise {
   order_in_workout: number
 }
 
-export function CreateWorkoutForm({ program, redirectOnSuccess = true, onSuccess, onCancel }: CreateWorkoutFormProps) {
+export function CreateWorkoutForm({ program, redirectOnSuccess = true, onSuccess, onCancel, initialScheduledDate }: CreateWorkoutFormProps) {
   const [name, setName] = useState("")
   const [workoutType, setWorkoutType] = useState<"gym" | "cardio">("gym")
   const [scheduledDate, setScheduledDate] = useState("")
@@ -54,6 +55,8 @@ export function CreateWorkoutForm({ program, redirectOnSuccess = true, onSuccess
   const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = createClient()
+
+
 
   useEffect(() => {
     const fetchExercises = async () => {
@@ -91,6 +94,21 @@ export function CreateWorkoutForm({ program, redirectOnSuccess = true, onSuccess
 
     fetchCardio()
   }, [program.coach_id, supabase])
+
+  // Update scheduled date when initialScheduledDate prop changes
+  useEffect(() => {
+    if (initialScheduledDate) {
+      // Format date as YYYY-MM-DD for the input field
+      const year = initialScheduledDate.getFullYear()
+      const month = String(initialScheduledDate.getMonth() + 1).padStart(2, '0')
+      const day = String(initialScheduledDate.getDate()).padStart(2, '0')
+      const formattedDate = `${year}-${month}-${day}`
+      setScheduledDate(formattedDate)
+      console.log('Setting scheduled date:', formattedDate, 'from initialScheduledDate:', initialScheduledDate)
+    } else {
+      setScheduledDate("")
+    }
+  }, [initialScheduledDate])
 
   // Prefill from cardioId in query params
   useEffect(() => {

@@ -10,12 +10,15 @@ export function CreateWorkoutDialog({
   onOpenChange,
   program,
   onCreated,
+  scheduledDate,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
   program: ProgramWithDetails
   onCreated?: () => void
+  scheduledDate?: Date
 }) {
+  console.log('CreateWorkoutDialog received scheduledDate:', scheduledDate)
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] overflow-y-auto p-0">
@@ -26,6 +29,7 @@ export function CreateWorkoutDialog({
           <CreateWorkoutForm
             program={program}
             redirectOnSuccess={false}
+            initialScheduledDate={scheduledDate}
             onSuccess={() => {
               onCreated?.()
               onOpenChange(false)

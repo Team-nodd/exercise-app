@@ -30,7 +30,7 @@ interface SharedCalendarProps {
   userId?: string
   isReadOnly?: boolean
   onEditWorkout?: (workout: WorkoutWithDetails) => void
-  onCreateWorkout?: () => void // NEW
+  onCreateWorkout?: (scheduledDate?: Date) => void // Updated to accept optional date
   workoutLinkQuery?: string
 }
 
@@ -313,7 +313,10 @@ export function SharedCalendar({
     const workoutsForDay = getWorkoutsForDate(date)
   
     if (workoutsForDay.length === 0) {
-      setShowWorkoutDialog(false)
+      // For coaches, directly open create workout dialog
+      if (userRole === "coach" && !isReadOnly) {
+        onCreateWorkout?.(date)
+      }
       return
     }
   
@@ -489,7 +492,7 @@ export function SharedCalendar({
               isToday && "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800",
               isDragOver && "bg-green-100 dark:bg-green-900/20 border-green-300 dark:border-green-700 opacity-100",
               
-              workoutsForDay.length === 0 && !isDragOver && "cursor-default",
+              workoutsForDay.length === 0 && userRole === "coach" && !isReadOnly && "cursor-pointer",
             )}
             onClick={(e) => handleDayClick(date, e)}
             onDragOver={(e) => handleDragOver(e, date)}
@@ -540,7 +543,7 @@ export function SharedCalendar({
               isPast && "text-gray-400 dark:text-gray-600",
               isDragOver && "bg-green-100 dark:bg-green-900/20 border-green-300 dark:border-green-700",
               
-              workoutsForDay.length === 0 && !isDragOver && "cursor-default",
+              workoutsForDay.length === 0 && userRole === "coach" && !isReadOnly && "cursor-pointer",
             )}
             onClick={(e) => handleDayClick(date, e)}
             onDragOver={(e) => handleDragOver(e, date)}
@@ -595,7 +598,7 @@ export function SharedCalendar({
               isToday && "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800",
               isDragOver && "bg-green-100 dark:bg-green-900/20 border-green-300 dark:border-green-700 opacity-100",
               
-              workoutsForDay.length === 0 && !isDragOver && "cursor-default",
+              workoutsForDay.length === 0 && userRole === "coach" && !isReadOnly && "cursor-pointer",
             )}
             onClick={(e) => handleDayClick(date, e)}
             onDragOver={(e) => handleDragOver(e, date)}
@@ -817,15 +820,30 @@ export function SharedCalendar({
             <span className="hidden sm:inline">Workout</span> Schedule
           </CardTitle>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => navigateMonth("prev")}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <span className="text-sm font-medium min-w-[100px] text-center">
-              {currentDate.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
-            </span>
-            <Button variant="ghost" size="sm" onClick={() => navigateMonth("next")}>
-              <ChevronRight className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" onClick={() => navigateMonth("prev")}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span
+                className="text-sm font-medium w-[92px] text-center tabular-nums"
+                style={{
+                  display: "inline-block",
+                  fontVariantNumeric: "tabular-nums",
+                  letterSpacing: "0.01em",
+                }}
+              >
+                {/* Use a fixed-width invisible string to reserve space for widest month */}
+                <span className="invisible absolute pointer-events-none select-none" aria-hidden="true">
+                  Sep 9999
+                </span>
+                <span className="relative">
+                  {currentDate.toLocaleDateString("en-US", { month: "short", year: "numeric" })}
+                </span>
+              </span>
+              <Button variant="ghost" size="sm" onClick={() => navigateMonth("next")}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
             {userRole === "coach" && (
               <Button
                 className="hidden sm:flex"
@@ -1110,13 +1128,26 @@ export function SharedCalendar({
               ))}
             </div>
           </ScrollArea>
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button type="button" variant="secondary">
-                Close
-              </Button>
-            </DialogClose>
-          </DialogFooter>
+                     <DialogFooter>
+             {userRole === "coach" && !isReadOnly && (
+               <Button
+                 onClick={() => {
+                   setShowWorkoutDialog(false)
+                   onCreateWorkout?.(selectedDate || undefined)
+                 }}
+                 disabled={!programId}
+                 className="mr-auto"
+               >
+                 <Plus className="h-4 w-4 mr-2" />
+                 Add Workout
+               </Button>
+             )}
+             <DialogClose asChild>
+               <Button type="button" variant="secondary">
+                 Close
+               </Button>
+             </DialogClose>
+           </DialogFooter>
         </DialogContent>
       </Dialog>
 
