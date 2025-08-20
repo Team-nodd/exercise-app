@@ -26,7 +26,7 @@ interface UserDashboardProps {
 
 export function UserDashboard({ user, initialStats, initialWorkouts }: UserDashboardProps) {
   const supabase = createClient()
-  const { stats, upcomingWorkouts, loading, error, refetch, refetchQuietly } = useDashboardData({
+  const { stats, upcomingWorkouts, allWorkouts, loading, error, refetch, refetchQuietly } = useDashboardData({
     userId: user.id,
     isCoach: false,
     initialStats,
@@ -125,10 +125,44 @@ export function UserDashboard({ user, initialStats, initialWorkouts }: UserDashb
 
   // Filter workouts based on selected program
   const filteredWorkouts = useMemo(() => {
-    return selectedProgramId === "all" 
+    let workouts = selectedProgramId === "all" 
       ? upcomingWorkouts || []
       : (upcomingWorkouts || []).filter(workout => workout.program?.id === Number(selectedProgramId))
+    
+    // Filter out completed workouts for the upcoming workouts display
+    workouts = workouts.filter(workout => !workout.completed)
+    
+    // Re-sort filtered workouts to ensure today's workouts come first
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const tomorrow = new Date(today)
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    
+    return workouts.sort((a, b) => {
+      const aDate = new Date(a.scheduled_date!)
+      const bDate = new Date(b.scheduled_date!)
+      
+      const aIsToday = aDate >= today && aDate < tomorrow
+      const bIsToday = bDate >= today && bDate < tomorrow
+      
+      // Today's workouts come first
+      if (aIsToday && !bIsToday) return -1
+      if (!aIsToday && bIsToday) return 1
+      
+      // If both are today or both are not today, sort by date
+      return aDate.getTime() - bDate.getTime()
+    })
   }, [selectedProgramId, upcomingWorkouts]);
+
+  // Get all workouts for calendar (including completed ones)
+  const allWorkoutsForCalendar = useMemo(() => {
+    let workouts = selectedProgramId === "all" 
+      ? allWorkouts || []
+      : (allWorkouts || []).filter(workout => workout.program?.id === Number(selectedProgramId))
+    
+    // For calendar, we want all workouts (including completed ones)
+    return workouts
+  }, [selectedProgramId, allWorkouts]);
 
   // Update workouts state when filtered workouts change (merge, don't overwrite)
   useEffect(() => {
@@ -161,11 +195,14 @@ export function UserDashboard({ user, initialStats, initialWorkouts }: UserDashb
   useEffect(() => {
     if (workouts.length > 0) {
       const today = new Date()
-      const todayString = today.toDateString()
+      today.setHours(0, 0, 0, 0)
+      const tomorrow = new Date(today)
+      tomorrow.setDate(tomorrow.getDate() + 1)
+      
       const workoutsToday = workouts.filter(workout => {
         if (!workout.scheduled_date) return false
         const workoutDate = new Date(workout.scheduled_date)
-        return workoutDate.toDateString() === todayString
+        return workoutDate >= today && workoutDate < tomorrow
       })
       setTodaysWorkouts(workoutsToday)
     } else {
@@ -296,14 +333,14 @@ export function UserDashboard({ user, initialStats, initialWorkouts }: UserDashb
               </div>
             </div>
             {/* Start Today's Workout Button */}
-            {todaysWorkouts.length > 0 && (
+            {todaysWorkouts.filter(w => !w.completed).length > 0 && (
               <div className="pt-2 border-t sm:ml-16">
-                <Button asChild className="w-full sm:w-auto">
-                  <AppLink href={`/dashboard/workouts/${todaysWorkouts[0].id}`}>
-                    <Play className="h-4 w-4 mr-2" />
-                    Start Today&#39;s Workout
-                  </AppLink>
-                </Button>
+                                  <Button asChild className="w-full sm:w-auto">
+                    <AppLink href={`/dashboard/workouts/${todaysWorkouts.filter(w => !w.completed)[0].id}`}>
+                      <Play className="h-4 w-4 mr-2" />
+                      Start Today&#39;s Workout
+                    </AppLink>
+                  </Button>
               </div>
             )}
           </div>
@@ -337,7 +374,7 @@ export function UserDashboard({ user, initialStats, initialWorkouts }: UserDashb
       {/* Calendar View */}
       <div className="mb-6">
         <SharedCalendar
-          workouts={workouts}
+          workouts={allWorkoutsForCalendar}
           onWorkoutUpdate={handleWorkoutUpdate}
           userRole="user"
           userId={user.id}
@@ -405,7 +442,7 @@ export function UserDashboard({ user, initialStats, initialWorkouts }: UserDashb
                 <Calendar className="h-5 w-5" />
                 Upcoming Workouts
               </CardTitle>
-              {upcomingWorkouts && upcomingWorkouts.length > 0 && (
+              {filteredWorkouts && filteredWorkouts.length > 0 && (
                 <AppLink href="/dashboard/workouts">
                   <Button variant="ghost" size="sm">
                     <span className="hidden sm:inline">View all</span>
@@ -416,7 +453,7 @@ export function UserDashboard({ user, initialStats, initialWorkouts }: UserDashb
             </div>
           </CardHeader>
           <CardContent>
-            {!upcomingWorkouts || upcomingWorkouts.length === 0 ? (
+            {!filteredWorkouts || filteredWorkouts.length === 0 ? (
               <div className="text-center py-8">
                 <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center">
                   <Calendar className="h-8 w-8 text-gray-400" />
@@ -434,47 +471,69 @@ export function UserDashboard({ user, initialStats, initialWorkouts }: UserDashb
               </div>
             ) : (
               <div className="space-y-3">
-                {upcomingWorkouts.slice(0, 5).map((workout, index) => (
-                  <div key={workout.id}>
-                    <div className="flex items-center gap-3 p-3 px-0 rounded-lg hover:bg-muted/50 transition-colors">
-                      <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center flex-shrink-0">
-                        <Dumbbell className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex-1 min-w-0">
-                            <h4 className="font-semibold text-sm sm:text-base text-gray-900 dark:text-white truncate">
-                              {workout.name}
-                            </h4>
-                            <div className="flex items-center gap-2 mt-1 text-xs sm:text-sm text-gray-600 dark:text-gray-400">
-                              <span className="hidden sm:inline">{workout.program?.name || 'No Program'}</span>
-                              <div className="w-1 h-1 bg-gray-300 rounded-full"></div>
-                              <span className="font-medium">{formatDate(workout.scheduled_date)}</span>
+                {filteredWorkouts.slice(0, 5).map((workout, index) => {
+                  const isToday = (() => {
+                    if (!workout.scheduled_date) return false
+                    const today = new Date()
+                    today.setHours(0, 0, 0, 0)
+                    const tomorrow = new Date(today)
+                    tomorrow.setDate(tomorrow.getDate() + 1)
+                    const workoutDate = new Date(workout.scheduled_date)
+                    return workoutDate >= today && workoutDate < tomorrow
+                  })()
+                  
+                  return (
+                    <div key={workout.id}>
+                      <div className="flex items-center gap-3 p-3 px-0 rounded-lg hover:bg-muted/50 transition-colors">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                          isToday 
+                            ? 'bg-green-100 dark:bg-green-900/30' 
+                            : 'bg-blue-100 dark:bg-blue-900/30'
+                        }`}>
+                          {isToday ? (
+                            <Calendar className="h-5 w-5 text-green-600 dark:text-green-400" />
+                          ) : (
+                            <Dumbbell className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex-1 min-w-0">
+                              <h4 className="font-semibold text-sm sm:text-base text-gray-900 dark:text-white truncate">
+                                {workout.name}
+                                {isToday && (
+                                  <Badge variant="secondary" className="ml-2 text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                                    Today
+                                  </Badge>
+                                )}
+                              </h4>
+                              <div className="flex items-center gap-2 mt-1 text-xs sm:text-sm text-gray-600 dark:text-gray-400">
+                                <span className="hidden sm:inline">{workout.program?.name || 'No Program'}</span>
+                                <div className="w-1 h-1 bg-gray-300 rounded-full"></div>
+                                <span className="font-medium">{formatDate(workout.scheduled_date)}</span>
+                              </div>
                             </div>
-                          </div>
-                          <div className="flex items-center gap-2 flex-shrink-0">
-                            <Badge variant="secondary" className="hidden sm:flex text-xs">
-                              Pending
-                            </Badge>
-                            <Button size="sm" asChild>
-                              <AppLink href={`/dashboard/workouts/${workout.id}`}>
-                                <Play className="h-3 w-3 mr-1" />
-                                <span className="hidden sm:inline">Start</span>
-                                <span className="sm:hidden">Go</span>
-                              </AppLink>
-                            </Button>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <Button size="sm" asChild>
+                                <AppLink href={`/dashboard/workouts/${workout.id}`}>
+                                  <Play className="h-3 w-3 mr-1" />
+                                  <span className="hidden sm:inline">Start</span>
+                                  <span className="sm:hidden">Go</span>
+                                </AppLink>
+                              </Button>
+                            </div>
                           </div>
                         </div>
                       </div>
+                      {index < filteredWorkouts.slice(0, 5).length - 1 && <Separator />}
                     </div>
-                    {index < upcomingWorkouts.slice(0, 5).length - 1 && <Separator />}
-                  </div>
-                ))}
-                {upcomingWorkouts.length > 5 && (
+                  )
+                })}
+                {filteredWorkouts.length > 5 && (
                   <div className="text-center pt-3 border-t">
                     <AppLink href="/dashboard/workouts">
                       <Button variant="ghost" size="sm">
-                        <span className="text-sm">View {upcomingWorkouts.length - 5} more workouts</span>
+                        <span className="text-sm">View {filteredWorkouts.length - 5} more workouts</span>
                         <ArrowRight className="h-3 w-3 ml-1" />
                       </Button>
                     </AppLink>

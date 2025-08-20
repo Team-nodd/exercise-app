@@ -19,6 +19,7 @@ interface UseDashboardDataOptions {
 interface DashboardData {
   stats: DashboardStats | null
   upcomingWorkouts: WorkoutWithDetails[]
+  allWorkouts: WorkoutWithDetails[] // Add this for calendar
   recentClients?: User[]
   loading: boolean
   error: string | null
@@ -31,6 +32,7 @@ const dashboardCache = new Map<string, {
   data: { 
     stats: DashboardStats | null; 
     upcomingWorkouts: WorkoutWithDetails[]; 
+    allWorkouts: WorkoutWithDetails[]; // Add this
     recentClients?: User[] 
   }; 
   timestamp: number 
@@ -42,6 +44,7 @@ export function useDashboardData({ userId, coachId, isCoach = false, initialStat
   
   const [stats, setStats] = useState<DashboardStats | null>(initialStats ?? null)
   const [upcomingWorkouts, setUpcomingWorkouts] = useState<WorkoutWithDetails[]>(initialUpcomingWorkouts ?? [])
+  const [allWorkouts, setAllWorkouts] = useState<WorkoutWithDetails[]>(initialUpcomingWorkouts ?? []) // Add this
   const [recentClients, setRecentClients] = useState<User[]>(initialRecentClients ?? [])
   // If any initial data is provided, start as not loading to avoid layout shift
   const [loading, setLoading] = useState(!(initialStats || initialUpcomingWorkouts || initialRecentClients))
@@ -64,7 +67,46 @@ export function useDashboardData({ userId, coachId, isCoach = false, initialStat
     if (error) throw new Error(`Failed to fetch user data: ${error.message}`)
 
     const all = (data ?? []) as WorkoutWithProgram[]
-    // Compute stats locally
+    
+    // Store all workouts for calendar
+    setAllWorkouts(all as WorkoutWithDetails[])
+    
+    // Filter to only show upcoming workouts (not completed and not in the past)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    
+    const upcomingWorkouts = all.filter(workout => {
+      // Skip completed workouts
+      if (workout.completed) return false
+      
+      // Skip workouts without scheduled dates
+      if (!workout.scheduled_date) return false
+      
+      // Skip past workouts (before today)
+      const workoutDate = new Date(workout.scheduled_date)
+      return workoutDate >= today
+    })
+    
+    // Sort upcoming workouts: today's first, then chronologically
+    const tomorrow = new Date(today)
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    
+    const sortedUpcomingWorkouts = upcomingWorkouts.sort((a, b) => {
+      const aDate = new Date(a.scheduled_date!)
+      const bDate = new Date(b.scheduled_date!)
+      
+      const aIsToday = aDate >= today && aDate < tomorrow
+      const bIsToday = bDate >= today && bDate < tomorrow
+      
+      // Today's workouts come first
+      if (aIsToday && !bIsToday) return -1
+      if (!aIsToday && bIsToday) return 1
+      
+      // If both are today or both are not today, sort by date
+      return aDate.getTime() - bDate.getTime()
+    })
+    
+    // Compute stats locally using all workouts (not just upcoming)
     const programMap = new Map<number, { id: number; status?: string }>()
     for (const w of all) {
       const p = w.program
@@ -73,15 +115,21 @@ export function useDashboardData({ userId, coachId, isCoach = false, initialStat
     const totalPrograms = programMap.size
     const activePrograms = [...programMap.values()].filter(p => p.status === "active").length
     const completedWorkouts = all.filter(w => w.completed).length
-    const today = new Date(); today.setHours(0,0,0,0)
-    const upcomingWorkoutsCount = all.filter(w => !w.completed && w.scheduled_date && new Date(w.scheduled_date) >= today).length
+    const upcomingWorkoutsCount = upcomingWorkouts.length
 
     const nextStats: DashboardStats = { totalPrograms, activePrograms, completedWorkouts, upcomingWorkouts: upcomingWorkoutsCount, totalClients: 0 }
 
     setStats(nextStats)
-    setUpcomingWorkouts(all as WorkoutWithDetails[])
+    setUpcomingWorkouts(sortedUpcomingWorkouts as WorkoutWithDetails[])
 
-    dashboardCache.set(cacheKey, { data: { stats: nextStats, upcomingWorkouts: all as WorkoutWithDetails[] }, timestamp: Date.now() })
+    dashboardCache.set(cacheKey, { 
+      data: { 
+        stats: nextStats, 
+        upcomingWorkouts: sortedUpcomingWorkouts as WorkoutWithDetails[],
+        allWorkouts: all as WorkoutWithDetails[]
+      }, 
+      timestamp: Date.now() 
+    })
   }, [supabase, cacheKey])
 
   const fetchCoachDashboardData = useCallback(async (coachId: string) => {
@@ -146,7 +194,8 @@ export function useDashboardData({ userId, coachId, isCoach = false, initialStat
         data: {
           stats,
           recentClients: clientsData,
-          upcomingWorkouts: []
+          upcomingWorkouts: [],
+          allWorkouts: []
         },
         timestamp: Date.now()
       })
@@ -201,6 +250,7 @@ export function useDashboardData({ userId, coachId, isCoach = false, initialStat
         if (cachedNow && Date.now() - cachedNow.timestamp < CACHE_DURATION) {
           setStats(cachedNow.data.stats)
           setUpcomingWorkouts(cachedNow.data.upcomingWorkouts)
+          setAllWorkouts(cachedNow.data.allWorkouts)
           setRecentClients(cachedNow.data.recentClients || [])
         } else if (initialStats || initialUpcomingWorkouts || initialRecentClients) {
           // Seed cache so other consumers get a hit
@@ -208,6 +258,7 @@ export function useDashboardData({ userId, coachId, isCoach = false, initialStat
             data: {
               stats: initialStats ?? null,
               upcomingWorkouts: initialUpcomingWorkouts ?? [],
+              allWorkouts: initialUpcomingWorkouts ?? [],
               recentClients: initialRecentClients ?? [],
             },
             timestamp: Date.now(),
@@ -230,7 +281,15 @@ export function useDashboardData({ userId, coachId, isCoach = false, initialStat
     // Reset local state to empty to avoid flashing previous user's data
     setStats(null)
     setUpcomingWorkouts([])
+    setAllWorkouts([])
     setRecentClients([])
+    
+    // Only trigger refresh if we have valid credentials
+    if (!userId && !coachId) {
+      setLoading(false)
+      return
+    }
+    
     // Trigger a silent refresh for the new identity
     ;(async () => {
       try {
@@ -275,17 +334,20 @@ export function useDashboardData({ userId, coachId, isCoach = false, initialStat
         if (msg.userId && msg.userId !== userId) return
         if (msg.type === 'updated') {
           setUpcomingWorkouts((prev) => prev.map((w) => (w.id === msg.workoutId ? { ...w, ...(msg.changes || {}) } as any : w)))
+          setAllWorkouts((prev) => prev.map((w) => (w.id === msg.workoutId ? { ...w, ...(msg.changes || {}) } as any : w)))
         } else if (msg.type === 'created' && msg.record) {
           const rec = msg.record as any
           if (rec.user_id === userId) {
             setUpcomingWorkouts((prev) => (prev.some((w) => w.id === rec.id) ? prev : [...prev, rec]))
+            setAllWorkouts((prev) => (prev.some((w) => w.id === rec.id) ? prev : [...prev, rec]))
           }
         } else if (msg.type === 'deleted') {
           setUpcomingWorkouts((prev) => prev.filter((w) => w.id !== msg.workoutId))
+          setAllWorkouts((prev) => prev.filter((w) => w.id !== msg.workoutId))
         }
       }
     } catch {
-      const handler = (e: StorageEvent) => {
+              const handler = (e: StorageEvent) => {
         if (e.key !== 'workout-updated' || !e.newValue) return
         try {
           const msg = JSON.parse(e.newValue)
@@ -293,13 +355,16 @@ export function useDashboardData({ userId, coachId, isCoach = false, initialStat
           if (msg.userId && msg.userId !== userId) return
           if (msg.type === 'updated') {
             setUpcomingWorkouts((prev) => prev.map((w) => (w.id === msg.workoutId ? { ...w, ...(msg.changes || {}) } as any : w)))
+            setAllWorkouts((prev) => prev.map((w) => (w.id === msg.workoutId ? { ...w, ...(msg.changes || {}) } as any : w)))
           } else if (msg.type === 'created' && msg.record) {
             const rec = msg.record as any
             if (rec.user_id === userId) {
               setUpcomingWorkouts((prev) => (prev.some((w) => w.id === rec.id) ? prev : [...prev, rec]))
+              setAllWorkouts((prev) => (prev.some((w) => w.id === rec.id) ? prev : [...prev, rec]))
             }
           } else if (msg.type === 'deleted') {
             setUpcomingWorkouts((prev) => prev.filter((w) => w.id !== msg.workoutId))
+            setAllWorkouts((prev) => prev.filter((w) => w.id !== msg.workoutId))
           }
         } catch {}
       }
@@ -320,13 +385,16 @@ export function useDashboardData({ userId, coachId, isCoach = false, initialStat
         if (msg.userId && msg.userId !== userId) return
         if (msg.type === 'updated') {
           setUpcomingWorkouts((prev) => prev.map((w) => (w.id === msg.workoutId ? { ...w, ...(msg.changes || {}) } as any : w)))
+          setAllWorkouts((prev) => prev.map((w) => (w.id === msg.workoutId ? { ...w, ...(msg.changes || {}) } as any : w)))
         } else if (msg.type === 'created' && msg.record) {
           const rec = msg.record as any
           if (rec.user_id === userId) {
             setUpcomingWorkouts((prev) => (prev.some((w) => w.id === rec.id) ? prev : [...prev, rec]))
+            setAllWorkouts((prev) => (prev.some((w) => w.id === rec.id) ? prev : [...prev, rec]))
           }
         } else if (msg.type === 'deleted') {
           setUpcomingWorkouts((prev) => prev.filter((w) => w.id !== msg.workoutId))
+          setAllWorkouts((prev) => prev.filter((w) => w.id !== msg.workoutId))
         }
       })
       .subscribe()
@@ -344,6 +412,13 @@ export function useDashboardData({ userId, coachId, isCoach = false, initialStat
       const toApply = queue.filter((m: any) => m && m.type === 'updated' && (!m.userId || m.userId === userId))
       if (toApply.length === 0) return
       setUpcomingWorkouts((prev) => {
+        let next = prev
+        for (const m of toApply) {
+          next = next.map((w) => (w.id === m.workoutId ? { ...w, ...(m.changes || {}) } as any : w))
+        }
+        return next
+      })
+      setAllWorkouts((prev) => {
         let next = prev
         for (const m of toApply) {
           next = next.map((w) => (w.id === m.workoutId ? { ...w, ...(m.changes || {}) } as any : w))
@@ -381,6 +456,7 @@ export function useDashboardData({ userId, coachId, isCoach = false, initialStat
   return {
     stats,
     upcomingWorkouts,
+    allWorkouts, // Add this to the return object
     recentClients,
     loading,
     error,

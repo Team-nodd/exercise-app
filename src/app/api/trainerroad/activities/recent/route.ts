@@ -6,22 +6,66 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 50)
+    const userId = searchParams.get('userId')
 
-    const cookieStore = await cookies()
-    
-    // Get TrainerRoad session cookies
-    const trCookies = Array.from(cookieStore.getAll())
-      .filter(cookie => cookie.name.startsWith('tr_'))
-      .map(cookie => `${cookie.name.substring(3)}=${cookie.value}`)
+    let trCookies: string[] = []
+
+    if (userId) {
+      // For coach accessing athlete's data, try to get the athlete's session from database
+      const { createServerClient } = await import('@/lib/supabase/server')
+      const supabase = await createServerClient()
+      
+      
+      const { data: session, error: sessionError } = await supabase
+        .from('trainerroad_sessions')
+        .select('cookies')
+        .eq('user_id', userId)
+        .eq('is_active', true)
+        .single()
+
+      if (sessionError) {
+        console.log('❌ TRAINERROAD API: Error fetching session:', sessionError)
+      }
+
+      if (session) {
+
+        // Check if the session has real TrainerRoad cookies (not dummy ones)
+        if (session.cookies.includes('SharedTrainerRoadAuth')) {
+          trCookies = session.cookies.split('; ').map((cookie: string) => cookie.trim())
+
+        } else {
+
+        }
+      } else {
+
+      }
+
+      // If no valid session cookies from database, try to get from browser cookies
+      if (trCookies.length === 0) {
+        const cookieStore = await cookies()
+        trCookies = Array.from(cookieStore.getAll())
+          .filter(cookie => cookie.name.startsWith('tr_'))
+          .map(cookie => `${cookie.name.substring(3)}=${cookie.value}`)
+        
+
+      }
+    } else {
+      // For current user, get cookies from request
+      const cookieStore = await cookies()
+      trCookies = Array.from(cookieStore.getAll())
+        .filter(cookie => cookie.name.startsWith('tr_'))
+        .map(cookie => `${cookie.name.substring(3)}=${cookie.value}`)
+    }
     
     if (trCookies.length === 0) {
+
       return NextResponse.json(
         { error: 'Not authenticated with TrainerRoad' },
         { status: 401 }
       )
     }
 
-    console.log('🔄 TRAINERROAD API: Using POST method for workouts API...')
+
 
     // Use POST method like the browser does
     const activitiesResponse = await fetch('https://www.trainerroad.com/app/api/workouts', {
@@ -109,15 +153,14 @@ export async function GET(request: NextRequest) {
       }),
     })
 
-    console.log('🔍 TRAINERROAD API: Workouts API response status:', activitiesResponse.status)
+
     
     // Log the response for debugging
-    console.log('🔍 TRAINERROAD API: Response headers:', Object.fromEntries(activitiesResponse.headers.entries()))
+
     
     if (!activitiesResponse.ok) {
       const errorText = await activitiesResponse.text()
-      console.log('🔍 TRAINERROAD API: Error response body:', errorText.substring(0, 1000))
-      console.log('🔍 TRAINERROAD API: Cookies sent:', trCookies.join('; ').substring(0, 200) + '...')
+
     }
 
     if (!activitiesResponse.ok) {
@@ -137,9 +180,9 @@ export async function GET(request: NextRequest) {
         )
       }
 
-      console.error('❌ TRAINERROAD API: Failed to fetch workouts:', activitiesResponse.status)
+
       const errorText = await activitiesResponse.text()
-      console.error('❌ TRAINERROAD API: Error response:', errorText)
+
       
       return NextResponse.json(
         { error: 'Failed to fetch workouts from TrainerRoad' },
@@ -148,9 +191,7 @@ export async function GET(request: NextRequest) {
     }
 
     const responseData = await activitiesResponse.json()
-    console.log('🔍 TRAINERROAD API: Response type:', typeof responseData)
-    console.log('🔍 TRAINERROAD API: Response keys:', Object.keys(responseData))
-    console.log('🔍 TRAINERROAD API: Response preview:', JSON.stringify(responseData).substring(0, 500))
+
 
     let activities: any[] = []
 
@@ -159,15 +200,12 @@ export async function GET(request: NextRequest) {
     } else if (responseData && typeof responseData === 'object') {
       // Check for the Workouts property specifically first
       if (Array.isArray(responseData.Workouts)) {
-        console.log(`🔍 TRAINERROAD API: Found Workouts array with length: ${responseData.Workouts.length}`)
         activities = responseData.Workouts
       } else {
-        console.log('🔍 TRAINERROAD API: No Workouts property found, checking other properties...')
         // Fallback to other possible array properties
         const possibleArrays = ['data', 'workouts', 'results', 'activities', 'items', 'records', 'list', 'entries', 'content']
         for (const key of possibleArrays) {
           if (Array.isArray(responseData[key])) {
-            console.log(`🔍 TRAINERROAD API: Found activities array in property: ${key}`)
             activities = responseData[key]
             break
           }
@@ -176,7 +214,6 @@ export async function GET(request: NextRequest) {
     }
 
     if (!Array.isArray(activities)) {
-      console.error('❌ TRAINERROAD API: Could not find activities array in response')
       return NextResponse.json(
         { error: 'Invalid response format from TrainerRoad' },
         { status: 500 }
@@ -185,17 +222,12 @@ export async function GET(request: NextRequest) {
 
     // Note: This appears to be workout templates, not completed activities
     // We might need a different endpoint for completed workouts
-    console.log('🔍 TRAINERROAD API: Activities array length:', activities.length)
     if (activities.length > 0) {
-      console.log('🔍 TRAINERROAD API: First workout item structure:', JSON.stringify(activities[0]).substring(0, 300))
-    } else {
-      console.log('🔍 TRAINERROAD API: No activities found in response')
     }
     
     // For now, just return the workouts (but these are templates, not completed activities)
     const sortedActivities = activities.slice(0, limit)
 
-    console.log(`✅ TRAINERROAD API: Fetched ${sortedActivities.length} workouts from workouts API`)
     
     return NextResponse.json(sortedActivities)
 

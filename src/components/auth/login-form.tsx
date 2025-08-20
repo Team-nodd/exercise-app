@@ -35,6 +35,12 @@ export function LoginForm() {
         return
       }
 
+      if (!authData.user) {
+        setError("Login failed - no user data received")
+        setLoading(false)
+        return
+      }
+
       // Get user profile to determine redirect
       const { data: profile, error: profileError } = await supabase
         .from("users")
@@ -61,19 +67,21 @@ export function LoginForm() {
           return
         }
 
-        router.push("/dashboard")
+        // Use replace instead of push to prevent back navigation to login
+        router.replace("/dashboard")
         return
       }
 
-      // Redirect based on role
+      // Redirect based on role - use replace to prevent back navigation
       const redirectUrl = profile.role === "coach" ? "/coach/dashboard" : "/dashboard"
-      router.push(redirectUrl)
+      console.log("🔄 LOGIN: Redirecting to:", redirectUrl)
+      router.replace(redirectUrl)
     } catch (error) {
+      console.error("Login error:", error)
       setError("An unexpected error occurred")
       setLoading(false)
-    } finally {
-      // Don't setLoading(false) here, let the global loading reset on route change
     }
+    // Don't setLoading(false) here, let the global loading reset on route change
   }
 
   return (

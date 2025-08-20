@@ -25,10 +25,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log('📧 API: Sending email via SMTP:', {
-      to,
-      subject
-    })
+
 
     // Get SMTP configuration (server-side only)
     let config
@@ -76,7 +73,7 @@ export async function POST(request: NextRequest) {
       const shouldFallback = config.port === 465 || primaryError?.code === 'ETIMEDOUT' || primaryError?.code === 'ECONNECTION'
       if (shouldFallback) {
         try {
-          console.log('🔁 API: Retrying with STARTTLS on port 587...')
+
           transporter = nodemailer.createTransport({
             host: config.host,
             port: 587,
@@ -114,7 +111,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    console.log('✅ API: Email sent successfully:', info.messageId)
+
 
     return NextResponse.json(
       { success: true, message: 'Email sent successfully', messageId: info.messageId },

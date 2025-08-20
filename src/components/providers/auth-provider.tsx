@@ -64,7 +64,7 @@ export function AuthProvider({ children, initialSession, initialProfile }: AuthP
     // Check cache first
     const cached = profileCache.current.get(userId)
     if (cached) {
-      console.log("📦 AUTH: Using cached profile for:", userId)
+
       return cached
     }
 
@@ -72,19 +72,19 @@ export function AuthProvider({ children, initialSession, initialProfile }: AuthP
     const local = getProfileFromLocalStorage(userId)
     if (local) {
       profileCache.current.set(userId, local)
-      console.log("📦 AUTH: Using localStorage profile for:", userId)
+
       return local
     }
 
     // Prevent duplicate fetches for the same user
     if (fetchingProfile.current === userId) {
-      console.log("⏳ AUTH: Profile fetch already in progress for:", userId)
+
       return null
     }
 
     try {
       fetchingProfile.current = userId
-      console.log("🔄 AUTH: Fetching profile for user:", userId)
+
 
       // Add timeout to prevent hanging
       const timeoutPromise = new Promise<never>((_, reject) => {
@@ -102,7 +102,7 @@ export function AuthProvider({ children, initialSession, initialProfile }: AuthP
         return fallback
       }
 
-      console.log("✅ AUTH: Profile loaded successfully:", data?.name)
+
       const profileData = data as Profile
 
       // Cache the profile
@@ -125,62 +125,59 @@ export function AuthProvider({ children, initialSession, initialProfile }: AuthP
 
     const initializeAuth = async () => {
       try {
-        console.log("🔄 AUTH: Initializing auth...")
+
 
         // If we have an initial session, use it
         if (initialSession?.user) {
-          console.log("🔄 AUTH: Using initial session for user:", initialSession.user.id)
+
           setUser(initialSession.user)
-          if (initialProfile) setProfile(initialProfile)
-          else {
+          if (initialProfile) {
+            setProfile(initialProfile)
+            setLoading(false)
+          } else {
             // Fallback fetch only if profile was not provided from the server
             const p = await fetchProfile(initialSession.user.id)
-            if (p) setProfile(p)
+            if (mounted) {
+              if (p) setProfile(p)
+              setLoading(false)
+            }
           }
-          if (mounted) setLoading(false)
-          return
-        }
-
-        // Otherwise, get the current session (uses localStorage in PWA)
-        console.log("🔄 AUTH: Getting current session...")
-        const {
-          data: { session },
-        } = await supabase.auth.getSession()
-
-        if (session?.user) {
-          console.log("🔄 AUTH: Found session, fetching profile for:", session.user.id)
-          setUser(session.user)
-          const p = await fetchProfile(session.user.id)
-          if (p) setProfile(p)
         } else {
-          console.log("🔄 AUTH: No session found")
-        }
+          // No initial session, check for existing session
+          const { data: { session } } = await supabase.auth.getSession()
+          if (mounted) {
+            if (session?.user) {
 
-        if (mounted) {
-          setLoading(false)
-          console.log("✅ AUTH: Initialization complete")
+              setUser(session.user)
+              const p = await fetchProfile(session.user.id)
+              if (p) setProfile(p)
+            }
+            setLoading(false)
+          }
         }
       } catch (error) {
         console.error("❌ AUTH: Initialization error:", error)
-        if (mounted) {
-          setLoading(false)
-        }
+        if (mounted) setLoading(false)
       }
     }
 
     initializeAuth()
 
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!mounted) return
+    // Add a timeout to prevent infinite loading
+    const timeoutId = setTimeout(() => {
+      if (mounted && loading) {
 
-      console.log("🔄 AUTH: Auth state change:", event, "User:", session?.user?.id || "none")
+        setLoading(false)
+      }
+    }, 10000) // 10 second timeout
+
+    // Set up auth state listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+
 
       // Skip profile fetch for certain events that don't require it
       if (event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION") {
-        console.log("ℹ️ AUTH: Skipping profile fetch for event:", event)
+
         return
       }
 
@@ -203,7 +200,6 @@ export function AuthProvider({ children, initialSession, initialProfile }: AuthP
         const isSameUser = currentProfile?.id === session.user.id
 
         if (!isSameUser) {
-          console.log("🔄 AUTH: Fetching profile for new user:", session.user.id)
           const profileData = await fetchProfile(session.user.id)
           if (mounted) {
             if (profileData) {
@@ -212,13 +208,13 @@ export function AuthProvider({ children, initialSession, initialProfile }: AuthP
             setLoading(false)
           }
         } else {
-          console.log("ℹ️ AUTH: Same user, keeping existing profile")
+
           if (mounted) {
             setLoading(false)
           }
         }
       } else {
-        console.log("🔄 AUTH: No session, clearing profile")
+        
         if (mounted) {
           setProfile(null)
           setLoading(false)
@@ -228,16 +224,20 @@ export function AuthProvider({ children, initialSession, initialProfile }: AuthP
 
     return () => {
       mounted = false
+      clearTimeout(timeoutId)
       subscription.unsubscribe()
     }
   }, [initialSession, initialProfile, supabase])
 
   // Client-side guard: redirect unauthenticated users from protected routes
   useEffect(() => {
-    if (loading) return
-    const publicRoutes = ["/", "/auth/login", "/auth/register", "/offline"]
+    if (loading) return // Don't redirect while loading
+    
+    const publicRoutes = ["/", "/auth/login", "/auth/register", "/offline", "/auth/callback"]
     const isPublic = publicRoutes.includes(pathname)
+    
     if (!user && !isPublic) {
+
       router.replace("/auth/login")
     }
   }, [loading, user, pathname, router])

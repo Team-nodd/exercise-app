@@ -316,7 +316,9 @@ return (
           ) : (
             <div className="flex items-center space-x-4">
               <Button asChild variant="ghost">
-                <AppLink href="/auth/login">Sign in</AppLink>
+                <AppLink href={pathname === "/auth/login" ? "/" : "/auth/login"}>
+                  {pathname === "/auth/login" ? "Home" : "Sign in"}
+                </AppLink>
               </Button>
               <Button asChild>
                 <AppLink href="/auth/register">Sign up</AppLink>

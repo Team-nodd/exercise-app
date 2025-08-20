@@ -3,7 +3,6 @@ import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 
 export async function middleware(request: NextRequest) {
-  console.log("🔄 MIDDLEWARE:", request.nextUrl.pathname)
 
   let response = NextResponse.next({
     request: { headers: request.headers },
@@ -12,6 +11,7 @@ export async function middleware(request: NextRequest) {
   // Only handle confirmation code exchange here
   const { searchParams, pathname } = request.nextUrl
   const code = searchParams.get('code')
+  
   if (code) {
     try {
       const supabase = createServerClient(
@@ -35,16 +35,20 @@ export async function middleware(request: NextRequest) {
           },
         },
       )
+      
       await supabase.auth.exchangeCodeForSession(code)
     } catch (e) {
-      console.error("Code exchange failed:", e)
+      console.error("❌ MIDDLEWARE: Code exchange failed:", e)
     }
+    
+    // Redirect to home after successful code exchange
     return NextResponse.redirect(new URL("/", request.url))
   }
 
   // Note: Do not gate by cookie here. In a PWA, sessions persist in localStorage
-  // on the client. Redirects based on cookies cause unnecessary login promptsh
+  // on the client. Redirects based on cookies cause unnecessary login prompts
   // on app relaunch and do not work offline. Client-side guards will handle it.
+  // This prevents authentication loops and allows the app to work properly.
 
   return response
 }

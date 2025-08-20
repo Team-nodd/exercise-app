@@ -123,6 +123,7 @@ src/
 - Programs: owned by a coach, assigned to an athlete
 - Workouts: gym or cardio; gym has nested workout_exercises
 - Notifications: in-app notifications with RLS
+- **TrainerRoad Integration**: Coaches can select workouts from their athletes' TrainerRoad library
 
 ## 🧪 Testing (quick manual)
 
@@ -130,6 +131,27 @@ src/
 - Use Exercise in Program (Gym) → choose program and workout → verify items
 - Use Cardio in Program → choose program and workout → apply template
 - Workout Detail → Send Email → check optimistic toast and coach notification
+
+## 🚴 TrainerRoad Integration
+
+The platform now supports integration with TrainerRoad, allowing coaches to select workouts from their athletes' TrainerRoad library:
+
+### Setup
+1. Athletes must authenticate with TrainerRoad through the platform
+2. Coaches can then access their athletes' TrainerRoad workouts when creating cardio workouts
+
+### Features
+- **Workout Selection**: Coaches can search and select from their athletes' TrainerRoad workout library
+- **Auto-population**: Selecting a TrainerRoad workout automatically fills in workout details (name, duration, TSS, FTP, etc.)
+- **Data Persistence**: TrainerRoad workout data is stored with the workout for future reference
+- **Edit Support**: Existing workouts with TrainerRoad data can be edited and the original TrainerRoad workout remains selected
+
+### Usage
+1. Create a new cardio workout or edit an existing one
+2. In the "Cardio Details" section, switch to the "TrainerRoad" tab
+3. Search for workouts by name
+4. Select a workout to auto-populate the form fields
+5. Save the workout - TrainerRoad data will be stored with the workout
 
 ## 🔒 Security
 

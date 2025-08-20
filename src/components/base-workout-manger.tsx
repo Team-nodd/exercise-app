@@ -127,7 +127,6 @@ export function BaseWorkoutManager({
 
   // Open dialog when createDialogProgram is set and we have a pending scheduled date
   useEffect(() => {
-    console.log('BaseWorkoutManager: createScheduledDate changed to:', createScheduledDate, 'createDialogProgram:', !!createDialogProgram)
     if (createDialogProgram && createScheduledDate !== undefined) {
       setCreateOpen(true)
     }

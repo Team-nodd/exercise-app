@@ -23,14 +23,7 @@ function getEmailConfig() {
   const from = process.env.SMTP_FROM;
   const fromName = process.env.SMTP_FROM_NAME || 'FitTracker Pro';
 
-  console.log('📧 EMAIL CONFIG:', {
-    host: host ? '✅' : '❌',
-    port,
-    user: user ? '✅' : '❌',
-    pass: pass ? '✅' : '❌',
-    from: from ? '✅' : '❌',
-    fromName
-  });
+
 
   if (!host || !user || !pass || !from) {
     throw new Error(`Missing required SMTP environment variables. Missing: ${[
@@ -55,21 +48,14 @@ export const runtime = 'nodejs'
 
 export async function POST(request: NextRequest) {
   try {
-    console.log('📧 EMAIL API: Starting email send process...');
     
     const body: WorkoutEmailRequest = await request.json();
     const { to, workoutName, programName, completedAt, userName, note, workoutType } = body;
 
-    console.log('📧 EMAIL API: Request body:', {
-      to: to ? '✅' : '❌',
-      workoutName,
-      userName,
-      workoutType
-    });
+
 
     // Validate required fields
-    if (!to || !workoutName || !userName) {
-      console.error('❌ EMAIL API: Missing required fields');
+    if (!to || !workoutName || !userName) { 
       return NextResponse.json(
         { error: 'Missing required fields: to, workoutName, userName are required' },
         { status: 400 }
@@ -81,14 +67,12 @@ export async function POST(request: NextRequest) {
     try {
       emailConfig = getEmailConfig();
     } catch (configError: any) {
-      console.error('❌ EMAIL API: Configuration error:', configError.message);
       return NextResponse.json(
         { error: `Email configuration error: ${configError.message}` },
         { status: 500 }
       );
     }
 
-    console.log('📧 EMAIL API: Creating transporter...');
     
     // Create transporter
     const transporter = nodemailer.createTransport({
@@ -104,9 +88,7 @@ export async function POST(request: NextRequest) {
 
     // Test connection
     try {
-      console.log('📧 EMAIL API: Testing connection...');
       await transporter.verify();
-      console.log('✅ EMAIL API: SMTP connection verified');
     } catch (verifyError: any) {
       console.error('❌ EMAIL API: SMTP connection failed:', verifyError.message);
       return NextResponse.json(
@@ -138,7 +120,6 @@ export async function POST(request: NextRequest) {
       workoutType
     });
 
-    console.log('📧 EMAIL API: Sending email...');
 
     // Send email
     const info = await transporter.sendMail({
@@ -149,14 +130,12 @@ export async function POST(request: NextRequest) {
       text,
     });
 
-    console.log('✅ EMAIL API: Email sent successfully:', info.messageId);
     return NextResponse.json({ 
       success: true, 
       messageId: info.messageId 
     });
 
   } catch (error: any) {
-    console.error('❌ EMAIL API: Unexpected error:', error);
     return NextResponse.json(
       { 
         error: 'Failed to send email', 

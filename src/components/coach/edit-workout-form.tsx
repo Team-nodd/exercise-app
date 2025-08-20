@@ -11,10 +11,13 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "sonner"
 import { Loader2, Plus, Trash2, ArrowLeft, AlertTriangle, Send, User, Dumbbell, CalendarIcon } from 'lucide-react'
 // import Link from "next/link"
 import type { ProgramWithDetails, Exercise, CardioExercise } from "@/types"
+import { TrainerRoadWorkoutSelector } from "./trainerroad-workout-selector"
+import { trainerRoadClient } from "@/lib/trainerroad/client"
 import { Badge } from "@/components/ui/badge"
 import { format } from "date-fns"
 import { Calendar } from "@/components/ui/calendar"
@@ -73,6 +76,11 @@ export function EditWorkoutForm({ program, workout, initialExercises, redirectOn
   const [loadingExercises, setLoadingExercises] = useState(true)
   const [cardioTemplates, setCardioTemplates] = useState<CardioExercise[]>([])
   const [selectedCardioId, setSelectedCardioId] = useState<string>(workout.cardio_exercise_id ? String(workout.cardio_exercise_id) : "")
+  const [selectedTrainerRoadWorkout, setSelectedTrainerRoadWorkout] = useState<any>(workout.trainerroad_workout_data || null)
+  const [trainerRoadAuthenticated, setTrainerRoadAuthenticated] = useState<boolean | null>(null)
+  const [cardioSource, setCardioSource] = useState<"template" | "trainerroad">(
+    workout.trainerroad_workout_id ? "trainerroad" : "template"
+  )
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
@@ -125,6 +133,21 @@ export function EditWorkoutForm({ program, workout, initialExercises, redirectOn
     }
     fetchCardio()
   }, [program.coach_id, supabase])
+
+  // Check if the athlete (user) has TrainerRoad authentication
+  useEffect(() => {
+    const checkTrainerRoadAuth = async () => {
+      try {
+        const isAuthenticated = await trainerRoadClient.checkUserAuthStatus(program.user_id)
+        setTrainerRoadAuthenticated(isAuthenticated)
+      } catch (error) {
+        console.error("Error checking TrainerRoad auth:", error)
+        setTrainerRoadAuthenticated(false)
+      }
+    }
+
+    checkTrainerRoadAuth()
+  }, [program.user_id])
 
   useEffect(() => {
     const fetchCurrentUser = async () => {
@@ -464,6 +487,8 @@ export function EditWorkoutForm({ program, workout, initialExercises, redirectOn
           target_tss: targetTss ? Number.parseInt(targetTss) : null,
           target_ftp: targetFtp ? Number.parseInt(targetFtp) : null,
           cardio_exercise_id: selectedCardioId ? Number.parseInt(selectedCardioId) : null,
+          trainerroad_workout_id: selectedTrainerRoadWorkout?.Id || null,
+          trainerroad_workout_data: selectedTrainerRoadWorkout || null,
         }),
         ...(workoutType === "gym" && {
           intensity_type: null,
@@ -471,6 +496,8 @@ export function EditWorkoutForm({ program, workout, initialExercises, redirectOn
           target_tss: null,
           target_ftp: null,
           cardio_exercise_id: null,
+          trainerroad_workout_id: null,
+          trainerroad_workout_data: null,
         }),
         updated_at: new Date().toISOString(),
       }
@@ -726,29 +753,76 @@ export function EditWorkoutForm({ program, workout, initialExercises, redirectOn
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Cardio Source Selection */}
               <div className="space-y-2">
-                <Label>Select Cardio Exercise</Label>
-                <Select value={selectedCardioId} onValueChange={(v) => {
-                  setSelectedCardioId(v)
-                  const t = cardioTemplates.find(ct => String(ct.id) === v)
-                  if (t) {
-                    setIntensityType(t.intensity_type || "")
-                    setDurationMinutes(t.duration_minutes ? String(t.duration_minutes) : "")
-                    setTargetTss(t.target_tss ? String(t.target_tss) : "")
-                    setTargetFtp(t.target_ftp ? String(t.target_ftp) : "")
-                  }
-                }}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose a cardio type (optional)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {cardioTemplates.map(ct => (
-                      <SelectItem key={ct.id} value={String(ct.id)}>
-                        {ct.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label>Cardio Source</Label>
+                <Tabs value={cardioSource} onValueChange={(value: string) => setCardioSource(value as "template" | "trainerroad")}>
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="template" className="cursor-pointer">Cardio Templates</TabsTrigger>
+                    <TabsTrigger value="trainerroad" className="cursor-pointer" disabled={trainerRoadAuthenticated === false}>
+                      TrainerRoad
+                      {trainerRoadAuthenticated === false && (
+                        <span className="ml-1 text-xs text-muted-foreground">(Not connected)</span>
+                      )}
+                    </TabsTrigger>
+                  </TabsList>
+                  
+                  <TabsContent value="template" className="space-y-4">
+                    <div className="space-y-2">
+                      <Label>Select Cardio Exercise</Label>
+                      <Select value={selectedCardioId} onValueChange={(v) => {
+                        setSelectedCardioId(v)
+                        setSelectedTrainerRoadWorkout(null)
+                        const t = cardioTemplates.find(ct => String(ct.id) === v)
+                        if (t) {
+                          setIntensityType(t.intensity_type || "")
+                          setDurationMinutes(t.duration_minutes ? String(t.duration_minutes) : "")
+                          setTargetTss(t.target_tss ? String(t.target_tss) : "")
+                          setTargetFtp(t.target_ftp ? String(t.target_ftp) : "")
+                        }
+                      }}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Choose a cardio type (optional)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {cardioTemplates.map(ct => (
+                            <SelectItem key={ct.id} value={String(ct.id)}>
+                              {ct.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </TabsContent>
+                  
+                  <TabsContent value="trainerroad" className="space-y-4">
+                    {trainerRoadAuthenticated === null ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="h-8 w-8 animate-spin" />
+                      </div>
+                    ) : trainerRoadAuthenticated === false ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <p>User is not connected to TrainerRoad</p>
+                        <p className="text-sm">The user needs to authenticate with TrainerRoad first</p>
+                      </div>
+                    ) : (
+                      <TrainerRoadWorkoutSelector
+                        userId={program.user_id}
+                        onWorkoutSelect={(workout) => {
+                          setSelectedTrainerRoadWorkout(workout)
+                          setSelectedCardioId("")
+                          setName(workout.WorkoutName)
+                          setIntensityType(workout.Progression?.Text || "")
+                          setDurationMinutes(String(workout.Duration))
+                          setTargetTss(String(workout.Tss))
+                          setTargetFtp(String(Math.round(workout.AverageFtpPercent)))
+                          setNotes(workout.WorkoutDescription?.replace(/<[^>]*>/g, '') || "")
+                        }}
+                        selectedWorkoutId={selectedTrainerRoadWorkout?.Id}
+                      />
+                    )}
+                  </TabsContent>
+                </Tabs>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">

@@ -10,10 +10,13 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "sonner"
-import { Loader2, Plus, Trash2 } from "lucide-react"
+import { Loader2, Plus, Trash2, ExternalLink } from "lucide-react"
 import type { ProgramWithDetails, Exercise, CardioExercise } from "@/types"
 import { useGlobalLoading } from "../providers/loading-provider"
+import { TrainerRoadWorkoutSelector } from "./trainerroad-workout-selector"
+import { trainerRoadClient } from "@/lib/trainerroad/client"
 
 interface CreateWorkoutFormProps {
   program: ProgramWithDetails
@@ -52,6 +55,9 @@ export function CreateWorkoutForm({ program, redirectOnSuccess = true, onSuccess
   const [loadingExercises, setLoadingExercises] = useState(true)
   const [cardioTemplates, setCardioTemplates] = useState<CardioExercise[]>([])
   const [selectedCardioId, setSelectedCardioId] = useState<string>("")
+  const [selectedTrainerRoadWorkout, setSelectedTrainerRoadWorkout] = useState<any>(null)
+  const [trainerRoadAuthenticated, setTrainerRoadAuthenticated] = useState<boolean | null>(null)
+  const [cardioSource, setCardioSource] = useState<"template" | "trainerroad">("template")
 
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -95,6 +101,11 @@ export function CreateWorkoutForm({ program, redirectOnSuccess = true, onSuccess
 
     fetchCardio()
   }, [program.coach_id, supabase])
+
+  // We'll check authentication by trying to fetch workouts directly
+  useEffect(() => {
+    setTrainerRoadAuthenticated(null) // Start with null to show loading
+  }, [program.user_id])
 
   // Update scheduled date when initialScheduledDate prop changes
   useEffect(() => {
@@ -198,6 +209,8 @@ export function CreateWorkoutForm({ program, redirectOnSuccess = true, onSuccess
           target_tss: targetTss ? Number.parseInt(targetTss) : null,
           target_ftp: targetFtp ? Number.parseInt(targetFtp) : null,
           cardio_exercise_id: selectedCardioId ? Number.parseInt(selectedCardioId) : null,
+          trainerroad_workout_id: selectedTrainerRoadWorkout?.Id || null,
+          trainerroad_workout_data: selectedTrainerRoadWorkout || null,
         }),
         ...(workoutType === "gym" && { cardio_exercise_id: null }),
       }
@@ -341,32 +354,67 @@ export function CreateWorkoutForm({ program, redirectOnSuccess = true, onSuccess
               <CardDescription className="text-sm">Specific parameters for cardio workouts</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Cardio Source Selection */}
               <div className="space-y-2">
-                <Label className="text-sm font-medium">Select Cardio Exercise</Label>
-                <Select
-                  value={selectedCardioId}
-                  onValueChange={(v) => {
-                    setSelectedCardioId(v)
-                    const t = cardioTemplates.find((ct) => String(ct.id) === v)
-                    if (t) {
-                      setIntensityType(t.intensity_type || "")
-                      setDurationMinutes(t.duration_minutes ? String(t.duration_minutes) : "")
-                      setTargetTss(t.target_tss ? String(t.target_tss) : "")
-                      setTargetFtp(t.target_ftp ? String(t.target_ftp) : "")
-                    }
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose a cardio type (optional)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {cardioTemplates.map((ct) => (
-                      <SelectItem key={ct.id} value={String(ct.id)}>
-                        {ct.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label className="text-sm font-medium">Cardio Source</Label>
+                <Tabs value={cardioSource} onValueChange={(value: string) => setCardioSource(value as "template" | "trainerroad")}>
+                  <TabsList className="grid w-full grid-cols-2">
+                     <TabsTrigger value="template" className="cursor-pointer">Cardio Templates</TabsTrigger>
+                     <TabsTrigger value="trainerroad" className="cursor-pointer">
+                       TrainerRoad
+                     </TabsTrigger>
+                   </TabsList>
+                  
+                  <TabsContent value="template" className="space-y-4">
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Select Cardio Exercise</Label>
+                      <Select
+                        value={selectedCardioId}
+                        onValueChange={(v) => {
+                          setSelectedCardioId(v)
+                          setSelectedTrainerRoadWorkout(null)
+                          const t = cardioTemplates.find((ct) => String(ct.id) === v)
+                          if (t) {
+                            setIntensityType(t.intensity_type || "")
+                            setDurationMinutes(t.duration_minutes ? String(t.duration_minutes) : "")
+                            setTargetTss(t.target_tss ? String(t.target_tss) : "")
+                            setTargetFtp(t.target_ftp ? String(t.target_ftp) : "")
+                          }
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Choose a cardio type (optional)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {cardioTemplates.map((ct) => (
+                            <SelectItem key={ct.id} value={String(ct.id)}>
+                              {ct.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </TabsContent>
+                  
+                                     <TabsContent value="trainerroad" className="space-y-4">
+                     <div className="space-y-4">
+                       <TrainerRoadWorkoutSelector
+                         userId={program.user_id}
+                         onWorkoutSelect={(workout) => {
+                           setSelectedTrainerRoadWorkout(workout)
+                           setSelectedCardioId("")
+                           setName(workout.WorkoutName)
+                           setIntensityType(workout.Progression?.Text || "")
+                           setDurationMinutes(String(workout.Duration))
+                           setTargetTss(String(workout.Tss))
+                           setTargetFtp(String(Math.round(workout.AverageFtpPercent)))
+                           setNotes(workout.WorkoutDescription?.replace(/<[^>]*>/g, '') || "")
+                         }}
+                         selectedWorkoutId={selectedTrainerRoadWorkout?.Id}
+                       />
+                     </div>
+                   </TabsContent>
+                </Tabs>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">

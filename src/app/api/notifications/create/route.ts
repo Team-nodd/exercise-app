@@ -21,13 +21,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
-    console.log('Creating notification:', {
-      senderId: user.id,
-      recipientId,
-      title,
-      type,
-      relatedId,
-    })
 
     // Insert using service role to bypass RLS (we already authenticated the sender)
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -60,7 +53,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: details }, { status: 500 })
     }
 
-    console.log('✅ Notification created successfully:', notification.id)
+
     return NextResponse.json({ success: true, notification })
 
   } catch (error) {

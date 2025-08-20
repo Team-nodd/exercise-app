@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
     
     if (serviceRoleKey && testUserId) {
       // Use service role authentication for testing
-      console.log('🔧 Using service role authentication for testing')
+
       user = { id: testUserId }
     } else {
       // Get the current user normally
@@ -32,13 +32,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
-    console.log('Notification request:', { 
-      senderId: user.id, 
-      recipientId, 
-      title, 
-      type, 
-      relatedId 
-    })
+  
 
     // Optimized relationship check using a single query
     // This checks if there's any program relationship between the two users
@@ -48,7 +42,7 @@ export async function POST(request: NextRequest) {
       .or(`and(user_id.eq.${user.id},coach_id.eq.${recipientId}),and(user_id.eq.${recipientId},coach_id.eq.${user.id})`)
       .limit(1)
 
-    console.log('Relationship check result:', { relationship, relationshipError })
+
 
     if (relationshipError) {
       console.error('Error checking relationship:', relationshipError)
@@ -56,14 +50,14 @@ export async function POST(request: NextRequest) {
     }
 
     const hasValidRelationship = relationship && relationship.length > 0
-    console.log('Has valid relationship?', hasValidRelationship)
+
 
     if (!hasValidRelationship) {
-      console.log('No valid relationship found between users')
+
       return NextResponse.json({ error: 'No valid relationship found' }, { status: 403 })
     }
 
-    console.log('Relationship verified, inserting notification...')
+
 
     // Insert the notification
     const { data: notification, error: insertError } = await supabase
@@ -84,7 +78,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to send notification' }, { status: 500 })
     }
 
-    console.log('Notification sent successfully:', notification)
+
 
     return NextResponse.json({ 
       success: true, 

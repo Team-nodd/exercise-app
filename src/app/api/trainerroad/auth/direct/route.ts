@@ -182,13 +182,40 @@ export async function POST(request: NextRequest) {
     // Persist cookies bundle to DB for seamless reuse
     try {
       const supabase = await createServerClient()
-      const { data: auth } = await supabase.auth.getUser()
+      const { data: auth, error: authError } = await supabase.auth.getUser()
+      
+      if (authError) {
+        console.error('❌ TRAINERROAD API: Auth error when saving session:', authError)
+        return NextResponse.json(
+          { success: false, message: 'Authentication error when saving session' },
+          { status: 500 }
+        )
+      }
+      
       const userId = auth.user?.id
+      console.log('🔍 TRAINERROAD API: Saving session for user ID:', userId)
+      
       if (userId) {
         const bundle = sessionCookies.join('; ')
-        await supabase
+        console.log('🔍 TRAINERROAD API: Session bundle length:', bundle.length)
+        
+        const { data: sessionData, error: sessionError } = await supabase
           .from('trainerroad_sessions')
-          .upsert({ user_id: userId, cookies: bundle, is_active: true, updated_at: new Date().toISOString() })
+          .upsert({ 
+            user_id: userId, 
+            cookies: bundle, 
+            is_active: true, 
+            updated_at: new Date().toISOString() 
+          })
+          .select()
+        
+        if (sessionError) {
+          console.error('❌ TRAINERROAD API: Failed to save session to DB:', sessionError)
+        } else {
+          console.log('✅ TRAINERROAD API: Successfully saved session to DB:', sessionData)
+        }
+      } else {
+        console.error('❌ TRAINERROAD API: No user ID found when saving session')
       }
     } catch (e) {
       console.error('❌ TRAINERROAD API: Failed to save cookies to DB:', e)
