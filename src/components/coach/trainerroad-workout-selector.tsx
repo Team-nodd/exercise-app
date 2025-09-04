@@ -101,7 +101,45 @@ export function TrainerRoadWorkoutSelector({
       if (isLoadMore) {
         // Append to existing workouts
         setAllWorkouts(prev => [...prev, ...workoutTemplates])
-        setFilteredWorkouts(prev => [...prev, ...workoutTemplates])
+        // Re-apply current search filter to all workouts (including newly loaded ones)
+        if (searchTerm.trim()) {
+          const allWorkoutsWithNew = [...allWorkouts, ...workoutTemplates]
+          const filtered = allWorkoutsWithNew.filter(workout => {
+            const searchLower = searchTerm.toLowerCase()
+            
+            // PRIORITIZE Progression.Text (intensity type badges) over description
+            // First check if Progression.Text matches the search for intensity types
+            if (workout.Progression?.Text) {
+              const progressionLower = workout.Progression.Text.toLowerCase()
+              if (progressionLower.includes(searchLower) ||
+                  (progressionLower.includes('vo2') && (searchLower.includes('vo2') || searchLower.includes('vo') || searchLower.includes('v02'))) ||
+                  (progressionLower.includes('sweet spot') && (searchLower.includes('sweet') || searchLower.includes('spot') || searchLower.includes('sweetspot'))) ||
+                  (progressionLower.includes('threshold') && (searchLower.includes('threshold') || searchLower.includes('thresh'))) ||
+                  (progressionLower.includes('endurance') && (searchLower.includes('endurance') || searchLower.includes('endur'))) ||
+                  (progressionLower.includes('tempo') && searchLower.includes('tempo')) ||
+                  (progressionLower.includes('aerobic') && searchLower.includes('aerobic')) ||
+                  (progressionLower.includes('anaerobic') && searchLower.includes('anaerobic'))) {
+                return true
+              }
+            }
+            
+            // If Progression.Text doesn't match, check other fields (but NOT description for intensity searches)
+            return (
+              workout.WorkoutName.toLowerCase().includes(searchLower) ||
+              (workout.ProfileName && workout.ProfileName.toLowerCase().includes(searchLower)) ||
+              (workout.PowerZones && workout.PowerZones.some((zone: string) => zone.toLowerCase().includes(searchLower))) ||
+              // Intensity-related search fields
+              (workout.IntensityFactor && workout.IntensityFactor.toString().includes(searchLower)) ||
+              (workout.AverageFtpPercent && workout.AverageFtpPercent.toString().includes(searchLower)) ||
+              (workout.Tss && workout.Tss.toString().includes(searchLower)) ||
+              (workout.Duration && workout.Duration.toString().includes(searchLower))
+            )
+          })
+          setFilteredWorkouts(filtered)
+        } else {
+          // No search term, just append to filtered results
+          setFilteredWorkouts(prev => [...prev, ...workoutTemplates])
+        }
       } else {
         // Replace all workouts
         setAllWorkouts(workoutTemplates)
@@ -146,17 +184,16 @@ export function TrainerRoadWorkoutSelector({
     fetchWorkouts(0, "", false)
   }, [fetchWorkouts])
 
-  // Handle search with debouncing
+  // Handle search with debouncing - ALWAYS fetch workouts first, then filter locally
   useEffect(() => {
     const timeoutId = setTimeout(() => {
-      if (searchTerm.trim() !== "") {
-        setCurrentPage(0)
-        fetchWorkouts(0, searchTerm, false)
-      } else if (hasInitialized) {
-        // If search is cleared, reload first page
+      // Always fetch workouts without search term, then filter locally
+      if (!hasInitialized || searchTerm.trim() === "") {
         setCurrentPage(0)
         fetchWorkouts(0, "", false)
       }
+      // Note: We don't send search terms to TrainerRoad API anymore
+      // All filtering is done locally for better intensity type matching
     }, 300) // 300ms debounce
 
     return () => clearTimeout(timeoutId)
@@ -182,13 +219,71 @@ export function TrainerRoadWorkoutSelector({
     // For local filtering when we have all workouts loaded
     const filtered = allWorkouts.filter(workout => {
       const searchLower = searchTerm.toLowerCase()
+      
+      // Debug logging to see what fields are available
+      if (searchTerm.trim()) {
+        console.log('🔍 Search debug:', {
+          searchTerm: searchLower,
+          workoutName: workout.WorkoutName,
+          progressionText: workout.Progression?.Text || 'N/A',
+          progressionMatches: workout.Progression?.Text ? workout.Progression.Text.toLowerCase().includes(searchLower) : false,
+          description: workout.WorkoutDescription?.substring(0, 50) || 'N/A',
+          descriptionMatches: workout.WorkoutDescription ? workout.WorkoutDescription.toLowerCase().includes(searchLower) : false,
+          // Show the actual search logic results
+          nameMatch: workout.WorkoutName.toLowerCase().includes(searchLower),
+          progressionDirectMatch: workout.Progression?.Text ? workout.Progression.Text.toLowerCase().includes(searchLower) : false,
+          // Show all available fields to debug where intensity type comes from
+          allFields: {
+            name: workout.WorkoutName,
+            description: workout.WorkoutDescription,
+            goalDescription: workout.GoalDescription,
+            progression: workout.Progression,
+            profileName: workout.ProfileName,
+            powerZones: workout.PowerZones,
+            intensityFactor: workout.IntensityFactor,
+            averageFtpPercent: workout.AverageFtpPercent,
+            tss: workout.Tss,
+            duration: workout.Duration
+          },
+          // Additional debugging for Progression.Text search
+          progressionSearchDetails: workout.Progression?.Text ? {
+            original: workout.Progression.Text,
+            lowercase: workout.Progression.Text.toLowerCase(),
+            includesSweetSpot: workout.Progression.Text.toLowerCase().includes('sweet spot'),
+            includesSweetspot: workout.Progression.Text.toLowerCase().includes('sweetspot'),
+            includesSweet: workout.Progression.Text.toLowerCase().includes('sweet'),
+            includesSpot: workout.Progression.Text.toLowerCase().includes('spot')
+          } : 'No Progression data'
+        })
+      }
+      
+      // PRIORITIZE Progression.Text (intensity type badges) over description
+      // First check if Progression.Text matches the search for intensity types
+      if (workout.Progression?.Text) {
+        const progressionLower = workout.Progression.Text.toLowerCase()
+        if (progressionLower.includes(searchLower) ||
+            (progressionLower.includes('vo2') && (searchLower.includes('vo2') || searchLower.includes('vo') || searchLower.includes('v02'))) ||
+            (progressionLower.includes('sweet spot') && (searchLower.includes('sweet') || searchLower.includes('spot') || searchLower.includes('sweetspot'))) ||
+            (progressionLower.includes('threshold') && (searchLower.includes('threshold') || searchLower.includes('thresh'))) ||
+            (progressionLower.includes('endurance') && (searchLower.includes('endurance') || searchLower.includes('endur'))) ||
+            (progressionLower.includes('tempo') && searchLower.includes('tempo')) ||
+            (progressionLower.includes('aerobic') && searchLower.includes('aerobic')) ||
+            (progressionLower.includes('anaerobic') && searchLower.includes('anaerobic'))) {
+          return true
+        }
+      }
+      
+      // If Progression.Text doesn't match, check other fields (but NOT description for intensity searches)
       return (
         workout.WorkoutName.toLowerCase().includes(searchLower) ||
-        (workout.WorkoutDescription && workout.WorkoutDescription.toLowerCase().includes(searchLower)) ||
-        (workout.GoalDescription && workout.GoalDescription.toLowerCase().includes(searchLower)) ||
-        (workout.Progression?.Text && workout.Progression.Text.toLowerCase().includes(searchLower)) ||
         (workout.ProfileName && workout.ProfileName.toLowerCase().includes(searchLower)) ||
-        (workout.PowerZones && workout.PowerZones.some(zone => zone.toLowerCase().includes(searchLower)))
+        (workout.PowerZones && workout.PowerZones.some(zone => zone.toLowerCase().includes(searchLower))) ||
+        // Intensity-related search fields
+        (workout.IntensityFactor && workout.IntensityFactor.toString().includes(searchLower)) ||
+        (workout.AverageFtpPercent && workout.AverageFtpPercent.toString().includes(searchLower)) ||
+        (workout.Tss && workout.Tss.toString().includes(searchLower)) ||
+        (workout.Duration && workout.Duration.toString().includes(searchLower))
+        // REMOVED: Description and GoalDescription checks for intensity searches
       )
     })
 
@@ -202,12 +297,14 @@ export function TrainerRoadWorkoutSelector({
       }
     }
 
+    console.log(`🔍 Search results: ${filtered.length} workouts match "${searchTerm}" out of ${allWorkouts.length} total`)
     setFilteredWorkouts(filtered)
   }, [searchTerm, allWorkouts, selectedWorkoutId, hasInitialized])
 
   const handleLoadMore = () => {
     if (!isLoadingMore && hasMore) {
-      fetchWorkouts(currentPage + 1, searchTerm, true)
+      // Always load more workouts without search term, then filter locally
+      fetchWorkouts(currentPage + 1, "", true)
     }
   }
 
@@ -250,7 +347,7 @@ export function TrainerRoadWorkoutSelector({
       <CardHeader>
         <CardTitle className="text-lg sm:text-xl">TrainerRoad Workouts</CardTitle>
         <CardDescription className="text-sm">
-          Search and select from all TrainerRoad workouts ({totalCount.toLocaleString()} total workouts)
+          Search and select from all TrainerRoad workouts by name, description, intensity, TSS, FTP, duration, or zones ({totalCount.toLocaleString()} total workouts)
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -259,7 +356,7 @@ export function TrainerRoadWorkoutSelector({
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
              <Input
-              placeholder="Search workouts by name, description, or zones..."
+              placeholder="Search workouts by intensity type (VO2, Sweet Spot, Threshold, Endurance), name, TSS, FTP, or duration..."
                value={searchTerm}
                onChange={(e) => setSearchTerm(e.target.value)}
                disabled={disabled}
